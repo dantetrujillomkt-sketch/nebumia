@@ -23,7 +23,8 @@ const navItems = [
   ["clients", "Clientes", "users"],
   ["collections", "Cobranzas", "wallet"],
   ["finance", "Caja de ingresos y egresos", "banknote"],
-  ["taxes", "Pago impuestos", "receipt"],
+  ["taxes", "Pago impuestos", "clock"],
+  ["comprobantes", "Comprobantes", "book"],
   ["team", "Pago personal", "briefcase"],
   ["settings", "Configuración", "settings"]
 ];
@@ -53,7 +54,10 @@ const icons = {
   sparkles: '<path d="m12 3 1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7z"></path><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"></path><path d="M5 15l.8 2.2L8 18l-2.2.8L5 21l-.8-2.2L2 18l2.2-.8z"></path>',
   package: '<path d="m21 8-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><path d="M12 13v8"></path>',
   trending: '<path d="m22 7-8.5 8.5-5-5L2 17"></path><path d="M16 7h6v6"></path>',
-  clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>'
+  clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>',
+  trash: '<path d="M3 6h18"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M9 6V4h6v2"></path>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>'
 };
 
 function icon(name, className = "") {
@@ -123,8 +127,12 @@ function newExpense(data = {}) {
     concept: data.concept || "",
     type: data.type || "Gasto fijo",
     amount: Number(data.amount || 0),
+    currency: data.currency || "PEN",
     status: data.status || "Pendiente",
-    owner: data.owner || "Bandu"
+    owner: data.owner || "Bandu",
+    refund: Boolean(data.refund),
+    isAdSpend: Boolean(data.isAdSpend),
+    docLink: data.docLink || ""
   };
 }
 
@@ -136,7 +144,56 @@ function newTeamPayment(data = {}) {
     role: data.role || "Team interno",
     amount: Number(data.amount || 0),
     status: data.status || "Pendiente",
-    receipt: data.receipt || ""
+    receipt: data.receipt || "",
+    dueDate: data.dueDate || "",
+    ruc: data.ruc || "",
+    bankName: data.bankName || "",
+    cci: data.cci || ""
+  };
+}
+
+function newTaxPayment(data = {}) {
+  return {
+    id: data.id || uid(),
+    date: data.date || today(),
+    type: data.type || "IGV 1011",
+    period: data.period || currentMonthName(),
+    amount: Number(data.amount || 0),
+    status: data.status || "Pendiente",
+    sunatRef: data.sunatRef || "",
+    docLink: data.docLink || ""
+  };
+}
+
+function newPurchase(data = {}) {
+  return {
+    id: data.id || uid(),
+    date: data.date || today(),
+    vendor: data.vendor || "",
+    ruc: data.ruc || "",
+    invoiceType: data.invoiceType || "Factura",
+    invoiceNum: data.invoiceNum || "",
+    concept: data.concept || "",
+    subtotal: Number(data.subtotal || 0),
+    igv: Number(data.igv || 0),
+    total: Number(data.total || 0),
+    currency: data.currency || "PEN"
+  };
+}
+
+function newInvoicedSale(data = {}) {
+  return {
+    id: data.id || uid(),
+    date: data.date || today(),
+    client: data.client || "",
+    ruc: data.ruc || "",
+    invoiceType: data.invoiceType || "Factura",
+    invoiceNum: data.invoiceNum || "",
+    service: data.service || "",
+    subtotal: Number(data.subtotal || 0),
+    igv: Number(data.igv || 0),
+    total: Number(data.total || 0),
+    currency: data.currency || "PEN"
   };
 }
 
@@ -173,6 +230,9 @@ function seedState() {
       newQuote({ code: "PPTO 0324", month: "Junio", date: "2026-06-03", category: "CRM", service: "Implementacion, configuracion y automatizacion de Kommo CRM", owner: "Dante Trujillo", client: "Neodoctor", subtotal: 4200, status: "Por cotizar", hasIgv: true, paymentType: "split", comments: "Lead Kommo Partner" })
     ],
     collections: [],
+    taxPayments: [],
+    purchases: [],
+    invoicedSales: [],
     expenses: [
       newExpense({ month: "Enero", concept: "Correo corporativo Gmail Administracion", amount: 16.8, type: "Gasto fijo", status: "Completado" }),
       newExpense({ month: "Enero", concept: "Correo corporativo Gmail Christian Trujillo", amount: 16.8, type: "Gasto fijo", status: "Completado" }),
@@ -260,7 +320,10 @@ function migrateState(input) {
       bankAccount: c.bankAccount || ""
     })),
     expenses: (input.expenses || base.expenses).map(newExpense),
-    team: (input.team || base.team).map(newTeamPayment)
+    team: (input.team || base.team).map(newTeamPayment),
+    taxPayments: (input.taxPayments || []).map(newTaxPayment),
+    purchases: (input.purchases || []).map(newPurchase),
+    invoicedSales: (input.invoicedSales || []).map(newInvoicedSale)
   };
   migrated.quotes.forEach(q => syncQuoteSideEffects(migrated, q));
   syncClientsFromActivity(migrated);
@@ -463,7 +526,8 @@ function dashboardFilterBar() {
     ["collections", "Próximos cobros"],
     ["pipeline", "Pipeline comercial"],
     ["profitability", "Rentabilidad por servicio"],
-    ["salesOwner", "Ventas por comercial"]
+    ["salesOwner", "Ventas por comercial"],
+    ["annualProjection", "Proyección anual"]
   ];
   return `
     <section class="dashboard-filter-zone">
@@ -510,7 +574,11 @@ function dashboardSnapshot() {
   const paid = collections.filter(row => row.status === "Pagado").reduce((sum, row) => sum + row.amount, 0);
   const pending = collections.filter(row => row.status !== "Pagado").reduce((sum, row) => sum + row.amount, 0);
   const outflows = expenses.reduce((sum, expense) => sum + expense.amount, 0) + team.reduce((sum, payment) => sum + payment.amount, 0);
-  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows };
+  const taxesPaid = (state.taxPayments || []).filter(t => dateInRange(t.date) && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
+  const adSpend = expenses.filter(e => e.isAdSpend).reduce((sum, e) => sum + e.amount, 0);
+  const netProfit = paid - outflows - taxesPaid;
+  const roas = adSpend > 0 ? paid / adSpend : null;
+  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas };
 }
 
 function currentMonthName() {
@@ -539,6 +607,23 @@ function calcQuote(q, sourceState = state) {
 
 function wonQuotes() {
   return state.quotes.filter(q => q.status === "Ganado").map(q => ({ ...q, ...calcQuote(q) }));
+}
+
+function annualProjectionTable() {
+  const year = new Date().getFullYear();
+  const goal = state.settings.monthlyGoal;
+  const rows = months.map((name, i) => {
+    const key = `${year}-${String(i + 1).padStart(2, "0")}`;
+    const ganado = state.quotes
+      .filter(q => q.status === "Ganado" && q.date.startsWith(key))
+      .reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const cobrado = collectionRows()
+      .filter(c => c.status === "Pagado" && (c.paidDate || "").startsWith(key))
+      .reduce((sum, c) => sum + c.amount, 0);
+    const pct = goal > 0 ? Math.round((ganado / goal) * 100) : 0;
+    return [name, fmt(goal), fmt(ganado), fmt(cobrado), `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>`];
+  });
+  return table(["Mes", "Meta", "Ganado", "Cobrado", "% Meta"], rows);
 }
 
 function collectionRows() {
@@ -662,7 +747,7 @@ const views = {
         ${metric("Oportunidades", openLeads.length, `${snapshot.leads.length} registradas`, "up", "8%", "purple")}
         ${metric("Pipeline de oportunidades", fmtMixed(openLeads, l => l.estimatedValue), `${openLeads.length} oportunidades abiertas`, "up", "2%", "amber")}
         ${metric("Ventas ganadas", fmtMixed(snapshot.won, q => q.total), `${wonSales.length} cotizaciones ganadas`, "up", "12%", "mint")}
-        ${metric("Ventas perdidas", fmtMixed(snapshot.lost, q => calcQuote(q).total, q => q.currency || "PEN"), `${lostSales.length} cotizaciones perdidas`, "down", "4%", "coral")}
+        ${metric("Utilidad neta", fmt(snapshot.netProfit), `Cobrado menos egresos${snapshot.roas ? ` · ROAS ${snapshot.roas.toFixed(1)}x` : ""}`, snapshot.netProfit >= 0 ? "up" : "down", "", "coral")}
       </section>
       <section class="dashboard-grid">
         <div class="panel chart-panel ${dashboardSections.has("revenue") ? "" : "hidden"}" data-dashboard-section="revenue">
@@ -703,6 +788,10 @@ const views = {
           <div class="panel-head"><div><h3>Ventas por comercial</h3><p>Rendimiento y base de comisiones</p></div></div>
           ${miniBars(group(snapshot.won, "owner", q => q.total))}
         </div>
+        <div class="panel annual-panel ${dashboardSections.has("annualProjection") ? "" : "hidden"}" data-dashboard-section="annualProjection">
+          <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div></div>
+          ${annualProjectionTable()}
+        </div>
       </section>
     `;
   },
@@ -737,7 +826,7 @@ const views = {
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o servicio",
-        filters: `<select id="quoteStatus"><option value="">Todos los estados</option>${options(quoteStatuses)}</select>`,
+        filters: `<select id="quoteStatus"><option value="">Todos los estados</option>${options(quoteStatuses)}</select><select id="quoteYear"><option value="">Todos los años</option>${Array.from({length: new Date().getFullYear() - 2021}, (_, i) => 2022 + i).reverse().map(y => `<option value="${y}">${y}</option>`).join("")}</select>`,
         action: "quote"
       })}
       <div id="quotesTable">${quotesTable(quotes)}</div>
@@ -821,7 +910,15 @@ const views = {
         </div>
         <div>
           <div class="section-heading"><h3>Egresos</h3><span>${snapshot.expenses.length} movimientos</span></div>
-          ${table(["Mes", "Concepto", "Tipo", "Monto", "Estado", "Acciones"], snapshot.expenses.map(e => [e.month, e.concept, e.type, fmt(e.amount), badge(e.status), `<button class="action-link" data-edit-expense="${e.id}" type="button">${icon("edit")}<span>Editar</span></button>`]))}
+          ${table(["Mes", "Concepto", "Tipo", "Monto", "Moneda", "Pauta", "Doc.", "Estado", "Acciones"], snapshot.expenses.map(e => [
+            e.month, `${e.refund ? "↩ " : ""}${e.concept}`, e.type,
+            fmt(e.amount, e.currency),
+            `<span class="currency-badge ${(e.currency || "pen").toLowerCase()}">${e.currency || "PEN"}</span>`,
+            e.isAdSpend ? `<span class="badge-ok">Ads</span>` : "—",
+            e.docLink ? `<a href="${escapeAttr(e.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
+            badge(e.status),
+            `<button class="action-link" data-edit-expense="${e.id}" type="button">${icon("edit")}<span>Editar</span></button>`
+          ]))}
         </div>
       </section>
     `;
@@ -829,18 +926,37 @@ const views = {
   taxes() {
     const won = wonQuotes().filter(item => dateInRange(item.date));
     const igv = won.reduce((sum, item) => sum + item.igv, 0);
-    const detractions = won.reduce((sum, item) => sum + item.detraction, 0);
+    const detractionsBilled = collectionRows().filter(r => r.status === "Pagado").reduce((sum, r) => sum + r.detraction, 0);
+    const detractionsPlanned = won.reduce((sum, item) => sum + item.detraction, 0);
+    const taxPayments = (state.taxPayments || []);
+    const detPaid = taxPayments.filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
+    const saldoDet = detractionsBilled - detPaid;
     return `
       <section class="metric-grid">
         ${metric("IGV generado", fmt(igv), `${Math.round(state.settings.igvRate * 100)}% en ventas con IGV`, "", "", "purple")}
-        ${metric("Detracciones", fmt(detractions), `${Math.round(state.settings.detractionRate * 100)}% según regla`, "", "", "amber")}
-        ${metric("Ventas afectas", won.filter(item => item.hasIgv).length, "Operaciones con IGV", "", "", "mint")}
-        ${metric("Con detraccion", won.filter(item => item.detraction > 0).length, `Superan ${fmt(state.settings.detractionThreshold)}`, "", "", "coral")}
+        ${metric("Detracción facturada", fmt(detractionsPlanned), `${Math.round(state.settings.detractionRate * 100)}% sobre ops. afectas`, "", "", "amber")}
+        ${metric("Saldo detracción", fmt(saldoDet), "Cobrado – pagado a SUNAT", saldoDet > 0 ? "up" : "", "", "mint")}
+        ${metric("Impuestos pagados", fmt(taxPayments.filter(t => t.status === "Pagado").reduce((s, t) => s + t.amount, 0)), `${taxPayments.filter(t => t.status === "Pagado").length} pagos a SUNAT`, "", "", "coral")}
       </section>
-      ${moduleToolbar({ search: "Buscar PPTO, cliente o impuesto", action: "taxPayment" })}
-      ${table(["PPTO", "Cliente", "Subtotal", "IGV", "Total", "Detraccion"], won.map(item => [
-        item.code, item.client, fmt(item.subtotal), fmt(item.igv), fmt(item.total), fmt(item.detraction)
-      ]))}
+      <div class="taxes-layout">
+        <section class="panel">
+          <div class="panel-head"><div><h3>Obligaciones tributarias</h3><p>IGV y detracción generados por ventas ganadas</p></div></div>
+          ${table(["PPTO", "Cliente", "Fecha", "Subtotal", "IGV", "Total", "Detracción"], won.map(item => [
+            item.code, item.client, item.date, fmt(item.subtotal, item.currency), fmt(item.igv, item.currency), fmt(item.total, item.currency), fmt(item.detraction, item.currency)
+          ]))}
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <div><h3>Pagos a SUNAT</h3><p>Registro de pagos de impuestos realizados</p></div>
+            <button class="create-action" data-module-action="taxes" type="button">${icon("plus")}<span>Nuevo pago</span></button>
+          </div>
+          ${taxPayments.length ? table(["Fecha", "Tipo", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Carpeta", "Acciones"], taxPayments.map(t => [
+            t.date, t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
+            t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
+            `<button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button>`
+          ])) : `<div class="empty-state">Sin pagos registrados. Agrega el primer pago a SUNAT.</div>`}
+        </section>
+      </div>
     `;
   },
   team() {
@@ -858,7 +974,53 @@ const views = {
         filters: `<select data-table-filter><option value="">Todos los estados</option><option>Pagado</option><option>Pendiente</option></select>`,
         action: "payment"
       })}
-      ${table(["Mes", "Nombre", "Tipo", "Pago", "Estado", "Acciones"], team.map(t => [t.month, t.name, t.role, fmt(t.amount), badge(t.status), `<button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button>`]))}`;
+      ${table(["Mes", "Fecha", "Nombre", "RUC", "Banco / CCI", "Tipo", "Pago", "RHE", "Estado", "Acciones"], team.map(t => [
+        t.month, t.dueDate || "—", t.name, t.ruc || "—",
+        t.bankName ? `${t.bankName}${t.cci ? " · " + t.cci : ""}` : "—",
+        t.role, fmt(t.amount), t.receipt ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>RHE</span></a>` : "—",
+        badge(t.status),
+        `<button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button>`
+      ]))}`;
+  },
+  comprobantes() {
+    const purchases = (state.purchases || []);
+    const invoicedSales = (state.invoicedSales || []);
+    const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
+    const totalSales = invoicedSales.reduce((sum, s) => sum + s.total, 0);
+    return `
+      <section class="metric-grid">
+        ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, "", "", "mint")}
+        ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber")}
+        ${metric("IGV ventas", fmt(invoicedSales.reduce((sum, s) => sum + s.igv, 0)), "IGV en comprobantes emitidos", "", "", "purple")}
+        ${metric("IGV compras (crédito)", fmt(purchases.reduce((sum, p) => sum + p.igv, 0)), "IGV a favor (crédito fiscal)", "", "", "coral")}
+      </section>
+      <div class="taxes-layout">
+        <section class="panel">
+          <div class="panel-head">
+            <div><h3>Registro de Ventas</h3><p>Facturas y boletas emitidas a clientes</p></div>
+            <button class="create-action" data-module-action="invoicedSale" type="button">${icon("plus")}<span>Nueva venta</span></button>
+          </div>
+          ${invoicedSales.length ? table(["Fecha", "Cliente", "RUC", "Comprobante", "N°", "Servicio", "Base", "IGV", "Total", "Moneda", "Acciones"], invoicedSales.map(s => [
+            s.date, s.client, s.ruc || "—", s.invoiceType, s.invoiceNum || "—", s.service,
+            fmt(s.subtotal, s.currency), fmt(s.igv, s.currency), fmt(s.total, s.currency),
+            `<span class="currency-badge ${(s.currency || "pen").toLowerCase()}">${s.currency || "PEN"}</span>`,
+            `<button class="action-link" data-edit-invoicedsale="${s.id}" type="button">${icon("edit")}<span>Editar</span></button>`
+          ])) : `<div class="empty-state">Sin ventas facturadas. Agrega el primer comprobante.</div>`}
+        </section>
+        <section class="panel">
+          <div class="panel-head">
+            <div><h3>Registro de Compras</h3><p>Facturas y boletas recibidas de proveedores</p></div>
+            <button class="create-action" data-module-action="purchase" type="button">${icon("plus")}<span>Nueva compra</span></button>
+          </div>
+          ${purchases.length ? table(["Fecha", "Proveedor", "RUC", "Comprobante", "N°", "Concepto", "Base", "IGV", "Total", "Moneda", "Acciones"], purchases.map(p => [
+            p.date, p.vendor, p.ruc || "—", p.invoiceType, p.invoiceNum || "—", p.concept,
+            fmt(p.subtotal, p.currency), fmt(p.igv, p.currency), fmt(p.total, p.currency),
+            `<span class="currency-badge ${(p.currency || "pen").toLowerCase()}">${p.currency || "PEN"}</span>`,
+            `<button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}<span>Editar</span></button>`
+          ])) : `<div class="empty-state">Sin compras registradas. Agrega el primer comprobante.</div>`}
+        </section>
+      </div>
+    `;
   },
   settings() {
     return `
@@ -1030,6 +1192,9 @@ function bindViewEvents() {
   bindActions("[data-pay]", id => markCollectionPaid(id));
   bindActions("[data-edit-expense]", id => openExpenseDialog(state.expenses.find(x => x.id === id)));
   bindActions("[data-edit-team]", id => openTeamDialog(state.team.find(x => x.id === id)));
+  bindActions("[data-edit-taxpayment]", id => openTaxPaymentDialog((state.taxPayments || []).find(x => x.id === id)));
+  bindActions("[data-edit-purchase]", id => openPurchaseDialog((state.purchases || []).find(x => x.id === id)));
+  bindActions("[data-edit-invoicedsale]", id => openInvoicedSaleDialog((state.invoicedSales || []).find(x => x.id === id)));
   const settingsForm = document.querySelector("#settingsForm");
   if (settingsForm) settingsForm.addEventListener("submit", saveSettings);
   const addBankForm = document.querySelector("#addBankAccountForm");
@@ -1052,7 +1217,7 @@ function bindViewEvents() {
 
 function bindDashboardQuickFilters() {
   if (activeView !== "dashboard") return;
-  const allSections = ["metrics", "revenue", "collections", "pipeline", "profitability", "salesOwner"];
+  const allSections = ["metrics", "revenue", "collections", "pipeline", "profitability", "salesOwner", "annualProjection"];
   const presets = {
     all: allSections,
     commercial: ["metrics", "pipeline", "salesOwner"],
@@ -1161,15 +1326,22 @@ function bindActions(selector, handler) {
 function bindFilters() {
   const quoteSearch = activeView === "quotes" ? document.querySelector("#moduleSearch") : null;
   const quoteStatus = document.querySelector("#quoteStatus");
+  const quoteYear = document.querySelector("#quoteYear");
   if (quoteSearch && quoteStatus) {
     const filter = () => {
       const term = quoteSearch.value.toLowerCase();
-      const rows = state.quotes.filter(q => dateInRange(q.date) && (!quoteStatus.value || q.status === quoteStatus.value) && [q.code, q.client, q.service].join(" ").toLowerCase().includes(term));
+      const yr = quoteYear?.value || "";
+      const rows = state.quotes.filter(q =>
+        (yr ? q.date.startsWith(yr) : dateInRange(q.date)) &&
+        (!quoteStatus.value || q.status === quoteStatus.value) &&
+        [q.code, q.client, q.service].join(" ").toLowerCase().includes(term)
+      );
       document.querySelector("#quotesTable").innerHTML = quotesTable(rows);
       bindViewEvents();
     };
     quoteSearch.addEventListener("input", filter);
     quoteStatus.addEventListener("change", filter);
+    quoteYear?.addEventListener("change", filter);
   }
   const leadSearch = activeView === "leads" ? document.querySelector("#moduleSearch") : null;
   const leadStatus = document.querySelector("#leadStatus");
@@ -1215,6 +1387,8 @@ function bindModuleToolbar() {
     else if (action === "finance") openExpenseDialog();
     else if (action === "team") openTeamDialog();
     else if (action === "taxes") openTaxPaymentDialog();
+    else if (action === "purchase") openPurchaseDialog();
+    else if (action === "invoicedSale") openInvoicedSaleDialog();
     else openQuoteDialog();
   });
 
@@ -1414,30 +1588,31 @@ function openExpenseDialog(expense = null) {
   dialogShell("expense", editingId ? "Editar gasto" : "Nuevo gasto", `
     <div class="form-grid">
       <label>Mes<select name="month">${options(months, item.month)}</select></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Tipo<input name="type" value="${escapeAttr(item.type)}" required></label>
+      <label>Encargado<input name="owner" value="${escapeAttr(item.owner)}"></label>
       <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Completado"], item.status)}</select></label>
-      <label>Encargado<input name="owner" value="${escapeAttr(item.owner)}"></label>
+      <label class="full">Link documento<input name="docLink" type="url" value="${escapeAttr(item.docLink)}" placeholder="https://drive.google.com/..."></label>
+      <label><input type="checkbox" name="refund" ${item.refund ? "checked" : ""}> Es devolución</label>
+      <label><input type="checkbox" name="isAdSpend" ${item.isAdSpend ? "checked" : ""}> Pauta publicitaria (ads)</label>
     </div>
   `);
 }
 
-function openTaxPaymentDialog() {
-  const item = newExpense({
-    type: "Pago de impuestos",
-    concept: "Pago de IGV / detracción",
-    owner: "Bandu"
-  });
-  editingId = "";
-  dialogShell("taxPayment", "Nuevo pago de impuestos", `
+function openTaxPaymentDialog(record = null) {
+  const item = record || newTaxPayment();
+  editingId = record?.id || "";
+  dialogShell("taxPayment", editingId ? "Editar pago a SUNAT" : "Nuevo pago a SUNAT", `
     <div class="form-grid">
-      <label>Mes<select name="month">${options(months, item.month)}</select></label>
-      <label>Tipo de impuesto<select name="type">${options(["IGV", "Detracción", "Renta", "Otro"], "IGV")}</select></label>
-      <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
+      <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
+      <label>Tipo<select name="type">${options(["IGV 1011", "Renta 3121", "Detracción", "Otro"], item.type)}</select></label>
+      <label>Periodo<select name="period">${options(months, item.period)}</select></label>
       <label>Monto<input name="amount" type="number" min="0" step="0.01" value="${item.amount}" required></label>
-      <label>Estado<select name="status">${options(["Pendiente", "Completado"], item.status)}</select></label>
-      <label>Encargado<input name="owner" value="${escapeAttr(item.owner)}"></label>
+      <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
+      <label>Ref. SUNAT<input name="sunatRef" value="${escapeAttr(item.sunatRef)}" placeholder="N° operación SUNAT"></label>
+      <label class="full">Link carpeta<input name="docLink" type="url" value="${escapeAttr(item.docLink)}" placeholder="https://drive.google.com/..."></label>
     </div>
   `);
 }
@@ -1445,14 +1620,56 @@ function openTaxPaymentDialog() {
 function openTeamDialog(payment = null) {
   const item = payment || newTeamPayment();
   editingId = payment && state.team.some(t => t.id === payment.id) ? payment.id : "";
-  dialogShell("team", editingId ? "Editar pago" : "Nuevo pago", `
+  dialogShell("team", editingId ? "Editar pago" : "Nuevo pago de personal", `
     <div class="form-grid">
       <label>Mes<select name="month">${options(months, item.month)}</select></label>
+      <label>Fecha acordada<input name="dueDate" type="date" value="${item.dueDate}"></label>
       <label>Nombre<input name="name" value="${escapeAttr(item.name)}" required></label>
       <label>Tipo<input name="role" value="${escapeAttr(item.role)}" required></label>
-      <label>Pago<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
+      <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
-      <label>RHE / soporte<input name="receipt" value="${escapeAttr(item.receipt)}"></label>
+      <label>RUC<input name="ruc" value="${escapeAttr(item.ruc)}" placeholder="20XXXXXXXXX"></label>
+      <label>Banco<input name="bankName" value="${escapeAttr(item.bankName)}" placeholder="Interbank, BCP..."></label>
+      <label class="full">CCI<input name="cci" value="${escapeAttr(item.cci)}" placeholder="00300000000000000000"></label>
+      <label class="full">Link RHE<input name="receipt" type="url" value="${escapeAttr(item.receipt)}" placeholder="https://..."></label>
+    </div>
+  `);
+}
+
+function openPurchaseDialog(purchase = null) {
+  const item = purchase || newPurchase();
+  editingId = purchase?.id || "";
+  dialogShell("purchase", editingId ? "Editar compra" : "Nueva compra", `
+    <div class="form-grid">
+      <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+      <label>Proveedor<input name="vendor" value="${escapeAttr(item.vendor)}" required></label>
+      <label>RUC proveedor<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
+      <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
+      <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
+      <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
+      <label>Base imponible<input name="subtotal" type="number" step="0.01" value="${item.subtotal}" required></label>
+      <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
+      <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
+    </div>
+  `);
+}
+
+function openInvoicedSaleDialog(sale = null) {
+  const item = sale || newInvoicedSale();
+  editingId = sale?.id || "";
+  dialogShell("invoicedSale", editingId ? "Editar venta facturada" : "Nueva venta facturada", `
+    <div class="form-grid">
+      <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+      <label>Cliente<input name="client" value="${escapeAttr(item.client)}" required></label>
+      <label>RUC cliente<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
+      <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
+      <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
+      <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
+      <label>Base imponible<input name="subtotal" type="number" step="0.01" value="${item.subtotal}" required></label>
+      <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
+      <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
     </div>
   `);
 }
@@ -1468,6 +1685,8 @@ function handleEntitySubmit(event) {
   if (editingType === "expense") saveExpense(data);
   if (editingType === "taxPayment") saveTaxPayment(data);
   if (editingType === "team") saveTeam(data);
+  if (editingType === "purchase") savePurchase(data);
+  if (editingType === "invoicedSale") saveInvoicedSale(data);
   saveState();
   quoteDialog.close();
   render();
@@ -1503,15 +1722,31 @@ function saveCollection(data) {
 }
 
 function saveExpense(data) {
-  const item = newExpense(data);
+  const item = newExpense({ ...data, refund: data.refund === "on", isAdSpend: data.isAdSpend === "on" });
   if (editingId) state.expenses = state.expenses.map(e => e.id === editingId ? { ...e, ...item, id: editingId } : e);
   else state.expenses.unshift(item);
   activeView = "finance";
 }
 
 function saveTaxPayment(data) {
-  state.expenses.unshift(newExpense({ ...data, type: `Impuesto: ${data.type}` }));
+  const item = newTaxPayment(data);
+  if (editingId) state.taxPayments = (state.taxPayments || []).map(t => t.id === editingId ? { ...t, ...item, id: editingId } : t);
+  else state.taxPayments = [item, ...(state.taxPayments || [])];
   activeView = "taxes";
+}
+
+function savePurchase(data) {
+  const item = newPurchase(data);
+  if (editingId) state.purchases = state.purchases.map(p => p.id === editingId ? { ...p, ...item, id: editingId } : p);
+  else state.purchases.unshift(item);
+  activeView = "comprobantes";
+}
+
+function saveInvoicedSale(data) {
+  const item = newInvoicedSale(data);
+  if (editingId) state.invoicedSales = state.invoicedSales.map(s => s.id === editingId ? { ...s, ...item, id: editingId } : s);
+  else state.invoicedSales.unshift(item);
+  activeView = "comprobantes";
 }
 
 function saveTeam(data) {

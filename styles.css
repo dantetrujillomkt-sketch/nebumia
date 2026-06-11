@@ -1111,3 +1111,10 @@ tr:last-child td { border-bottom: 0; }
 .bank-account-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
 .bank-account-item .action-link.danger { color: var(--danger); }
 .bank-account-item .action-link.danger:hover { background: #fff0f3; }
+
+.taxes-layout { display: grid; gap: 1.5rem; }
+.annual-panel { grid-column: 1 / -1; }
+
+.badge-ok { display: inline-block; background: #ddfaef; color: var(--ok); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+.badge-warn { display: inline-block; background: #fff8e0; color: #c68c00; border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+.badge-low { display: inline-block; background: #ffe8e8; color: var(--danger); border-radius: 6px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
