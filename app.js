@@ -193,7 +193,9 @@ function newInvoicedSale(data = {}) {
     subtotal: Number(data.subtotal || 0),
     igv: Number(data.igv || 0),
     total: Number(data.total || 0),
-    currency: data.currency || "PEN"
+    currency: data.currency || "PEN",
+    quoteId: data.quoteId || "",
+    part: data.part || 0
   };
 }
 
@@ -708,6 +710,26 @@ function syncQuoteSideEffects(targetState, q) {
     };
   });
   targetState.collections = targetState.collections.filter(c => c.quoteId !== q.id).concat(next);
+
+  // Auto-create invoicedSale entries for each payment
+  if (!targetState.invoicedSales) targetState.invoicedSales = [];
+  const igvRate = targetState.settings.igvRate;
+  next.forEach(collection => {
+    const alreadyExists = targetState.invoicedSales.some(s => s.quoteId === q.id && s.part === collection.part);
+    if (alreadyExists) return;
+    const igv = q.hasIgv ? collection.amount * igvRate / (1 + igvRate) : 0;
+    targetState.invoicedSales.push(newInvoicedSale({
+      date: collection.dueDate,
+      client: q.client,
+      service: q.service,
+      subtotal: collection.amount - igv,
+      igv,
+      total: collection.amount,
+      currency: q.currency || "PEN",
+      quoteId: q.id,
+      part: collection.part
+    }));
+  });
 }
 
 function renderNav() {
