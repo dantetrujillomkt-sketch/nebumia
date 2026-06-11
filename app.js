@@ -74,6 +74,7 @@ function newLead(data = {}) {
     channel: data.channel || "WhatsApp",
     service: data.service || "",
     estimatedValue: Number(data.estimatedValue || data.value || 0),
+    currency: data.currency || "PEN",
     status: data.status || "Nuevo",
     owner: data.owner || "Dante Trujillo",
     notes: data.notes || "",
@@ -93,6 +94,7 @@ function newQuote(data = {}) {
     owner: data.owner || "Dante Trujillo",
     client: data.client || "",
     subtotal: Number(data.subtotal || 0),
+    currency: data.currency || "PEN",
     status: data.status || "Por cotizar",
     hasIgv: data.hasIgv !== undefined ? Boolean(data.hasIgv) : true,
     paymentType: data.paymentType || "split",
@@ -250,6 +252,7 @@ function migrateState(input) {
       dueDate: c.dueDate || c.due || today(),
       amount: Number(c.amount || 0),
       detraction: Number(c.detraction || 0),
+      currency: c.currency || "PEN",
       status: c.status || "Pendiente",
       paidDate: c.paidDate || "",
       invoice: c.invoice || ""
@@ -512,8 +515,15 @@ function currentMonthName() {
   return months[new Date().getMonth()];
 }
 
-function fmt(amount, currency = state.settings.currency || "PEN") {
+function fmt(amount, currency = "PEN") {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency }).format(amount || 0);
+}
+
+function fmtMixed(rows, valueFn, currencyFn = r => r.currency || "PEN") {
+  const map = {};
+  rows.forEach(r => { const c = currencyFn(r); map[c] = (map[c] || 0) + valueFn(r); });
+  const parts = Object.entries(map).map(([c, v]) => fmt(v, c));
+  return parts.length ? parts.join(" + ") : fmt(0);
 }
 
 function calcQuote(q, sourceState = state) {
@@ -532,7 +542,7 @@ function wonQuotes() {
 function collectionRows() {
   return state.collections.map(c => {
     const quote = state.quotes.find(q => q.id === c.quoteId);
-    return { ...c, quote, client: quote?.client || "Sin cotizacion", service: quote?.service || "", code: quote?.code || "-" };
+    return { ...c, quote, client: quote?.client || "Sin cotizacion", service: quote?.service || "", code: quote?.code || "-", currency: c.currency || quote?.currency || "PEN" };
   });
 }
 
@@ -595,6 +605,7 @@ function syncQuoteSideEffects(targetState, q) {
     return {
       id: old.id || uid(),
       quoteId: q.id,
+      currency: q.currency || "PEN",
       part: index + 1,
       label: q.paymentType === "split" ? `Pago ${index + 1}/2` : "Pago 100%",
       dueDate: old.dueDate || (index === 0 ? q.date : addDays(q.date, 30)),
@@ -643,14 +654,14 @@ const views = {
       ${dashboardFilterBar()}
       <section class="metric-grid dashboard-metrics ${dashboardSections.has("metrics") ? "" : "hidden"}" data-dashboard-section="metrics">
         ${metric("Oportunidades", openLeads.length, `${snapshot.leads.length} registradas`, "up", "8%", "purple")}
-        ${metric("Pipeline de oportunidades", fmt(opportunityAmount), `${openLeads.length} oportunidades abiertas`, "up", "2%", "amber")}
-        ${metric("Ventas ganadas", fmt(snapshot.revenue), `${wonSales.length} cotizaciones ganadas`, "up", "12%", "mint")}
-        ${metric("Ventas perdidas", fmt(lostAmount), `${lostSales.length} cotizaciones perdidas`, "down", "4%", "coral")}
+        ${metric("Pipeline de oportunidades", fmtMixed(openLeads, l => l.estimatedValue), `${openLeads.length} oportunidades abiertas`, "up", "2%", "amber")}
+        ${metric("Ventas ganadas", fmtMixed(snapshot.won, q => q.total), `${wonSales.length} cotizaciones ganadas`, "up", "12%", "mint")}
+        ${metric("Ventas perdidas", fmtMixed(snapshot.lost, q => calcQuote(q).total, q => q.currency || "PEN"), `${lostSales.length} cotizaciones perdidas`, "down", "4%", "coral")}
       </section>
       <section class="dashboard-grid">
         <div class="panel chart-panel ${dashboardSections.has("revenue") ? "" : "hidden"}" data-dashboard-section="revenue">
           <div class="panel-head">
-            <div><h3>Ingresos</h3><p>${fmt(snapshot.revenue)} vendidos · ${fmt(snapshot.paid)} cobrado</p></div>
+            <div><h3>Ingresos</h3><p>${fmtMixed(snapshot.won, q => q.total)} vendidos · ${fmtMixed(snapshot.collections.filter(r => r.status === "Pagado"), r => r.amount)} cobrado</p></div>
           </div>
           <canvas id="revenueChart" class="chart"></canvas>
         </div>
@@ -695,7 +706,7 @@ const views = {
     return `
       <section class="metric-grid">
         ${metric("Leads abiertos", openLeads.length, "Aun no cerrados")}
-        ${metric("Pipeline estimado", fmt(openLeads.reduce((s, l) => s + l.estimatedValue, 0)), "Oportunidades abiertas")}
+        ${metric("Pipeline estimado", fmtMixed(openLeads, l => l.estimatedValue), "Oportunidades abiertas")}
         ${metric("Cotizados", leads.filter(l => l.quoteId).length, "Leads con PPTO vinculado")}
         ${metric("Fuentes activas", new Set(leads.map(l => l.source)).size, "Canales de adquisicion")}
       </section>
@@ -759,9 +770,10 @@ const views = {
         ${metric("Comisiones", fmt(sales.reduce((sum, sale) => sum + sale.commission, 0)), "Base comercial", "", "", "coral")}
       </section>
       ${moduleToolbar({ search: "Buscar venta, cliente o servicio", action: "quote" })}
-      ${table(["PPTO", "Cliente", "Servicio", "Subtotal", "IGV", "Total", "Detraccion", "Comision", "Acciones"], sales.map(s => [
-      s.code, s.client, s.service, fmt(s.subtotal), fmt(s.igv), fmt(s.total), fmt(s.detraction), fmt(s.commission), `<button class="action-link" data-edit-quote="${s.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-    ]))}`;
+      ${table(["PPTO", "Cliente", "Servicio", "Subtotal", "IGV", "Total", "Detraccion", "Comision", "Moneda", "Acciones"], sales.map(s => {
+      const cur = s.currency || "PEN";
+      return [s.code, s.client, s.service, fmt(s.subtotal, cur), fmt(s.igv, cur), fmt(s.total, cur), fmt(s.detraction, cur), fmt(s.commission, cur), `<span class="currency-badge ${cur.toLowerCase()}">${cur}</span>`, `<button class="action-link" data-edit-quote="${s.id}" type="button">${icon("edit")}<span>Editar</span></button>`];
+    }))}`;
   },
   collections() {
     const collections = collectionRows().filter(row => dateInRange(row.paidDate || row.dueDate));
@@ -780,8 +792,8 @@ const views = {
         filters: `<select data-table-filter><option value="">Todos los estados</option>${options(paymentStatuses)}</select>`,
         action: "quote"
       })}
-      ${table(["PPTO", "Cliente", "Pago", "Vence", "Monto", "Detraccion", "Estado", "Acciones"], collections.map(r => [
-      r.code, r.client, r.label, r.dueDate, fmt(r.amount), fmt(r.detraction), badge(r.status), collectionActions(r)
+      ${table(["PPTO", "Cliente", "Pago", "Vence", "Monto", "Detraccion", "Moneda", "Estado", "Acciones"], collections.map(r => [
+      r.code, r.client, r.label, r.dueDate, fmt(r.amount, r.currency), fmt(r.detraction, r.currency), `<span class="currency-badge ${(r.currency || "pen").toLowerCase()}">${r.currency || "PEN"}</span>`, badge(r.status), collectionActions(r)
     ]))}`;
   },
   finance() {
@@ -799,7 +811,7 @@ const views = {
       <section class="finance-sections">
         <div>
           <div class="section-heading"><h3>Ingresos cobrados</h3><span>${paidRows.length} movimientos</span></div>
-          ${table(["Fecha", "Cliente", "PPTO", "Concepto", "Monto"], paidRows.map(row => [row.paidDate || row.dueDate, row.client, row.code, row.label, fmt(row.amount)]))}
+          ${table(["Fecha", "Cliente", "PPTO", "Concepto", "Monto"], paidRows.map(row => [row.paidDate || row.dueDate, row.client, row.code, row.label, fmt(row.amount, row.currency)]))}
         </div>
         <div>
           <div class="section-heading"><h3>Egresos</h3><span>${snapshot.expenses.length} movimientos</span></div>
@@ -901,7 +913,7 @@ function table(headers, rows) {
 
 function leadsTable(rows) {
   return table(["Fecha", "Cliente", "Fuente", "Servicio", "Valor", "Estado", "Acciones"], rows.map(l => [
-    l.date, l.client, `${l.source}<br><span class="muted">${l.channel}</span>`, l.service, fmt(l.estimatedValue), badge(l.status), leadActions(l)
+    l.date, l.client, `${l.source}<br><span class="muted">${l.channel}</span>`, l.service, fmt(l.estimatedValue, l.currency || "PEN"), badge(l.status), leadActions(l)
   ]));
 }
 
@@ -917,9 +929,10 @@ function leadActions(l) {
 }
 
 function quotesTable(rows) {
-  return table(["PPTO", "Mes", "Cliente", "Servicio", "Subtotal", "Total", "Estado", "Acciones"], rows.map(q => {
+  return table(["PPTO", "Mes", "Cliente", "Servicio", "Subtotal", "Total", "Moneda", "Estado", "Acciones"], rows.map(q => {
     const c = calcQuote(q);
-    return [q.code, q.month, q.client, q.service, fmt(q.subtotal), fmt(c.total), badge(q.status), quoteActions(q)];
+    const cur = q.currency || "PEN";
+    return [q.code, q.month, q.client, q.service, fmt(q.subtotal, cur), fmt(c.total, cur), `<span class="currency-badge ${cur.toLowerCase()}">${cur}</span>`, badge(q.status), quoteActions(q)];
   }));
 }
 
@@ -1294,6 +1307,7 @@ function openLeadDialog(lead = null) {
       <label>Comercial<input name="owner" value="${escapeAttr(item.owner)}" required></label>
       <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
       <label>Valor estimado<input name="estimatedValue" type="number" min="0" step="0.01" value="${item.estimatedValue}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(leadStatuses, item.status)}</select></label>
       <label class="full">Notas<textarea name="notes" rows="3">${escapeHtml(item.notes)}</textarea></label>
     </div>
@@ -1313,6 +1327,7 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
       <label>Comercial<input name="owner" value="${escapeAttr(item.owner)}" required></label>
       <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
       <label>Monto sin IGV<input name="subtotal" type="number" min="0" step="0.01" value="${item.subtotal}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
       <label>Tipo de pago<select name="paymentType"><option value="split" ${item.paymentType === "split" ? "selected" : ""}>50% / 50%</option><option value="full" ${item.paymentType === "full" ? "selected" : ""}>100%</option></select></label>
       <label class="check-row"><input name="hasIgv" type="checkbox" ${item.hasIgv ? "checked" : ""}> Aplica IGV</label>
