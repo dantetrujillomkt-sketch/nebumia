@@ -123,7 +123,7 @@ function newClient(data = {}) {
 function newExpense(data = {}) {
   return {
     id: data.id || uid(),
-    month: data.month || currentMonthName(),
+    date: data.date || (data.month ? monthDate(data.month) || today() : today()),
     concept: data.concept || "",
     type: data.type || "Gasto fijo",
     amount: Number(data.amount || 0),
@@ -321,7 +321,7 @@ function migrateState(input) {
       invoice: c.invoice || "",
       bankAccount: c.bankAccount || ""
     })),
-    expenses: (input.expenses || base.expenses).map(newExpense),
+    expenses: (input.expenses || base.expenses).map(e => newExpense({ ...e, date: e.date || monthDate(e.month) || today() })),
     team: (input.team || base.team).map(newTeamPayment),
     taxPayments: (input.taxPayments || []).map(newTaxPayment),
     purchases: (input.purchases || []).map(newPurchase),
@@ -570,8 +570,8 @@ function dashboardSnapshot() {
   const won = quotes.filter(quote => quote.status === "Ganado").map(quote => ({ ...quote, ...calcQuote(quote) }));
   const lost = quotes.filter(quote => quote.status === "Perdido");
   const collections = collectionRows().filter(row => dateInRange(row.paidDate || row.dueDate));
-  const expenses = state.expenses.filter(expense => dateInRange(monthDate(expense.month)));
-  const team = state.team.filter(payment => dateInRange(monthDate(payment.month)));
+  const expenses = state.expenses.filter(expense => dateInRange(expense.date || monthDate(expense.month)));
+  const team = state.team.filter(payment => dateInRange(payment.dueDate || monthDate(payment.month)));
   const revenue = won.reduce((sum, sale) => sum + sale.total, 0);
   const paid = collections.filter(row => row.status === "Pagado").reduce((sum, row) => sum + row.amount, 0);
   const pending = collections.filter(row => row.status !== "Pagado").reduce((sum, row) => sum + row.amount, 0);
@@ -932,8 +932,8 @@ const views = {
         </div>
         <div>
           <div class="section-heading"><h3>Egresos</h3><span>${snapshot.expenses.length} movimientos</span></div>
-          ${table(["Mes", "Concepto", "Tipo", "Monto", "Moneda", "Pauta", "Doc.", "Estado", "Acciones"], snapshot.expenses.map(e => [
-            e.month, `${e.refund ? "↩ " : ""}${e.concept}`, e.type,
+          ${table(["Fecha", "Concepto", "Tipo", "Monto", "Moneda", "Pauta", "Doc.", "Estado", "Acciones"], snapshot.expenses.map(e => [
+            e.date || e.month, `${e.refund ? "↩ " : ""}${e.concept}`, e.type,
             fmt(e.amount, e.currency),
             `<span class="currency-badge ${(e.currency || "pen").toLowerCase()}">${e.currency || "PEN"}</span>`,
             e.isAdSpend ? `<span class="badge-ok">Ads</span>` : "—",
@@ -982,7 +982,7 @@ const views = {
     `;
   },
   team() {
-    const team = state.team.filter(item => dateInRange(monthDate(item.month)));
+    const team = state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month)));
     const paidTeam = team.filter(item => item.status === "Pagado");
     return `
       <section class="metric-grid">
@@ -996,8 +996,8 @@ const views = {
         filters: `<select data-table-filter><option value="">Todos los estados</option><option>Pagado</option><option>Pendiente</option></select>`,
         action: "payment"
       })}
-      ${table(["Mes", "Fecha", "Nombre", "RUC", "Banco / CCI", "Tipo", "Pago", "RHE", "Estado", "Acciones"], team.map(t => [
-        t.month, t.dueDate || "—", t.name, t.ruc || "—",
+      ${table(["Fecha", "Nombre", "RUC", "Banco / CCI", "Tipo", "Pago", "RHE", "Estado", "Acciones"], team.map(t => [
+        t.dueDate || t.month, t.name, t.ruc || "—",
         t.bankName ? `${t.bankName}${t.cci ? " · " + t.cci : ""}` : "—",
         t.role, fmt(t.amount), t.receipt ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>RHE</span></a>` : "—",
         badge(t.status),
@@ -1534,18 +1534,20 @@ function openLeadDialog(lead = null) {
   dialogShell("lead", editingId ? "Editar lead" : "Nuevo lead", `
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
-      <label>Cliente<input name="client" value="${escapeAttr(item.client)}" required></label>
+      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
       <label>Contacto<input name="contact" value="${escapeAttr(item.contact)}"></label>
-      <label>Fuente<input name="source" value="${escapeAttr(item.source)}" required></label>
-      <label>Canal<input name="channel" value="${escapeAttr(item.channel)}"></label>
-      <label>Comercial<input name="owner" value="${escapeAttr(item.owner)}" required></label>
-      <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
+      <label>Fuente<input name="source" list="dl-sources" value="${escapeAttr(item.source)}" required></label>
+      <label>Canal<input name="channel" list="dl-channels" value="${escapeAttr(item.channel)}"></label>
+      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}" required></label>
+      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
       <label>Valor estimado<input name="estimatedValue" type="number" min="0" step="0.01" value="${item.estimatedValue}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(leadStatuses, item.status)}</select></label>
       <label class="full">Notas<textarea name="notes" rows="3">${escapeHtml(item.notes)}</textarea></label>
     </div>
+    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
 function openQuoteDialog(q = null, isNewFromLead = false) {
@@ -1555,11 +1557,10 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
     <div class="form-grid">
       <label>PPTO<input name="code" value="${escapeAttr(item.code || nextQuoteCode())}" required></label>
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
-      <label>Mes<select name="month">${options(months, item.month)}</select></label>
-      <label>Categoria<input name="category" value="${escapeAttr(item.category)}" required></label>
-      <label>Cliente<input name="client" value="${escapeAttr(item.client)}" required></label>
-      <label>Comercial<input name="owner" value="${escapeAttr(item.owner)}" required></label>
-      <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
+      <label>Categoria<input name="category" list="dl-categories" value="${escapeAttr(item.category)}" required></label>
+      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
+      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}" required></label>
+      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
       <label>Monto sin IGV<input name="subtotal" type="number" min="0" step="0.01" value="${item.subtotal}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
@@ -1569,7 +1570,9 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
       <label class="full">Repositorio<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
       <label class="full">Comentarios<textarea name="comments" rows="3">${escapeHtml(item.comments)}</textarea></label>
     </div>
+    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
 function openClientDialog(client = null) {
@@ -1577,15 +1580,17 @@ function openClientDialog(client = null) {
   editingId = client && state.clients.some(c => c.id === client.id) ? client.id : "";
   dialogShell("client", editingId ? "Editar cliente" : "Nuevo cliente", `
     <div class="form-grid">
-      <label>Cliente<input name="name" value="${escapeAttr(item.name)}" required></label>
-      <label>RUC<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
+      <label>Cliente<input name="name" list="dl-clients" value="${escapeAttr(item.name)}" required></label>
+      <label>RUC<input name="ruc" value="${escapeAttr(item.ruc)}" placeholder="20XXXXXXXXX"></label>
       <label>Contacto<input name="contact" value="${escapeAttr(item.contact)}"></label>
       <label>Correo<input name="email" type="email" value="${escapeAttr(item.email)}"></label>
-      <label>Telefono<input name="phone" value="${escapeAttr(item.phone)}"></label>
-      <label>Comercial<input name="owner" value="${escapeAttr(item.owner)}"></label>
+      <label>Teléfono<input name="phone" value="${escapeAttr(item.phone)}" placeholder="+51 9XXXXXXXX"></label>
+      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}"></label>
       <label class="full">Notas<textarea name="notes" rows="3">${escapeHtml(item.notes)}</textarea></label>
     </div>
+    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
 function openCollectionDialog(row) {
@@ -1609,10 +1614,10 @@ function openExpenseDialog(expense = null) {
   editingId = expense && state.expenses.some(e => e.id === expense.id) ? expense.id : "";
   dialogShell("expense", editingId ? "Editar gasto" : "Nuevo gasto", `
     <div class="form-grid">
-      <label>Mes<select name="month">${options(months, item.month)}</select></label>
+      <label>Fecha<input name="date" type="date" value="${item.date || today()}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Tipo<input name="type" value="${escapeAttr(item.type)}" required></label>
-      <label>Encargado<input name="owner" value="${escapeAttr(item.owner)}"></label>
+      <label>Tipo<input name="type" list="dl-expense-types" value="${escapeAttr(item.type)}" required></label>
+      <label>Encargado<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}"></label>
       <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Completado"], item.status)}</select></label>
@@ -1620,6 +1625,7 @@ function openExpenseDialog(expense = null) {
       <label><input type="checkbox" name="refund" ${item.refund ? "checked" : ""}> Es devolución</label>
       <label><input type="checkbox" name="isAdSpend" ${item.isAdSpend ? "checked" : ""}> Pauta publicitaria (ads)</label>
     </div>
+    ${buildDatalicists()}
   `);
 }
 
@@ -1644,8 +1650,7 @@ function openTeamDialog(payment = null) {
   editingId = payment && state.team.some(t => t.id === payment.id) ? payment.id : "";
   dialogShell("team", editingId ? "Editar pago" : "Nuevo pago de personal", `
     <div class="form-grid">
-      <label>Mes<select name="month">${options(months, item.month)}</select></label>
-      <label>Fecha acordada<input name="dueDate" type="date" value="${item.dueDate}"></label>
+      <label>Fecha<input name="dueDate" type="date" value="${item.dueDate || today()}" required></label>
       <label>Nombre<input name="name" value="${escapeAttr(item.name)}" required></label>
       <label>Tipo<input name="role" value="${escapeAttr(item.role)}" required></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
@@ -1655,6 +1660,7 @@ function openTeamDialog(payment = null) {
       <label class="full">CCI<input name="cci" value="${escapeAttr(item.cci)}" placeholder="00300000000000000000"></label>
       <label class="full">Link RHE<input name="receipt" type="url" value="${escapeAttr(item.receipt)}" placeholder="https://..."></label>
     </div>
+    ${buildDatalicists()}
   `);
 }
 
@@ -1665,7 +1671,7 @@ function openPurchaseDialog(purchase = null) {
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Proveedor<input name="vendor" value="${escapeAttr(item.vendor)}" required></label>
+      <label>Proveedor<input name="vendor" list="dl-vendors" value="${escapeAttr(item.vendor)}" required></label>
       <label>RUC proveedor<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
       <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
       <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
@@ -1674,7 +1680,9 @@ function openPurchaseDialog(purchase = null) {
       <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
       <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
     </div>
+    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
 function openInvoicedSaleDialog(sale = null) {
@@ -1684,16 +1692,18 @@ function openInvoicedSaleDialog(sale = null) {
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Cliente<input name="client" value="${escapeAttr(item.client)}" required></label>
+      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
       <label>RUC cliente<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
       <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
       <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
-      <label class="full">Servicio<input name="service" value="${escapeAttr(item.service)}" required></label>
+      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
       <label>Base imponible<input name="subtotal" type="number" step="0.01" value="${item.subtotal}" required></label>
       <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
       <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
     </div>
+    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
 function handleEntitySubmit(event) {
@@ -1784,6 +1794,49 @@ function escapeHtml(text = "") {
 
 function escapeAttr(text = "") {
   return escapeHtml(text);
+}
+
+function buildDatalicists() {
+  const dl = (id, vals) => `<datalist id="${id}">${[...new Set(vals.filter(Boolean))].map(v => `<option value="${escapeAttr(v)}">`).join("")}</datalist>`;
+  return [
+    dl("dl-clients",  state.clients.map(c => c.name)),
+    dl("dl-owners",   [...state.leads, ...state.quotes, ...state.team].map(i => i.owner || i.name).filter(s => s && s.length > 1)),
+    dl("dl-categories", state.quotes.map(q => q.category)),
+    dl("dl-services", state.quotes.map(q => q.service).slice(0, 40)),
+    dl("dl-expense-types", state.expenses.map(e => e.type)),
+    dl("dl-sources",  state.leads.map(l => l.source)),
+    dl("dl-channels", state.leads.map(l => l.channel)),
+    dl("dl-vendors",  (state.purchases || []).map(p => p.vendor))
+  ].join("");
+}
+
+function bindDialogAutofills() {
+  const form = quoteDialog.querySelector("form");
+  if (!form) return;
+  const clientInput = form.querySelector('[name="client"], [name="name"]');
+  if (!clientInput) return;
+  const fill = (name, value) => {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el && !el.value) el.value = value || "";
+  };
+  clientInput.addEventListener("input", () => {
+    const found = state.clients.find(c => c.name.toLowerCase() === clientInput.value.trim().toLowerCase());
+    if (!found) return;
+    fill("ruc", found.ruc);
+    fill("contact", found.contact);
+    fill("email", found.email);
+    fill("phone", found.phone);
+    fill("owner", found.owner);
+  });
+  // Vendor autofill for purchases
+  const vendorInput = form.querySelector('[name="vendor"]');
+  if (vendorInput) {
+    vendorInput.addEventListener("input", () => {
+      const found = (state.purchases || []).find(p => p.vendor.toLowerCase() === vendorInput.value.trim().toLowerCase());
+      if (!found) return;
+      fill("ruc", found.ruc);
+    });
+  }
 }
 
 function drawCharts() {
