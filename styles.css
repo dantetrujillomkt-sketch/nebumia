@@ -1106,3 +1106,8 @@ tr:last-child td { border-bottom: 0; }
   .date-inputs { grid-template-columns: 1fr; margin-top: 24px; }
   .date-inputs > span { display: none; }
 }
+
+.bank-accounts-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.bank-account-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
+.bank-account-item .action-link.danger { color: var(--danger); }
+.bank-account-item .action-link.danger:hover { background: #fff0f3; }

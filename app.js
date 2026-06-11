@@ -145,10 +145,11 @@ function seedState() {
     settings: {
       monthlyGoal: 8000,
       currency: "PEN",
-    commissionRate: COMMISSION_RATE,
-    detractionRate: DETRACTION_RATE,
-    igvRate: IGV_RATE,
-    detractionThreshold: DETRACTION_THRESHOLD
+      commissionRate: COMMISSION_RATE,
+      detractionRate: DETRACTION_RATE,
+      igvRate: IGV_RATE,
+      detractionThreshold: DETRACTION_THRESHOLD,
+      bankAccounts: ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"]
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -893,6 +894,22 @@ const views = {
           </div>
         </aside>
       </form>
+      <section class="panel settings-panel" style="margin-top:1rem">
+        <div class="panel-head"><div><h3>Cuentas bancarias</h3><p>Cuentas disponibles al registrar cobros (DEP. C. CORRIENTE).</p></div></div>
+        <ul class="bank-accounts-list">
+          ${(state.settings.bankAccounts || []).map((a, i) => `
+            <li class="bank-account-item">
+              <span>${a}</span>
+              <button class="action-link danger" data-delete-bank="${i}" type="button">${icon("trash")}<span>Eliminar</span></button>
+            </li>`).join("")}
+        </ul>
+        <form id="addBankAccountForm" class="form-grid" style="margin-top:1rem">
+          <label class="full">Nueva cuenta<input name="accountName" placeholder="Ej: CC BCP S/" required></label>
+          <div style="grid-column:1/-1;display:flex;justify-content:flex-end">
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar cuenta</span></button>
+          </div>
+        </form>
+      </section>
     `;
   }
 };
@@ -1015,6 +1032,22 @@ function bindViewEvents() {
   bindActions("[data-edit-team]", id => openTeamDialog(state.team.find(x => x.id === id)));
   const settingsForm = document.querySelector("#settingsForm");
   if (settingsForm) settingsForm.addEventListener("submit", saveSettings);
+  const addBankForm = document.querySelector("#addBankAccountForm");
+  if (addBankForm) addBankForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("accountName").trim();
+    if (name && !state.settings.bankAccounts.includes(name)) {
+      state.settings.bankAccounts = [...(state.settings.bankAccounts || []), name];
+      saveState();
+      render();
+    }
+  });
+  document.querySelectorAll("[data-delete-bank]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.getAttribute("data-delete-bank"));
+    state.settings.bankAccounts = state.settings.bankAccounts.filter((_, idx) => idx !== i);
+    saveState();
+    render();
+  }));
 }
 
 function bindDashboardQuickFilters() {
@@ -1370,7 +1403,7 @@ function openCollectionDialog(row) {
       <label>Detracción<input name="detraction" type="number" step="0.01" value="${row.detraction}"></label>
       <label>Estado<select name="status">${options(paymentStatuses, row.status)}</select></label>
       <label>Factura<input name="invoice" value="${escapeAttr(row.invoice)}" placeholder="F001-000..."></label>
-      <label class="full">Cuenta (DEP. C. CORRIENTE)<input name="bankAccount" value="${escapeAttr(row.bankAccount || "")}" placeholder="CC Interbank S/, CC Interbank $..."></label>
+      <label class="full">Cuenta (DEP. C. CORRIENTE)<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${row.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
     </div>
   `);
 }
