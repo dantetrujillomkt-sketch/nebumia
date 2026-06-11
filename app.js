@@ -255,7 +255,8 @@ function migrateState(input) {
       currency: c.currency || "PEN",
       status: c.status || "Pendiente",
       paidDate: c.paidDate || "",
-      invoice: c.invoice || ""
+      invoice: c.invoice || "",
+      bankAccount: c.bankAccount || ""
     })),
     expenses: (input.expenses || base.expenses).map(newExpense),
     team: (input.team || base.team).map(newTeamPayment)
@@ -599,21 +600,25 @@ function syncQuoteSideEffects(targetState, q) {
   }
   const calc = calcQuote(q, targetState);
   const existing = targetState.collections.filter(c => c.quoteId === q.id);
-  const parts = q.paymentType === "split" ? [0.5, 0.5] : [1];
+  const parts = q.paymentType === "split" ? [0.5, 0.5] : q.paymentType === "thirds" ? [1/3, 1/3, 1/3] : [1];
+  const totalParts = parts.length;
   const next = parts.map((part, index) => {
     const old = existing.find(c => c.part === index + 1) || {};
+    const label = totalParts === 1 ? "Pago 100%" : `Pago ${index + 1}/${totalParts}`;
+    const dueDateOffset = index * 30;
     return {
       id: old.id || uid(),
       quoteId: q.id,
       currency: q.currency || "PEN",
       part: index + 1,
-      label: q.paymentType === "split" ? `Pago ${index + 1}/2` : "Pago 100%",
-      dueDate: old.dueDate || (index === 0 ? q.date : addDays(q.date, 30)),
+      label,
+      dueDate: old.dueDate || addDays(q.date, dueDateOffset),
       amount: calc.total * part,
       detraction: calc.detraction * part,
       status: old.status || (index === 0 ? "Facturado" : "Pendiente"),
       paidDate: old.paidDate || "",
-      invoice: old.invoice || ""
+      invoice: old.invoice || "",
+      bankAccount: old.bankAccount || ""
     };
   });
   targetState.collections = targetState.collections.filter(c => c.quoteId !== q.id).concat(next);
@@ -792,8 +797,8 @@ const views = {
         filters: `<select data-table-filter><option value="">Todos los estados</option>${options(paymentStatuses)}</select>`,
         action: "quote"
       })}
-      ${table(["PPTO", "Cliente", "Pago", "Vence", "Monto", "Detraccion", "Moneda", "Estado", "Acciones"], collections.map(r => [
-      r.code, r.client, r.label, r.dueDate, fmt(r.amount, r.currency), fmt(r.detraction, r.currency), `<span class="currency-badge ${(r.currency || "pen").toLowerCase()}">${r.currency || "PEN"}</span>`, badge(r.status), collectionActions(r)
+      ${table(["PPTO", "Cliente", "Pago", "Fecha PP", "Fecha RP", "Monto", "Detracción", "Factura", "Cuenta", "Moneda", "Estado", "Acciones"], collections.map(r => [
+      r.code, r.client, r.label, r.dueDate, r.paidDate || "—", fmt(r.amount, r.currency), fmt(r.detraction, r.currency), r.invoice || "—", r.bankAccount || "—", `<span class="currency-badge ${(r.currency || "pen").toLowerCase()}">${r.currency || "PEN"}</span>`, badge(r.status), collectionActions(r)
     ]))}`;
   },
   finance() {
@@ -1329,7 +1334,7 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
       <label>Monto sin IGV<input name="subtotal" type="number" min="0" step="0.01" value="${item.subtotal}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
-      <label>Tipo de pago<select name="paymentType"><option value="split" ${item.paymentType === "split" ? "selected" : ""}>50% / 50%</option><option value="full" ${item.paymentType === "full" ? "selected" : ""}>100%</option></select></label>
+      <label>Tipo de pago<select name="paymentType"><option value="split" ${item.paymentType === "split" ? "selected" : ""}>50% / 50%</option><option value="thirds" ${item.paymentType === "thirds" ? "selected" : ""}>3 cuotas (33/33/33)</option><option value="full" ${item.paymentType === "full" ? "selected" : ""}>100%</option></select></label>
       <label class="check-row"><input name="hasIgv" type="checkbox" ${item.hasIgv ? "checked" : ""}> Aplica IGV</label>
       <input name="leadId" type="hidden" value="${escapeAttr(item.leadId || "")}">
       <label class="full">Repositorio<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
@@ -1359,12 +1364,13 @@ function openCollectionDialog(row) {
   editingId = row.id;
   dialogShell("collection", "Editar cobro", `
     <div class="form-grid">
-      <label>Vencimiento<input name="dueDate" type="date" value="${row.dueDate}" required></label>
+      <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate}" required></label>
+      <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${row.amount}" required></label>
-      <label>Detraccion<input name="detraction" type="number" step="0.01" value="${row.detraction}"></label>
+      <label>Detracción<input name="detraction" type="number" step="0.01" value="${row.detraction}"></label>
       <label>Estado<select name="status">${options(paymentStatuses, row.status)}</select></label>
-      <label>Fecha de pago<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
       <label>Factura<input name="invoice" value="${escapeAttr(row.invoice)}" placeholder="F001-000..."></label>
+      <label class="full">Cuenta (DEP. C. CORRIENTE)<input name="bankAccount" value="${escapeAttr(row.bankAccount || "")}" placeholder="CC Interbank S/, CC Interbank $..."></label>
     </div>
   `);
 }
@@ -1459,7 +1465,7 @@ function saveClient(data) {
 }
 
 function saveCollection(data) {
-  state.collections = state.collections.map(c => c.id === editingId ? { ...c, ...data, amount: Number(data.amount), detraction: Number(data.detraction || 0) } : c);
+  state.collections = state.collections.map(c => c.id === editingId ? { ...c, ...data, amount: Number(data.amount), detraction: Number(data.detraction || 0), bankAccount: data.bankAccount || "" } : c);
   activeView = "collections";
 }
 
