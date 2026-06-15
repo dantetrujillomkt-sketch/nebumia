@@ -1457,7 +1457,7 @@ const views = {
       <div class="dash-main-grid" data-dash-grid>
         <div class="panel chart-panel" data-dash-section="revenue">
           <div class="panel-head">
-            <div><h3>Ingresos vs Egresos</h3><p>Últimos 6 meses · vendido vs cobrado</p></div>
+            <div><h3>Ingresos vs Egresos</h3><p id="revenueChartSubtitle">vendido vs cobrado</p></div>
           </div>
           <canvas id="revenueChart" class="chart"></canvas>
         </div>
@@ -4460,18 +4460,73 @@ function drawCharts() {
     ctx.fillText("Meta", padL + 4, goalY - 5);
   }
 
-  // Legend
-  const legendY = padT - 8;
+  // Subtitle — reflect active filter
+  const subtitleEl = document.getElementById("revenueChartSubtitle");
+  if (subtitleEl) subtitleEl.textContent = `${dashboardRange.label} · vendido vs cobrado`;
+
+  // Legend — top right
   const legendItems = [["#4f7cff","Vendido"],["#34d399","Cobrado"],["#fb7185","Egresos"]];
-  let lx = padL;
+  ctx.font = `11px Inter, sans-serif`;
+  const totalLegendW = legendItems.reduce((s,[,l]) => s + 10 + 4 + ctx.measureText(l).width + 16, 0);
+  let lx = rect.width - padR - totalLegendW;
+  const legendY = padT - 8;
   legendItems.forEach(([color, label]) => {
     ctx.fillStyle = color;
     ctx.fillRect(lx, legendY, 10, 10);
     ctx.fillStyle = "#64748b";
-    ctx.font = `11px Inter, sans-serif`;
-    ctx.fillText(label, lx + 13, legendY + 9);
-    lx += ctx.measureText(label).width + 30;
+    ctx.fillText(label, lx + 14, legendY + 9);
+    lx += 14 + ctx.measureText(label).width + 16;
   });
+
+  // Store bar hit areas for tooltip
+  canvas._chartBars = periods.map((p, i) => {
+    const cx = padL + i * groupW + groupW / 2;
+    const gap = barW + 2;
+    return {
+      label: p.label,
+      bars: [
+        { name: "Vendido", color: "#4f7cff", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
+        { name: "Cobrado", color: "#34d399", value: cobValues[i], x: cx - barW/2,       y: padT + chartH - (cobValues[i]/max)*chartH, w: barW, h: (cobValues[i]/max)*chartH },
+        { name: "Egresos", color: "#fb7185", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
+      ]
+    };
+  });
+
+  // Attach tooltip listener once
+  if (!canvas._tooltipBound) {
+    canvas._tooltipBound = true;
+    let tooltip = document.getElementById("chartTooltip");
+    if (!tooltip) {
+      tooltip = document.createElement("div");
+      tooltip.id = "chartTooltip";
+      tooltip.style.cssText = "position:fixed;pointer-events:none;background:#1e293b;color:#f1f5f9;font:12px Inter,sans-serif;padding:8px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:9999;line-height:1.6;white-space:nowrap;";
+      document.body.appendChild(tooltip);
+    }
+    canvas.addEventListener("mousemove", e => {
+      const r = canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      let hit = null;
+      for (const period of (canvas._chartBars || [])) {
+        for (const bar of period.bars) {
+          if (mx >= bar.x && mx <= bar.x + bar.w && my >= bar.y && my <= bar.y + bar.h) { hit = { period, bar }; break; }
+        }
+        if (hit) break;
+      }
+      if (hit) {
+        const fmt = v => v >= 1000 ? `S/ ${(v/1000).toFixed(1)}k` : `S/ ${Math.round(v)}`;
+        tooltip.innerHTML = `<strong style="color:${hit.bar.color}">${hit.bar.name}</strong> · ${hit.period.label}<br>${fmt(hit.bar.value)}`;
+        tooltip.style.display = "block";
+        tooltip.style.left = (e.clientX + 12) + "px";
+        tooltip.style.top  = (e.clientY - 36) + "px";
+      } else {
+        tooltip.style.display = "none";
+      }
+    });
+    canvas.addEventListener("mouseleave", () => {
+      const tooltip = document.getElementById("chartTooltip");
+      if (tooltip) tooltip.style.display = "none";
+    });
+  }
 }
 
 document.querySelector("#loginForm").addEventListener("submit", async event => {
