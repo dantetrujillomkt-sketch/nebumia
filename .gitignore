@@ -1,0 +1,6 @@
+.env
+*.backup
+.claude/
+server.js
+dev-server.ps1
+serve.ps1
