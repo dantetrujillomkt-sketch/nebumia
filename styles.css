@@ -606,7 +606,7 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 }
 .topbar {
   position: relative;
-  z-index: 100;
+  z-index: 500;
   display: flex;
   align-items: center;
   justify-content: flex-end;
