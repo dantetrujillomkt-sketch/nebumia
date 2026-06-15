@@ -17,16 +17,42 @@ function toCamel(obj) {
   return out;
 }
 
+// Columns that exist in Supabase for each table (prevents unknown-column upsert errors)
+const SB_COLS = {
+  clients:       ["id","name","ruc","date","contact","email","phone","client_type","country","owner","source","notes"],
+  leads:         ["id","name","client","contact","service","source","channel","owner","status","estimated_value","date","notes","quote_id"],
+  quotes:        ["id","code","lead_id","month","client","service","category","owner","subtotal","has_igv","status","payment_type","currency","date","won_date","repo","comments","cuotas","invoice","bank_account"],
+  expenses:      ["id","date","concept","type","amount","currency","status","owner","refund","is_ad_spend","vendor","ruc","invoice","category","doc_link"],
+  team_payments: ["id","month","name","role","amount","status","receipt","due_date","ruc","currency","bank_name","account_number","cci","comm_invoice","comm_repo"],
+  tax_payments:  ["id","date","type","period","amount","status","sunat_ref","doc_link"],
+  purchases:     ["id","date","vendor","ruc","invoice_type","invoice_num","concept","subtotal","igv","total","currency","detraction","paid_date","bank_account","declared","repo"],
+  invoiced_sales:["id","date","client","ruc","invoice_type","invoice_num","service","subtotal","igv","total","currency","quote_id","part"],
+  cash_entries:  ["id","date","type","concept","category","amount","currency","status","bank_account","notes","invoice"],
+  collections:   ["id","quote_id","part","label","due_date","amount","detraction","currency","status","paid_date","invoice","bank_account","declared"],
+  declaraciones: ["id","period","igv1011","renta3121","otro","otro_concepto","status","notes"],
+};
+
 async function sbSyncTable(table, records) {
   if (!sbUser) return;
   const uid = sbUser.id;
-  const rows = records.map(r => ({ ...toSnake(r), user_id: uid }));
+  const allowed = new Set(SB_COLS[table] || []);
+  const rows = records.map(r => {
+    const snake = toSnake(r);
+    const filtered = { user_id: uid };
+    for (const [k, v] of Object.entries(snake)) {
+      if (allowed.has(k)) filtered[k] = v;
+    }
+    return filtered;
+  });
   const { data: existing } = await sb.from(table).select("id").eq("user_id", uid);
   const dbIds = new Set((existing || []).map(r => r.id));
   const localIds = new Set(rows.map(r => r.id));
   const toDelete = [...dbIds].filter(id => !localIds.has(id));
   if (toDelete.length) await sb.from(table).delete().in("id", toDelete);
-  if (rows.length) await sb.from(table).upsert(rows, { onConflict: "id" });
+  if (rows.length) {
+    const { error } = await sb.from(table).upsert(rows, { onConflict: "id" });
+    if (error) console.error(`sbSyncTable(${table}):`, error.message);
+  }
 }
 
 async function sbSyncSettings() {
@@ -96,6 +122,18 @@ async function sbLoad() {
     sb.from("settings").select("*").eq("user_id", uid).maybeSingle(),
     sb.from("sales_targets").select("*").eq("user_id", uid),
   ]);
+
+  // If Supabase is completely empty but localStorage has data, push local → Supabase instead of wiping
+  const sbEmpty = ![clients,leads,quotes,collections,expenses,team,taxPayments,purchases,invoicedSales,cashEntries].some(a => a?.length);
+  if (sbEmpty && !settings) {
+    const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
+    const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);
+    if (localHasData) {
+      state = migrateState(local);
+      sbSync().catch(e => console.error("sbLoad fallback sync:", e));
+      return;
+    }
+  }
   const base = seedState();
   state.clients       = (clients       || []).map(r => newClient(toCamel(r)));
   state.leads         = (leads         || []).map(r => newLead(toCamel(r)));
