@@ -3336,7 +3336,76 @@ function bindModuleToolbar() {
   document.querySelector("[data-import-state]")?.addEventListener("click", importState);
 }
 
+const EXCEL_SCHEMAS = {
+  clients: {
+    label: "Clientes",
+    cols: { name:"Cliente", ruc:"RUC/DNI", clientType:"Tipo", contact:"Contacto", email:"Correo", phone:"Teléfono", owner:"Comercial", source:"Fuente", country:"País", date:"Fecha", notes:"Notas" },
+    getData: () => state.clients,
+  },
+  leads: {
+    label: "Leads",
+    cols: { name:"Nombre", client:"Empresa", service:"Servicio", source:"Fuente", channel:"Canal", owner:"Comercial", status:"Estado", estimatedValue:"Valor estimado", date:"Fecha", notes:"Notas" },
+    getData: () => state.leads,
+  },
+  quotes: {
+    label: "Cotizaciones",
+    cols: { code:"Código", client:"Cliente", service:"Servicio", category:"Categoría", owner:"Comercial", subtotal:"Subtotal", status:"Estado", paymentType:"Tipo pago", currency:"Moneda", date:"Fecha", wonDate:"Fecha ganado", comments:"Comentarios" },
+    getData: () => state.quotes,
+  },
+  collections: {
+    label: "Cobranzas",
+    cols: { quoteId:"Cotización", label:"Cuota", dueDate:"Vencimiento", amount:"Monto", currency:"Moneda", status:"Estado", paidDate:"Fecha pago", invoice:"Factura", declared:"Declarado" },
+    getData: () => collectionRows(),
+  },
+  expenses: {
+    label: "Gastos",
+    cols: { date:"Fecha", concept:"Concepto", type:"Tipo", amount:"Monto", currency:"Moneda", vendor:"Proveedor", ruc:"RUC", invoice:"Comprobante", category:"Categoría" },
+    getData: () => state.expenses,
+  },
+  team: {
+    label: "Pagos equipo",
+    cols: { month:"Mes", name:"Nombre", role:"Rol", amount:"Monto", currency:"Moneda", status:"Estado", dueDate:"Fecha", ruc:"RUC" },
+    getData: () => state.team,
+  },
+  tax: {
+    label: "Impuestos",
+    cols: { date:"Fecha", type:"Tipo", period:"Período", amount:"Monto", status:"Estado", sunatRef:"N° SUNAT" },
+    getData: () => state.taxPayments,
+  },
+  purchases: {
+    label: "Compras",
+    cols: { date:"Fecha", vendor:"Proveedor", ruc:"RUC", invoiceType:"Tipo comprobante", invoiceNum:"N° comprobante", concept:"Concepto", subtotal:"Subtotal", igv:"IGV", total:"Total", currency:"Moneda" },
+    getData: () => state.purchases,
+  },
+  sales: {
+    label: "Ventas facturadas",
+    cols: { date:"Fecha", client:"Cliente", ruc:"RUC", invoiceType:"Tipo", invoiceNum:"N° comprobante", service:"Servicio", subtotal:"Subtotal", igv:"IGV", total:"Total", currency:"Moneda" },
+    getData: () => state.invoicedSales,
+  },
+  finance: {
+    label: "Caja",
+    cols: { date:"Fecha", type:"Tipo", concept:"Concepto", category:"Categoría", amount:"Monto", currency:"Moneda", status:"Estado", bankAccount:"Cuenta" },
+    getData: () => buildCajaRows(),
+  },
+};
+
 function exportState() {
+  const schema = EXCEL_SCHEMAS[activeView];
+  if (!schema || typeof XLSX === "undefined") { exportStateJson(); return; }
+  const data = schema.getData();
+  if (!data?.length) { showToast("No hay datos para exportar"); return; }
+  const cols = schema.cols;
+  const keys = Object.keys(cols);
+  const rows = [Object.values(cols), ...data.map(r => keys.map(k => r[k] ?? ""))];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // Column widths
+  ws["!cols"] = keys.map(k => ({ wch: Math.max(cols[k].length, 14) }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, schema.label);
+  XLSX.writeFile(wb, `nebumia-${activeView}-${today()}.xlsx`);
+}
+
+function exportStateJson() {
   const payload = JSON.stringify({ product: "Nebumia", exportedAt: new Date().toISOString(), state }, null, 2);
   const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
   const anchor = document.createElement("a");
@@ -3347,27 +3416,69 @@ function exportState() {
 }
 
 function importState() {
+  const schema = EXCEL_SCHEMAS[activeView];
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "application/json,.json";
+  input.accept = schema ? ".xlsx,.xls,application/json,.json" : "application/json,.json";
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     if (!file) return;
+    const ext = file.name.split(".").pop().toLowerCase();
+    if (ext === "json") { importStateJson(file); return; }
+    if (!schema || typeof XLSX === "undefined") { showToast("Formato no soportado"); return; }
     const reader = new FileReader();
-    reader.addEventListener("load", () => {
+    reader.addEventListener("load", e => {
       try {
-        const parsed = JSON.parse(reader.result);
-        state = migrateState(parsed.state || parsed);
-        saveState();
-        render();
-        alert("Respaldo importado correctamente.");
-      } catch {
-        alert("El archivo no contiene un respaldo válido de Nebumia.");
+        const wb = XLSX.read(e.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const cols = schema.cols;
+        // Invert label→key map
+        const labelToKey = Object.fromEntries(Object.entries(cols).map(([k,v]) => [v, k]));
+        const imported = rows.map(row => {
+          const obj = { id: crypto.randomUUID() };
+          for (const [label, val] of Object.entries(row)) {
+            const key = labelToKey[label];
+            if (key) obj[key] = val === undefined ? "" : String(val);
+          }
+          return obj;
+        });
+        if (!imported.length) { showToast("El archivo no tiene datos válidos"); return; }
+        const key = activeView === "collections" ? "collections"
+          : activeView === "team" ? "team"
+          : activeView === "tax" ? "taxPayments"
+          : activeView === "purchases" ? "purchases"
+          : activeView === "sales" ? "invoicedSales"
+          : activeView === "finance" ? null
+          : activeView + "s";
+        if (!key) { showToast("Este módulo no soporta importación"); return; }
+        if (!confirm(`¿Agregar ${imported.length} registros a ${schema.label}? Los registros existentes no se eliminarán.`)) return;
+        state[key] = [...(state[key] || []), ...imported];
+        saveState(); render();
+        showToast(`${imported.length} registros importados`);
+      } catch (err) {
+        showToast("Error al leer el archivo Excel");
+        console.error(err);
       }
     });
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   });
   input.click();
+}
+
+function importStateJson(file) {
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      state = migrateState(parsed.state || parsed);
+      saveState(); render();
+      showToast("Respaldo importado correctamente");
+    } catch {
+      showToast("El archivo no contiene un respaldo válido de Nebumia");
+    }
+  });
+  reader.readAsText(file);
 }
 
 function updateLeadStatus(id, status) {
