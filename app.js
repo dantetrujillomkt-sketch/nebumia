@@ -3337,170 +3337,179 @@ function bindModuleToolbar() {
 }
 
 const EXCEL_SCHEMAS = {
-  clients: {
-    label: "Clientes",
-    cols: { name:"Cliente", ruc:"RUC/DNI", clientType:"Tipo", contact:"Contacto", email:"Correo", phone:"Teléfono", owner:"Comercial", source:"Fuente", country:"País", date:"Fecha", notes:"Notas" },
-    example: { name:"Empresa SAC", ruc:"20123456789", clientType:"Empresa", contact:"Juan Pérez", email:"juan@empresa.com", phone:"999888777", owner:"María López", source:"Referido", country:"Perú", date:"2024-01-15", notes:"Cliente VIP" },
-    getData: () => state.clients,
-  },
-  leads: {
-    label: "Leads",
-    cols: { name:"Nombre", client:"Empresa", service:"Servicio", source:"Fuente", channel:"Canal", owner:"Comercial", status:"Estado", estimatedValue:"Valor estimado", date:"Fecha", notes:"Notas" },
-    example: { name:"Ana Torres", client:"Torres Corp", service:"Diseño web", source:"LinkedIn", channel:"Redes sociales", owner:"María López", status:"Nuevo", estimatedValue:"3500", date:"2024-01-15", notes:"Interesado en paquete completo" },
-    getData: () => state.leads,
-  },
-  quotes: {
-    label: "Cotizaciones",
-    cols: { code:"Código", client:"Cliente", service:"Servicio", category:"Categoría", owner:"Comercial", subtotal:"Subtotal", status:"Estado", paymentType:"Tipo pago", currency:"Moneda", date:"Fecha", wonDate:"Fecha ganado", comments:"Comentarios" },
-    example: { code:"COT-001", client:"Empresa SAC", service:"Diseño de marca", category:"Marketing", owner:"María López", subtotal:"5000", status:"Ganado", paymentType:"split", currency:"PEN", date:"2024-01-10", wonDate:"2024-01-20", comments:"Incluye manual de marca" },
-    getData: () => state.quotes,
-  },
-  collections: {
-    label: "Cobranzas",
-    cols: { quoteId:"Cotización", label:"Cuota", dueDate:"Vencimiento", amount:"Monto", currency:"Moneda", status:"Estado", paidDate:"Fecha pago", invoice:"Factura", declared:"Declarado" },
-    example: { quoteId:"COT-001", label:"Cuota 1 de 2", dueDate:"2024-02-01", amount:"2950", currency:"PEN", status:"Pagado", paidDate:"2024-02-03", invoice:"F001-00123", declared:"Declarado" },
-    getData: () => collectionRows(),
-  },
-  expenses: {
-    label: "Gastos",
-    cols: { date:"Fecha", concept:"Concepto", type:"Tipo", amount:"Monto", currency:"Moneda", vendor:"Proveedor", ruc:"RUC", invoice:"Comprobante", category:"Categoría" },
-    example: { date:"2024-01-05", concept:"Adobe Creative Cloud", type:"Gasto fijo", amount:"180", currency:"PEN", vendor:"Adobe Inc", ruc:"20999888777", invoice:"F001-00456", category:"Software" },
-    getData: () => state.expenses,
-  },
-  team: {
-    label: "Pagos equipo",
-    cols: { month:"Mes", name:"Nombre", role:"Rol", amount:"Monto", currency:"Moneda", status:"Estado", dueDate:"Fecha", ruc:"RUC" },
-    example: { month:"2024-01", name:"Carlos Ruiz", role:"Diseñador", amount:"3500", currency:"PEN", status:"Pagado", dueDate:"2024-01-31", ruc:"10456789012" },
-    getData: () => state.team,
-  },
-  tax: {
-    label: "Impuestos",
-    cols: { date:"Fecha", type:"Tipo", period:"Período", amount:"Monto", status:"Estado", sunatRef:"N° SUNAT" },
-    example: { date:"2024-01-19", type:"IGV", period:"2023-12", amount:"1800", status:"Pagado", sunatRef:"NPS-20240119-001" },
-    getData: () => state.taxPayments,
-  },
-  purchases: {
-    label: "Compras",
-    cols: { date:"Fecha", vendor:"Proveedor", ruc:"RUC", invoiceType:"Tipo comprobante", invoiceNum:"N° comprobante", concept:"Concepto", subtotal:"Subtotal", igv:"IGV", total:"Total", currency:"Moneda" },
-    example: { date:"2024-01-08", vendor:"Proveedor SAC", ruc:"20111222333", invoiceType:"Factura", invoiceNum:"F002-00789", concept:"Equipos de cómputo", subtotal:"2542.37", igv:"457.63", total:"3000", currency:"PEN" },
-    getData: () => state.purchases,
-  },
-  sales: {
-    label: "Ventas facturadas",
-    cols: { date:"Fecha", client:"Cliente", ruc:"RUC", invoiceType:"Tipo", invoiceNum:"N° comprobante", service:"Servicio", subtotal:"Subtotal", igv:"IGV", total:"Total", currency:"Moneda" },
-    example: { date:"2024-01-20", client:"Empresa SAC", ruc:"20123456789", invoiceType:"Factura", invoiceNum:"F001-00123", service:"Diseño de marca", subtotal:"5000", igv:"900", total:"5900", currency:"PEN" },
-    getData: () => state.invoicedSales,
-  },
-  finance: {
-    label: "Caja",
-    cols: { date:"Fecha", type:"Tipo", concept:"Concepto", category:"Categoría", amount:"Monto", currency:"Moneda", status:"Estado", bankAccount:"Cuenta" },
-    example: { date:"2024-01-15", type:"ingreso", concept:"Pago cuota 1 - Empresa SAC", category:"Cobranza", amount:"2950", currency:"PEN", status:"Confirmado", bankAccount:"BCP Soles" },
-    getData: () => buildCajaRows(),
-  },
+  clients:     { label:"Clientes",          stateKey:"clients",       viewKey:"clients",     cols:{name:"Cliente",ruc:"RUC/DNI",clientType:"Tipo",contact:"Contacto",email:"Correo",phone:"Teléfono",owner:"Comercial",source:"Fuente",country:"País",date:"Fecha",notes:"Notas"}, example:{name:"Empresa SAC",ruc:"20123456789",clientType:"Empresa",contact:"Juan Pérez",email:"juan@empresa.com",phone:"999888777",owner:"María López",source:"Referido",country:"Perú",date:"2024-01-15",notes:"Cliente VIP"}, getData:()=>state.clients },
+  leads:       { label:"Leads",             stateKey:"leads",         viewKey:"leads",       cols:{name:"Nombre",client:"Empresa",service:"Servicio",source:"Fuente",channel:"Canal",owner:"Comercial",status:"Estado",estimatedValue:"Valor estimado",date:"Fecha",notes:"Notas"}, example:{name:"Ana Torres",client:"Torres Corp",service:"Diseño web",source:"LinkedIn",channel:"Redes sociales",owner:"María López",status:"Nuevo",estimatedValue:"3500",date:"2024-01-15",notes:"Interesado en paquete completo"}, getData:()=>state.leads },
+  quotes:      { label:"Cotizaciones",      stateKey:"quotes",        viewKey:"quotes",      cols:{code:"Código",client:"Cliente",service:"Servicio",category:"Categoría",owner:"Comercial",subtotal:"Subtotal",status:"Estado",paymentType:"Tipo pago",currency:"Moneda",date:"Fecha",wonDate:"Fecha ganado",comments:"Comentarios"}, example:{code:"COT-001",client:"Empresa SAC",service:"Diseño de marca",category:"Marketing",owner:"María López",subtotal:"5000",status:"Ganado",paymentType:"split",currency:"PEN",date:"2024-01-10",wonDate:"2024-01-20",comments:"Incluye manual de marca"}, getData:()=>state.quotes },
+  collections: { label:"Cobranzas",         stateKey:"collections",   viewKey:"collections", cols:{quoteId:"Cotización",label:"Cuota",dueDate:"Vencimiento",amount:"Monto",currency:"Moneda",status:"Estado",paidDate:"Fecha pago",invoice:"Factura",declared:"Declarado"}, example:{quoteId:"COT-001",label:"Cuota 1 de 2",dueDate:"2024-02-01",amount:"2950",currency:"PEN",status:"Pagado",paidDate:"2024-02-03",invoice:"F001-00123",declared:"Declarado"}, getData:()=>collectionRows() },
+  expenses:    { label:"Gastos",            stateKey:"expenses",      viewKey:"expenses",    cols:{date:"Fecha",concept:"Concepto",type:"Tipo",amount:"Monto",currency:"Moneda",vendor:"Proveedor",ruc:"RUC",invoice:"Comprobante",category:"Categoría"}, example:{date:"2024-01-05",concept:"Adobe Creative Cloud",type:"Gasto fijo",amount:"180",currency:"PEN",vendor:"Adobe Inc",ruc:"20999888777",invoice:"F001-00456",category:"Software"}, getData:()=>state.expenses },
+  team:        { label:"Pagos equipo",      stateKey:"team",          viewKey:"team",        cols:{month:"Mes",name:"Nombre",role:"Rol",amount:"Monto",currency:"Moneda",status:"Estado",dueDate:"Fecha",ruc:"RUC"}, example:{month:"2024-01",name:"Carlos Ruiz",role:"Diseñador",amount:"3500",currency:"PEN",status:"Pagado",dueDate:"2024-01-31",ruc:"10456789012"}, getData:()=>state.team },
+  purchases:   { label:"Compras",           stateKey:"purchases",     viewKey:"comprobantes",cols:{date:"Fecha",vendor:"Proveedor",ruc:"RUC",invoiceType:"Tipo comprobante",invoiceNum:"N° comprobante",concept:"Concepto",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-08",vendor:"Proveedor SAC",ruc:"20111222333",invoiceType:"Factura",invoiceNum:"F002-00789",concept:"Equipos de cómputo",subtotal:"2542.37",igv:"457.63",total:"3000",currency:"PEN"}, getData:()=>state.purchases },
+  sales:       { label:"Ventas facturadas", stateKey:"invoicedSales", viewKey:"sales",       cols:{date:"Fecha",client:"Cliente",ruc:"RUC",invoiceType:"Tipo",invoiceNum:"N° comprobante",service:"Servicio",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-20",client:"Empresa SAC",ruc:"20123456789",invoiceType:"Factura",invoiceNum:"F001-00123",service:"Diseño de marca",subtotal:"5000",igv:"900",total:"5900",currency:"PEN"}, getData:()=>state.invoicedSales },
+  finance:     { label:"Caja",              stateKey:null,            viewKey:"finance",     cols:{date:"Fecha",type:"Tipo",concept:"Concepto",category:"Categoría",amount:"Monto",currency:"Moneda",status:"Estado",bankAccount:"Cuenta"}, example:{date:"2024-01-15",type:"ingreso",concept:"Pago cuota 1 - Empresa SAC",category:"Cobranza",amount:"2950",currency:"PEN",status:"Confirmado",bankAccount:"BCP Soles"}, getData:()=>buildCajaRows() },
 };
 
-function exportState() {
-  const schema = EXCEL_SCHEMAS[activeView];
-  if (!schema || typeof XLSX === "undefined") { exportStateJson(); return; }
+function getSchemaForView() {
+  return Object.values(EXCEL_SCHEMAS).find(s => s.viewKey === activeView) || null;
+}
 
+function exportState() {
+  const schema = getSchemaForView();
+  if (!schema || typeof XLSX === "undefined") { exportStateJson(); return; }
   const cols = schema.cols;
   const keys = Object.keys(cols);
   const headers = Object.values(cols);
   const data = schema.getData();
-
-  // If there's real data export it, otherwise export template with example row
-  const dataRows = data?.length
-    ? data.map(r => keys.map(k => r[k] ?? ""))
-    : [keys.map(k => schema.example?.[k] ?? "")];
-
+  const isTemplate = !data?.length;
+  const dataRows = isTemplate ? [keys.map(k => schema.example?.[k] ?? "")] : data.map(r => keys.map(k => r[k] ?? ""));
   const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-
-  // Style header row: bold + background
-  const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F46E5" } }, alignment: { horizontal: "center" } };
-  headers.forEach((_, i) => {
-    const cell = XLSX.utils.encode_cell({ r: 0, c: i });
-    if (ws[cell]) ws[cell].s = headerStyle;
-  });
-
-  // If template (no data), style example row in gray italic
-  if (!data?.length) {
-    const exStyle = { font: { italic: true, color: { rgb: "94A3B8" } } };
-    keys.forEach((_, i) => {
-      const cell = XLSX.utils.encode_cell({ r: 1, c: i });
-      if (ws[cell]) ws[cell].s = exStyle;
-    });
+  const hStyle = { font:{ bold:true, color:{ rgb:"FFFFFF" } }, fill:{ fgColor:{ rgb:"4F46E5" } }, alignment:{ horizontal:"center" } };
+  headers.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:0,c:i}); if (ws[c]) ws[c].s = hStyle; });
+  if (isTemplate) {
+    const eStyle = { font:{ italic:true, color:{ rgb:"94A3B8" } } };
+    keys.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:1,c:i}); if (ws[c]) ws[c].s = eStyle; });
   }
-
   ws["!cols"] = headers.map(h => ({ wch: Math.max(h.length + 4, 16) }));
-
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, schema.label);
-  const filename = data?.length
-    ? `nebumia-${activeView}-${today()}.xlsx`
-    : `plantilla-${activeView}.xlsx`;
-  XLSX.writeFile(wb, filename);
-  showToast(data?.length ? "Excel exportado" : "Plantilla descargada — borra la fila de ejemplo antes de importar");
+  XLSX.writeFile(wb, isTemplate ? `plantilla-${schema.label.toLowerCase().replace(/ /g,"-")}.xlsx` : `nebumia-${schema.label.toLowerCase().replace(/ /g,"-")}-${today()}.xlsx`);
+  showToast(isTemplate ? "Plantilla descargada — borra la fila de ejemplo antes de importar" : "Excel exportado");
 }
 
 function exportStateJson() {
-  const payload = JSON.stringify({ product: "Nebumia", exportedAt: new Date().toISOString(), state }, null, 2);
-  const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `nebumia-respaldo-${today()}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  const payload = JSON.stringify({ product:"Nebumia", exportedAt:new Date().toISOString(), state }, null, 2);
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([payload], {type:"application/json"})), download:`nebumia-respaldo-${today()}.json` });
+  a.click();
 }
 
 function importState() {
-  const schema = EXCEL_SCHEMAS[activeView];
+  const schema = getSchemaForView();
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = schema ? ".xlsx,.xls,application/json,.json" : "application/json,.json";
+  input.accept = ".xlsx,.xls,application/json,.json";
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     if (!file) return;
-    const ext = file.name.split(".").pop().toLowerCase();
-    if (ext === "json") { importStateJson(file); return; }
-    if (!schema || typeof XLSX === "undefined") { showToast("Formato no soportado"); return; }
+    if (file.name.endsWith(".json")) { importStateJson(file); return; }
+    if (!schema || typeof XLSX === "undefined") { showToast("Este módulo no soporta importación Excel"); return; }
+    if (!schema.stateKey) { showToast("La Caja no soporta importación directa"); return; }
     const reader = new FileReader();
     reader.addEventListener("load", e => {
       try {
-        const wb = XLSX.read(e.target.result, { type: "array" });
+        const wb = XLSX.read(e.target.result, { type:"array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        const cols = schema.cols;
+        const rawRows = XLSX.utils.sheet_to_json(ws, { defval:"", raw:false });
+        if (!rawRows.length) { showToast("El archivo está vacío"); return; }
+
         // Invert label→key map
-        const labelToKey = Object.fromEntries(Object.entries(cols).map(([k,v]) => [v, k]));
-        const imported = rows.map(row => {
+        const labelToKey = Object.fromEntries(Object.entries(schema.cols).map(([k,v]) => [v,k]));
+
+        // Validate and map rows
+        const errors = [];
+        const imported = rawRows.map((row, ri) => {
           const obj = { id: crypto.randomUUID() };
+          let hasData = false;
           for (const [label, val] of Object.entries(row)) {
             const key = labelToKey[label];
-            if (key) obj[key] = val === undefined ? "" : String(val);
+            if (key) { obj[key] = val === undefined ? "" : String(val).trim(); hasData = true; }
+            else if (label && String(val).trim()) errors.push(`Fila ${ri+2}: columna desconocida "${label}"`);
           }
+          if (!hasData) errors.push(`Fila ${ri+2}: fila vacía o sin columnas reconocidas`);
           return obj;
-        });
-        if (!imported.length) { showToast("El archivo no tiene datos válidos"); return; }
-        const key = activeView === "collections" ? "collections"
-          : activeView === "team" ? "team"
-          : activeView === "tax" ? "taxPayments"
-          : activeView === "purchases" ? "purchases"
-          : activeView === "sales" ? "invoicedSales"
-          : activeView === "finance" ? null
-          : activeView + "s";
-        if (!key) { showToast("Este módulo no soporta importación"); return; }
-        if (!confirm(`¿Agregar ${imported.length} registros a ${schema.label}? Los registros existentes no se eliminarán.`)) return;
-        state[key] = [...(state[key] || []), ...imported];
-        saveState(); render();
-        showToast(`${imported.length} registros importados`);
+        }).filter(o => Object.keys(o).length > 1);
+
+        if (!imported.length) {
+          showImportErrorModal("No se encontraron datos válidos.\n\nAsegúrate de usar la plantilla descargada desde Nebumia con los encabezados correctos.", []);
+          return;
+        }
+        showImportConfirmModal(schema, imported, errors);
       } catch (err) {
-        showToast("Error al leer el archivo Excel");
-        console.error(err);
+        showImportErrorModal("No se pudo leer el archivo Excel.\n\nError: " + err.message, []);
       }
     });
     reader.readAsArrayBuffer(file);
   });
   input.click();
+}
+
+function showImportConfirmModal(schema, imported, warnings) {
+  const existing = (state[schema.stateKey] || []).length;
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 8px;font-size:16px;">Confirmar importación</h3>
+      <p style="margin:0 0 16px;color:var(--muted);font-size:14px;">Módulo: <strong style="color:var(--ink)">${schema.label}</strong></p>
+      <div style="background:var(--surface);border-radius:10px;padding:14px 16px;margin-bottom:${warnings.length?'12px':'20px'};display:grid;gap:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Filas a importar</span><strong>${imported.length}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Registros existentes</span><strong>${existing}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Total tras importar</span><strong>${existing + imported.length}</strong></div>
+      </div>
+      ${warnings.length ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#9a3412;max-height:80px;overflow-y:auto;">${warnings.slice(0,5).map(w=>`⚠ ${w}`).join("<br>")}${warnings.length>5?`<br>…y ${warnings.length-5} advertencias más`:""}</div>` : ""}
+      <div style="display:flex;gap:10px;">
+        <button id="importCancelBtn" style="flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;">Cancelar</button>
+        <button id="importConfirmBtn" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer;font-size:14px;font-weight:600;">Importar ${imported.length} registros</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#importCancelBtn").onclick = () => overlay.remove();
+  overlay.querySelector("#importConfirmBtn").onclick = () => {
+    overlay.remove();
+    runImport(schema, imported);
+  };
+}
+
+function showImportErrorModal(msg, errors) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+      <h3 style="margin:0 0 12px;font-size:16px;color:var(--danger);">Error en la importación</h3>
+      <p style="margin:0 0 ${errors.length?'12px':'20px'};font-size:14px;color:var(--muted);white-space:pre-line;">${msg}</p>
+      ${errors.length ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#991b1b;max-height:120px;overflow-y:auto;">${errors.map(e=>`✗ ${e}`).join("<br>")}</div>` : ""}
+      <button onclick="this.closest('div[style]').remove()" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;">Cerrar</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function runImport(schema, imported) {
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
+  overlay.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:360px;width:90%;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+      <div style="margin-bottom:16px;font-size:22px;">⏳</div>
+      <h3 style="margin:0 0 8px;font-size:15px;" id="importProgressTitle">Importando registros…</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--muted);" id="importProgressSub">0 de ${imported.length}</p>
+      <div style="background:var(--surface);border-radius:999px;height:6px;overflow:hidden;">
+        <div id="importProgressBar" style="background:var(--brand);height:100%;width:0%;transition:width .2s;border-radius:999px;"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const bar = overlay.querySelector("#importProgressBar");
+  const sub = overlay.querySelector("#importProgressSub");
+
+  // Add records in chunks so the progress bar animates
+  const CHUNK = 20;
+  let done = 0;
+  state[schema.stateKey] = state[schema.stateKey] || [];
+  for (let i = 0; i < imported.length; i += CHUNK) {
+    state[schema.stateKey].push(...imported.slice(i, i + CHUNK));
+    done = Math.min(i + CHUNK, imported.length);
+    const pct = Math.round((done / imported.length) * 100);
+    bar.style.width = pct + "%";
+    sub.textContent = `${done} de ${imported.length}`;
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  // Save and sync
+  overlay.querySelector("#importProgressTitle").textContent = "Guardando en Supabase…";
+  saveState();
+  if (sbUser) {
+    try { await sbSync(); } catch(e) { console.error("Sync error:", e); }
+  }
+
+  overlay.remove();
+  render();
+  showToast(`✓ ${imported.length} registros importados en ${schema.label}`);
 }
 
 function importStateJson(file) {
