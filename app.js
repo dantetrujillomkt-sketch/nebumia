@@ -1,3 +1,130 @@
+// ── SUPABASE ─────────────────────────────────────────────
+const SUPABASE_URL = "https://avjthwvppogqezlljksz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_UhsLakmDIvELDC0Ori-PFg_NHvd-iQs";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let sbUser = null;
+
+function toSnake(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj))
+    out[k.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`)] = v;
+  return out;
+}
+function toCamel(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj))
+    out[k.replace(/_([a-z])/g, (_, c) => c.toUpperCase())] = v;
+  return out;
+}
+
+async function sbSyncTable(table, records) {
+  if (!sbUser) return;
+  const uid = sbUser.id;
+  const rows = records.map(r => ({ ...toSnake(r), user_id: uid }));
+  const { data: existing } = await sb.from(table).select("id").eq("user_id", uid);
+  const dbIds = new Set((existing || []).map(r => r.id));
+  const localIds = new Set(rows.map(r => r.id));
+  const toDelete = [...dbIds].filter(id => !localIds.has(id));
+  if (toDelete.length) await sb.from(table).delete().in("id", toDelete);
+  if (rows.length) await sb.from(table).upsert(rows, { onConflict: "id" });
+}
+
+async function sbSyncSettings() {
+  if (!sbUser) return;
+  const s = state.settings;
+  await sb.from("settings").upsert({
+    user_id: sbUser.id,
+    igv_rate: s.igvRate, detraction_rate: s.detractionRate,
+    detraction_threshold: s.detractionThreshold, commission_rate: s.commissionRate,
+    currency: s.currency, bank_accounts: s.bankAccounts || [],
+    fixed_expenses: s.fixedExpenses || [], team_members: s.teamMembers || [],
+    services: state.services || [], categories: state.categories || [],
+    sources: state.sources || [], profiles: state.profiles || [],
+    updated_at: new Date().toISOString()
+  }, { onConflict: "user_id" });
+}
+
+async function sbSyncSalesTargets() {
+  if (!sbUser) return;
+  const all = getSalesTargets();
+  for (const [year, d] of Object.entries(all)) {
+    await sb.from("sales_targets").upsert({
+      user_id: sbUser.id, year: Number(year),
+      mode: d.mode || "annual", annual_pen: d.annualPEN || 0,
+      annual_usd: d.annualUSD || 0, monthly: d.monthly || {}
+    }, { onConflict: "user_id,year" });
+  }
+}
+
+async function sbSync() {
+  await Promise.all([
+    sbSyncTable("clients", state.clients),
+    sbSyncTable("leads", state.leads),
+    sbSyncTable("quotes", state.quotes),
+    sbSyncTable("collections", state.collections),
+    sbSyncTable("expenses", state.expenses),
+    sbSyncTable("team_payments", state.team),
+    sbSyncTable("tax_payments", state.taxPayments),
+    sbSyncTable("purchases", state.purchases),
+    sbSyncTable("invoiced_sales", state.invoicedSales),
+    sbSyncTable("cash_entries", state.cashEntries),
+    sbSyncTable("declaraciones", state.declaraciones),
+    sbSyncSettings(),
+    sbSyncSalesTargets(),
+  ]);
+}
+
+async function sbLoad() {
+  const uid = sbUser.id;
+  const [
+    { data: clients }, { data: leads }, { data: quotes }, { data: collections },
+    { data: expenses }, { data: team }, { data: taxPayments }, { data: purchases },
+    { data: invoicedSales }, { data: cashEntries }, { data: declaraciones },
+    { data: settings }, { data: salesTargets }
+  ] = await Promise.all([
+    sb.from("clients").select("*").eq("user_id", uid),
+    sb.from("leads").select("*").eq("user_id", uid),
+    sb.from("quotes").select("*").eq("user_id", uid),
+    sb.from("collections").select("*").eq("user_id", uid),
+    sb.from("expenses").select("*").eq("user_id", uid),
+    sb.from("team_payments").select("*").eq("user_id", uid),
+    sb.from("tax_payments").select("*").eq("user_id", uid),
+    sb.from("purchases").select("*").eq("user_id", uid),
+    sb.from("invoiced_sales").select("*").eq("user_id", uid),
+    sb.from("cash_entries").select("*").eq("user_id", uid),
+    sb.from("declaraciones").select("*").eq("user_id", uid),
+    sb.from("settings").select("*").eq("user_id", uid).maybeSingle(),
+    sb.from("sales_targets").select("*").eq("user_id", uid),
+  ]);
+  const base = seedState();
+  state.clients       = (clients       || []).map(r => newClient(toCamel(r)));
+  state.leads         = (leads         || []).map(r => newLead(toCamel(r)));
+  state.quotes        = (quotes        || []).map(r => newQuote(toCamel(r)));
+  state.collections   = (collections   || []).map(r => { const c = toCamel(r); return { id:c.id, quoteId:c.quoteId||"", part:Number(c.part||1), label:c.label||"", dueDate:c.dueDate||"", amount:Number(c.amount||0), detraction:Number(c.detraction||0), currency:c.currency||"PEN", status:c.status||"Pendiente", paidDate:c.paidDate||"", invoice:c.invoice||"", bankAccount:c.bankAccount||"", declared:c.declared||"Sin declarar" }; });
+  state.expenses      = (expenses      || []).map(r => newExpense(toCamel(r)));
+  state.team          = (team          || []).map(r => newTeamPayment(toCamel(r)));
+  state.taxPayments   = (taxPayments   || []).map(r => newTaxPayment(toCamel(r)));
+  state.purchases     = (purchases     || []).map(r => newPurchase(toCamel(r)));
+  state.invoicedSales = (invoicedSales || []).map(r => newInvoicedSale(toCamel(r)));
+  state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
+  state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
+  if (settings) {
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [] };
+    state.services   = settings.services   || base.services;
+    state.categories = settings.categories || base.categories;
+    state.sources    = settings.sources    || base.sources;
+    state.profiles   = settings.profiles   || base.profiles;
+  }
+  if (salesTargets?.length) {
+    const map = {};
+    for (const t of salesTargets) map[t.year] = { mode: t.mode, annualPEN: t.annual_pen, annualUSD: t.annual_usd, monthly: t.monthly || {} };
+    localStorage.setItem(SALES_TARGETS_KEY, JSON.stringify(map));
+  }
+  state.quotes.forEach(q => syncQuoteSideEffects(state, q));
+  syncClientsFromActivity(state);
+}
+// ─────────────────────────────────────────────────────────
+
 const IGV_RATE = 0.18;
 const DETRACTION_RATE = 0.12;
 const DETRACTION_THRESHOLD = 700;
@@ -8,7 +135,43 @@ const LEGACY_STORAGE_KEY = "bandu-panel-state-v1";
 const AUTH_KEY = "bandu-panel-auth-v1";
 const SESSION_KEY = "nebumia-session";
 const THEME_KEY = "bandu-panel-theme";
+const SIDEBAR_KEY = "nebumia-sidebar-collapsed";
+let sidebarCollapsed = localStorage.getItem(SIDEBAR_KEY) === "1";
 const DASHBOARD_FILTERS_KEY = "nebumia-dashboard-filters";
+const DASH_SECTIONS_KEY = "nebumia-dash-sections";
+const METRICS_VIS_KEY = "nebumia-metrics-vis";
+const SALES_TARGETS_KEY = "nebumia-sales-targets";
+function getSalesTargets() {
+  try { return JSON.parse(localStorage.getItem(SALES_TARGETS_KEY) || "{}"); } catch { return {}; }
+}
+function setSalesTargets(data) {
+  localStorage.setItem(SALES_TARGETS_KEY, JSON.stringify(data));
+}
+function getMonthTarget(year, monthNum) {
+  const fallbackPEN = (typeof state !== "undefined" ? state?.settings?.monthlyGoal : 0) || 0;
+  const all = getSalesTargets();
+  const yd = all[year];
+  if (!yd) return { pen: fallbackPEN, usd: 0 };
+  const mk = String(monthNum).padStart(2, "0");
+  if (yd.mode === "monthly") {
+    const saved = yd.monthly?.[mk];
+    // Only fall back when the month has NEVER been saved
+    if (saved == null) return { pen: fallbackPEN, usd: 0 };
+    return { pen: Number(saved.pen ?? 0), usd: Number(saved.usd ?? 0) };
+  }
+  const penAnnual = Math.round((yd.annualPEN || 0) / 12);
+  const usdAnnual = Math.round((yd.annualUSD || 0) / 12);
+  return { pen: penAnnual || fallbackPEN, usd: usdAnnual };
+}
+function isMetricVisible(view) {
+  const vis = JSON.parse(localStorage.getItem(METRICS_VIS_KEY) || "{}");
+  return vis[view] !== false;
+}
+function setMetricVis(view, visible) {
+  const vis = JSON.parse(localStorage.getItem(METRICS_VIS_KEY) || "{}");
+  vis[view] = visible;
+  localStorage.setItem(METRICS_VIS_KEY, JSON.stringify(vis));
+}
 
 const quoteStatuses = ["Por cotizar", "Cotizado", "Ganado", "Perdido"];
 const leadStatuses = ["Nuevo", "Contactado", "Reunion", "Propuesta", "Cotizado", "Ganado", "Cerrado perdido"];
@@ -17,14 +180,12 @@ const months = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", 
 
 const navItems = [
   ["dashboard", "Dashboard", "layout"],
-  ["leads", "Oportunidades", "target"],
+  ["clients", "Clientes", "users"],
   ["quotes", "Cotizaciones", "fileText"],
   ["sales", "Ventas", "receipt"],
-  ["clients", "Clientes", "users"],
   ["collections", "Cobranzas", "wallet"],
-  ["finance", "Caja de ingresos y egresos", "banknote"],
-  ["taxes", "Pago impuestos", "clock"],
-  ["comprobantes", "Comprobantes", "book"],
+  ["finance", "Caja financiera", "banknote"],
+  ["comprobantes", "Contabilidad", "book"],
   ["team", "Pago personal", "briefcase"],
   ["settings", "Configuración", "settings"]
 ];
@@ -57,7 +218,16 @@ const icons = {
   clock: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
   book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>',
   trash: '<path d="M3 6h18"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M9 6V4h6v2"></path>',
-  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>'
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>',
+  "chevron-up": '<path d="m18 15-6-6-6 6"></path>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"></path>',
+  "chevron-left": '<path d="m15 18-6-6 6-6"></path>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"></path>',
+  sliders: '<line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>',
+  eyeOff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>'
 };
 
 function icon(name, className = "") {
@@ -101,21 +271,30 @@ function newQuote(data = {}) {
     currency: data.currency || "PEN",
     status: data.status || "Por cotizar",
     hasIgv: data.hasIgv !== undefined ? Boolean(data.hasIgv) : true,
-    paymentType: data.paymentType || "split",
+    cuotas: Number(data.cuotas) || (data.paymentType === "thirds" ? 3 : data.paymentType === "full" ? 1 : 2),
     repo: data.repo || "",
-    comments: data.comments || ""
+    comments: data.comments || "",
+    wonDate: data.wonDate || "",
+    invoice: data.invoice || "",
+    bankAccount: data.bankAccount || ""
   };
 }
+
+const countriesList = ["Perú","Argentina","Bolivia","Brasil","Chile","Colombia","Ecuador","Paraguay","Uruguay","Venezuela","México","Estados Unidos","España","Alemania","Francia","Italia","Reino Unido","Portugal","Países Bajos","Bélgica","Suiza","Austria","Suecia","Noruega","Dinamarca","Finlandia","Polonia","República Checa","Rumania","Grecia","Turquía","Rusia","Ucrania","China","Japón","Corea del Sur","India","Indonesia","Filipinas","Vietnam","Tailandia","Malasia","Singapur","Australia","Nueva Zelanda","Canadá","Costa Rica","Panamá","Guatemala","Honduras","El Salvador","Nicaragua","Cuba","Puerto Rico","República Dominicana","Haití","Jamaica","Trinidad y Tobago","Angola","Sudáfrica","Nigeria","Kenia","Etiopía","Ghana","Marruecos","Egipto","Argelia","Tanzania","Mozambique","Uganda","Camerún","Costa de Marfil","Senegal","Zambia","Zimbabwe","Arabia Saudita","Emiratos Árabes Unidos","Israel","Irán","Irak","Pakistán","Bangladés","Sri Lanka","Nepal","Afganistán"];
 
 function newClient(data = {}) {
   return {
     id: data.id || uid(),
     name: data.name || "",
     ruc: data.ruc || "",
+    date: data.date || "",
     contact: data.contact || "",
     email: data.email || "",
     phone: data.phone || "",
+    clientType: data.clientType || "",
+    country: data.country || "Perú",
     owner: data.owner || "Dante Trujillo",
+    source: data.source || "",
     notes: data.notes || ""
   };
 }
@@ -147,9 +326,24 @@ function newTeamPayment(data = {}) {
     receipt: data.receipt || "",
     dueDate: data.dueDate || "",
     ruc: data.ruc || "",
+    currency: data.currency || "PEN",
     bankName: data.bankName || "",
-    cci: data.cci || ""
+    accountNumber: data.accountNumber || "",
+    cci: data.cci || "",
+    commInvoice: data.commInvoice || "",
+    commRepo: data.commRepo || ""
   };
+}
+
+function profileHasCommission(roleName) {
+  return (state.profiles || []).find(p => p.name === roleName)?.hasCommission || false;
+}
+
+function calcTeamCommission(name) {
+  const rate = state.settings.commissionRate || 0.05;
+  return wonQuotes()
+    .filter(q => q.owner === name)
+    .reduce((sum, q) => sum + calcQuote(q, state).commission, 0);
 }
 
 function newTaxPayment(data = {}) {
@@ -165,6 +359,19 @@ function newTaxPayment(data = {}) {
   };
 }
 
+function newDeclaracion(data = {}) {
+  return {
+    id: data.id || uid(),
+    period: data.period || currentMonthName(),
+    igv1011: Number(data.igv1011 || 0),
+    renta3121: Number(data.renta3121 || 0),
+    otro: Number(data.otro || 0),
+    otroConcepto: data.otroConcepto || "",
+    status: data.status || "Pendiente",
+    notes: data.notes || ""
+  };
+}
+
 function newPurchase(data = {}) {
   return {
     id: data.id || uid(),
@@ -177,7 +384,12 @@ function newPurchase(data = {}) {
     subtotal: Number(data.subtotal || 0),
     igv: Number(data.igv || 0),
     total: Number(data.total || 0),
-    currency: data.currency || "PEN"
+    currency: data.currency || "PEN",
+    detraction: Number(data.detraction || 0),
+    paidDate: data.paidDate || "",
+    bankAccount: data.bankAccount || "",
+    declared: data.declared || "Sin declarar",
+    repo: data.repo || ""
   };
 }
 
@@ -199,6 +411,22 @@ function newInvoicedSale(data = {}) {
   };
 }
 
+function newCashEntry(data = {}) {
+  return {
+    id: data.id || uid(),
+    date: data.date || today(),
+    type: data.type || "egreso",
+    concept: data.concept || "",
+    category: data.category || "",
+    amount: Number(data.amount || 0),
+    currency: data.currency || "PEN",
+    status: data.status || "Confirmado",
+    bankAccount: data.bankAccount || "",
+    notes: data.notes || "",
+    invoice: data.invoice || ""
+  };
+}
+
 function seedState() {
   const state = {
     settings: {
@@ -208,7 +436,9 @@ function seedState() {
       detractionRate: DETRACTION_RATE,
       igvRate: IGV_RATE,
       detractionThreshold: DETRACTION_THRESHOLD,
-      bankAccounts: ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"]
+      bankAccounts: ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"],
+      fixedExpenses: [],
+      teamMembers: []
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -235,6 +465,8 @@ function seedState() {
     taxPayments: [],
     purchases: [],
     invoicedSales: [],
+    cashEntries: [],
+    declaraciones: [],
     expenses: [
       newExpense({ month: "Enero", concept: "Correo corporativo Gmail Administracion", amount: 16.8, type: "Gasto fijo", status: "Completado" }),
       newExpense({ month: "Enero", concept: "Correo corporativo Gmail Christian Trujillo", amount: 16.8, type: "Gasto fijo", status: "Completado" }),
@@ -251,13 +483,64 @@ function seedState() {
   return state;
 }
 
+// ONE-TIME RESET — se ejecuta una sola vez al abrir el app
+(() => {
+  const RESET_FLAG = "bandu-reset-20260612b";
+  if (!localStorage.getItem(RESET_FLAG)) {
+    const clean = {
+      clients: [{ id: crypto.randomUUID(), name: "TESY S.A.C.", ruc: "", date: "", contact: "", email: "", phone: "", clientType: "B2B", country: "Perú", owner: "Dante Trujillo", notes: "" }],
+      leads: [], quotes: [], collections: [], expenses: [],
+      team: [], taxPayments: [], purchases: [], invoicedSales: [], cashEntries: [], declaraciones: [],
+      services: [
+        "Estrategia y anuncios Meta Ads",
+        "Implementacion CRM + automatizaciones",
+        "Diseno UX/UI de Página Web",
+        "Chat inteligente con IA",
+        "Contratacion usuarios Kommo CRM",
+        "Renovacion usuarios Kommo CRM",
+        "SEO y posicionamiento web",
+        "Gestion de redes sociales",
+        "Email marketing",
+        "Consultoria digital"
+      ],
+      categories: ["CRM", "Diseño", "IA", "Marketing", "Tecnologia", "Otro"],
+      sources: ["Kommo Partners", "Recomendado", "Página Web", "Meta Ads", "Referido", "Otro"],
+      profiles: [
+        { name: "Comercial",   hasCommission: true  },
+        { name: "Diseñador",   hasCommission: false },
+        { name: "Especialista",hasCommission: false },
+        { name: "Externo",     hasCommission: false }
+      ],
+      settings: {}
+    };
+    localStorage.setItem("bandu-panel-state-v2", JSON.stringify(clean));
+    localStorage.removeItem("bandu-panel-state-v1");
+    localStorage.removeItem("nebumia-active-view");
+    localStorage.setItem(RESET_FLAG, "1");
+  }
+})();
+
 let state = loadState();
-let activeView = "dashboard";
+let activeView = localStorage.getItem("nebumia-active-view") || "dashboard";
 let editingId = "";
 let editingType = "";
+let activeCajaTab = "general";
+let activeSettingsTab = "financiero";
+let salesTargetsYear = new Date().getFullYear();
 let authMode = "login";
-let dashboardRange = getDashboardPreset("thisYear");
-let dashboardSections = new Set(["metrics", "revenue", "collections", "pipeline", "profitability", "salesOwner"]);
+const VIEW_RANGES_KEY = "nebumia-view-ranges";
+let viewRanges = (() => { try { return JSON.parse(localStorage.getItem(VIEW_RANGES_KEY) || "{}"); } catch { return {}; } })();
+function getCurrentRange() { return viewRanges[activeView] || getDashboardPreset("thisMonth"); }
+function setCurrentRange(range) { viewRanges[activeView] = range; localStorage.setItem(VIEW_RANGES_KEY, JSON.stringify(viewRanges)); }
+let dashboardRange = getCurrentRange();
+let dashboardSections = (() => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(DASH_SECTIONS_KEY));
+    if (Array.isArray(stored)) return new Set(stored);
+  } catch {}
+  return new Set(["metrics", "revenue", "pipeline", "profitability", "salesSource", "salesOwner", "collections", "activity"]);
+})();
+let activeDashboardFilter = null;
 let dashboardSavedFilters = JSON.parse(localStorage.getItem(DASHBOARD_FILTERS_KEY) || "[]");
 
 const loginScreen = document.querySelector("#loginScreen");
@@ -298,7 +581,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [] },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -319,13 +602,20 @@ function migrateState(input) {
       status: c.status || "Pendiente",
       paidDate: c.paidDate || "",
       invoice: c.invoice || "",
-      bankAccount: c.bankAccount || ""
+      bankAccount: c.bankAccount || "",
+      declared: c.declared || "Sin declarar"
     })),
     expenses: (input.expenses || base.expenses).map(e => newExpense({ ...e, date: e.date || monthDate(e.month) || today() })),
     team: (input.team || base.team).map(newTeamPayment),
     taxPayments: (input.taxPayments || []).map(newTaxPayment),
     purchases: (input.purchases || []).map(newPurchase),
-    invoicedSales: (input.invoicedSales || []).map(newInvoicedSale)
+    invoicedSales: (input.invoicedSales || []).map(newInvoicedSale),
+    cashEntries: (input.cashEntries || []).map(newCashEntry),
+    declaraciones: (input.declaraciones || []).map(newDeclaracion),
+    services: input.services || base.services || [],
+    categories: input.categories || base.categories || ["CRM", "Diseño", "IA", "Marketing", "Tecnologia", "Otro"],
+    sources: input.sources || base.sources || ["Kommo Partners", "Recomendado", "Página Web", "Meta Ads", "Referido", "Otro"],
+    profiles: input.profiles || base.profiles || [{ name: "Comercial", hasCommission: true }, { name: "Especialista", hasCommission: false }]
   };
   migrated.quotes.forEach(q => syncQuoteSideEffects(migrated, q));
   syncClientsFromActivity(migrated);
@@ -334,14 +624,15 @@ function migrateState(input) {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (sbUser) sbSync().catch(err => console.error("Supabase sync:", err));
+  if (typeof refreshNotifBadge === "function") refreshNotifBadge();
 }
 
 function applyTheme(theme) {
   document.body.dataset.theme = theme;
   const label = theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
-  themeToggleBtn.innerHTML = icon(theme === "dark" ? "sun" : "moon");
+  themeToggleBtn.textContent = label;
   themeToggleBtn.setAttribute("aria-label", label);
-  themeToggleBtn.title = label;
   localStorage.setItem(THEME_KEY, theme);
 }
 
@@ -359,14 +650,41 @@ function syncProfileUI() {
   const name = current.name || "Administrador";
   profileName.textContent = name;
   profileEmail.textContent = current.email || "admin@bandu.pe";
-  profileAvatar.textContent = name.trim().charAt(0).toUpperCase() || "N";
+  const photo = localStorage.getItem("nebumia-profile-photo");
+  const img = document.getElementById("profilePhotoImg");
+  if (photo) {
+    profileAvatar.textContent = "";
+    profileAvatar.style.backgroundImage = `url(${photo})`;
+    profileAvatar.style.backgroundSize = "cover";
+    profileAvatar.style.backgroundPosition = "center";
+    if (img) { img.src = photo; img.style.display = "block"; }
+    document.getElementById("profilePhotoInitial").style.display = "none";
+  } else {
+    profileAvatar.textContent = name.trim().charAt(0).toUpperCase() || "N";
+    profileAvatar.style.backgroundImage = "";
+    if (img) { img.src = ""; img.style.display = "none"; }
+    const ini = document.getElementById("profilePhotoInitial");
+    if (ini) { ini.textContent = name.trim().charAt(0).toUpperCase() || "N"; ini.style.display = ""; }
+  }
 }
 
 function logout() {
-  localStorage.removeItem(SESSION_KEY);
-  appShell.classList.add("hidden");
-  loginScreen.classList.remove("hidden");
   profileDropdown.classList.add("hidden");
+  const overlay = document.createElement("div");
+  overlay.className = "logout-overlay";
+  overlay.innerHTML = '<div class="content-spinner"></div>';
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+  sb.auth.signOut().finally(() => {
+    sbUser = null;
+    setTimeout(() => {
+      localStorage.removeItem(SESSION_KEY);
+      appShell.classList.add("hidden");
+      loginScreen.classList.remove("hidden");
+      setAuthMode("login");
+      overlay.remove();
+    }, 800);
+  });
 }
 
 function setAuthMode(mode) {
@@ -424,7 +742,7 @@ function getDashboardPreset(key) {
     last30: { start: shiftDate(end, -29), end, label: "Últimos 30 días" },
     thisWeek: { start: shiftDate(end, -weekday), end, label: "Esta semana" },
     lastWeek: { start: shiftDate(end, -weekday - 7), end: shiftDate(end, -weekday - 1), label: "Semana pasada" },
-    thisMonth: { start: isoDate(new Date(year, month, 1)), end, label: "Este mes" },
+    thisMonth: { start: isoDate(new Date(year, month, 1)), end: isoDate(new Date(year, month + 1, 0)), label: "Este mes" },
     lastMonth: {
       start: isoDate(new Date(year, month - 1, 1)),
       end: isoDate(new Date(year, month, 0)),
@@ -489,34 +807,57 @@ function dateFilterControl() {
   `;
 }
 
-function moduleToolbar({ search = "", filters = "", action = "", showDate = true } = {}) {
+function metricsToggleBtn(view) {
+  const visible = isMetricVisible(view);
+  return `<button class="filter-toggle-btn metrics-vis-btn${visible ? "" : " filter-active"}" data-metrics-toggle type="button" title="${visible ? "Ocultar métricas" : "Mostrar métricas"}" aria-label="${visible ? "Ocultar métricas" : "Mostrar métricas"}">${icon("layout")}</button>`;
+}
+
+function filterPopover(id, filtersHtml, isActive = false) {
+  if (!filtersHtml) return "";
+  return `
+    <div class="filter-btn-wrap">
+      <button class="filter-toggle-btn${isActive ? " filter-active" : ""}" data-filter-toggle="${id}" type="button" title="Filtros">
+        ${icon("sliders")}
+        <span class="filter-dot${isActive ? "" : " hidden"}"></span>
+      </button>
+      <div id="${id}" class="filter-popover hidden">
+        ${filtersHtml}
+        <button class="filter-reset-btn${isActive ? "" : " hidden"}" data-filter-reset="${id}" type="button">Limpiar filtros</button>
+      </div>
+    </div>
+  `;
+}
+
+function moduleToolbar({ search = "", filters = "", action = "", showDate = true, metricsToggle = false } = {}) {
   const actions = {
     quote: ["Nueva cotización", "quotes"],
-    lead: ["Nueva oportunidad", "leads"],
+    lead: ["Nueva oportunidad", "quotes"],
     client: ["Nuevo cliente", "clients"],
     expense: ["Nuevo egreso", "finance"],
     payment: ["Nuevo pago", "team"],
-    taxPayment: ["Nuevo pago", "taxes"]
+    taxPayment: ["Nuevo pago SUNAT", "comprobantes"],
+    sale: ["Nueva venta", "sales"],
+    collection: ["Nueva cobranza", "collections"]
   };
   const actionConfig = actions[action];
+  const navItem = navItems.find(([id]) => id === activeView);
+  const title = navItem ? navItem[1] : "";
   return `
-    <div class="module-controls">
-      <section class="module-toolbar module-query-bar">
+    <div class="module-page-header" data-page-header>
+      <h1 class="page-title" style="margin-bottom:0">${escapeHtml(title)}</h1>
+      ${showDate ? dateFilterControl() : ""}
+    </div>
+    <div class="module-controls module-controls-inline">
+      <div class="module-controls-left">
         ${search ? `<label class="module-search">${icon("search")}<input id="moduleSearch" type="search" placeholder="${search}"></label>` : ""}
-        <div class="module-query-filters">
-          ${filters}
-          ${showDate ? dateFilterControl() : ""}
-        </div>
-      </section>
-      <section class="module-toolbar module-action-bar">
-        <div class="module-primary-action">
-          ${actionConfig ? `<button class="create-action" data-module-action="${actionConfig[1]}" type="button">${icon("plus")}<span>${actionConfig[0]}</span></button>` : ""}
-        </div>
-        <div class="module-toolbar-actions">
+        ${filterPopover(`${activeView}-filters`, filters)}
+        ${metricsToggle ? metricsToggleBtn(activeView) : ""}
+      </div>
+      <div class="module-controls-right">
         <button class="secondary-action" data-import-state type="button">${icon("upload")}<span>Importar</span></button>
         <button class="secondary-action" data-export-state type="button">${icon("download")}<span>Exportar</span></button>
-        </div>
-      </section>
+        ${actionConfig ? `<button class="create-action" data-module-action="${actionConfig[1]}" type="button">${icon("plus")}<span>${actionConfig[0]}</span></button>` : ""}
+      </div>
     </div>
   `;
 }
@@ -525,20 +866,26 @@ function dashboardFilterBar() {
   const sectionOptions = [
     ["metrics", "Métricas principales"],
     ["revenue", "Gráfico de ingresos"],
-    ["collections", "Próximos cobros"],
-    ["pipeline", "Pipeline comercial"],
-    ["profitability", "Rentabilidad por servicio"],
-    ["salesOwner", "Ventas por comercial"],
+    ["pipeline", "Embudo comercial"],
+    ["profitability", "Por categoría"],
+    ["salesSource", "Por fuente"],
+    ["salesOwner", "Comerciales"],
+    ["collections", "Cobros próximos"],
+    ["activity", "Actividad reciente"],
     ["annualProjection", "Proyección anual"]
   ];
   return `
     <section class="dashboard-filter-zone">
       <div class="dashboard-quick-filters">
         <span class="dashboard-filter-label">Filtros rápidos</span>
-        <button data-dashboard-preset="all" type="button">Vista completa</button>
-        <button data-dashboard-preset="commercial" type="button">Comercial</button>
-        <button data-dashboard-preset="finance" type="button">Finanzas</button>
-        ${dashboardSavedFilters.map(filter => `<button data-saved-dashboard-filter="${filter.id}" type="button">${escapeHtml(filter.name)}</button>`).join("")}
+        <button data-dashboard-preset="all" type="button" class="${activeDashboardFilter === "all" ? "dash-filter-active" : ""}">Vista completa</button>
+        <button data-dashboard-preset="commercial" type="button" class="${activeDashboardFilter === "commercial" ? "dash-filter-active" : ""}">Comercial</button>
+        <button data-dashboard-preset="finance" type="button" class="${activeDashboardFilter === "finance" ? "dash-filter-active" : ""}">Finanzas</button>
+        ${dashboardSavedFilters.map(filter => `
+          <div class="saved-filter-chip${activeDashboardFilter === filter.id ? " dash-filter-active" : ""}">
+            <button class="saved-filter-chip__name" data-saved-dashboard-filter="${filter.id}" type="button">${escapeHtml(filter.name)}</button>
+            <button class="saved-filter-delete" data-delete-dashboard-filter="${filter.id}" type="button" title="Eliminar filtro" aria-label="Eliminar filtro">${icon("x")}</button>
+          </div>`).join("")}
         <div class="dashboard-filter-builder">
           <button id="createDashboardFilter" class="add-filter-button" type="button">${icon("plus")}<span>Crear filtro</span></button>
           <div id="dashboardFilterBuilder" class="dashboard-filter-popover hidden">
@@ -569,7 +916,8 @@ function dashboardSnapshot() {
   const quotes = state.quotes.filter(quote => dateInRange(quote.date));
   const won = quotes.filter(quote => quote.status === "Ganado").map(quote => ({ ...quote, ...calcQuote(quote) }));
   const lost = quotes.filter(quote => quote.status === "Perdido");
-  const collections = collectionRows().filter(row => dateInRange(row.paidDate || row.dueDate));
+  const allCollections = collectionRows();
+  const collections = allCollections.filter(row => dateInRange(row.paidDate || row.dueDate));
   const expenses = state.expenses.filter(expense => dateInRange(expense.date || monthDate(expense.month)));
   const team = state.team.filter(payment => dateInRange(payment.dueDate || monthDate(payment.month)));
   const revenue = won.reduce((sum, sale) => sum + sale.total, 0);
@@ -580,7 +928,42 @@ function dashboardSnapshot() {
   const adSpend = expenses.filter(e => e.isAdSpend).reduce((sum, e) => sum + e.amount, 0);
   const netProfit = paid - outflows - taxesPaid;
   const roas = adSpend > 0 ? paid / adSpend : null;
-  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas };
+  // pipeline: leads open + quotes not won/lost
+  const openLeads = state.leads.filter(l => !["Ganado","Cerrado perdido"].includes(l.status));
+  const openQuotes = state.quotes.filter(q => ["Por cotizar","Cotizado"].includes(q.status));
+  const pipelineValue = openLeads.reduce((s,l) => s + (l.estimatedValue||0), 0) + openQuotes.reduce((s,q) => s + calcQuote(q).total, 0);
+  // conversion: won / (won + lost + open with known outcome) of all time leads in period
+  const totalLeads = leads.length;
+  const wonLeads = leads.filter(l => l.status === "Ganado").length;
+  const convRate = totalLeads > 0 ? Math.round(wonLeads / totalLeads * 100) : 0;
+  // goal progress for current month
+  const now = new Date();
+  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  // PEN-specific stats
+  const wonPEN = won.filter(q => (q.currency||"PEN") === "PEN");
+  const lostPEN = lost.filter(q => (q.currency||"PEN") === "PEN");
+  const wonThisMonthPEN = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && (q.wonDate||q.date||"").startsWith(thisMonthKey)).reduce((s,q) => s + calcQuote(q).total, 0);
+  const _monthTarget = getMonthTarget(now.getFullYear(), now.getMonth() + 1);
+  const goal = _monthTarget.pen || 0;
+  const goalPctPEN = goal > 0 ? Math.min(100, Math.round(wonThisMonthPEN / goal * 100)) : 0;
+  const pipelinePEN = openLeads.filter(l => (l.currency||"PEN") === "PEN").reduce((s,l) => s + (l.estimatedValue||0), 0)
+    + openQuotes.filter(q => (q.currency||"PEN") === "PEN").reduce((s,q) => s + calcQuote(q).total, 0);
+  // USD-specific stats
+  const wonUSD = won.filter(q => q.currency === "USD");
+  const lostUSD = lost.filter(q => q.currency === "USD");
+  const pipelineUSD = openLeads.filter(l => l.currency === "USD").reduce((s,l) => s + (l.estimatedValue||0), 0)
+    + openQuotes.filter(q => q.currency === "USD").reduce((s,q) => s + calcQuote(q).total, 0);
+  const wonThisMonthUSD = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && (q.wonDate||q.date||"").startsWith(thisMonthKey)).reduce((s,q) => s + calcQuote(q).total, 0);
+  const goalUSD = _monthTarget.usd || 0;
+  const goalPctUSD = goalUSD > 0 ? Math.min(100, Math.round(wonThisMonthUSD / goalUSD * 100)) : 0;
+  // kept for backwards compat with other dashboard sections
+  const wonThisMonth = wonThisMonthPEN + wonThisMonthUSD;
+  const goalPct = goalPctPEN;
+  // overdue collections
+  const overdueCollections = allCollections.filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < today());
+  const pendingSunat = (state.taxPayments||[]).filter(t => t.status === "Pendiente");
+  const pendingTeam = state.team.filter(t => t.status === "Pendiente");
+  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, convRate, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD };
 }
 
 function currentMonthName() {
@@ -611,27 +994,169 @@ function wonQuotes() {
   return state.quotes.filter(q => q.status === "Ganado").map(q => ({ ...q, ...calcQuote(q) }));
 }
 
-function annualProjectionTable() {
+function annualProjectionTables() {
   const year = new Date().getFullYear();
-  const goal = state.settings.monthlyGoal;
-  const rows = months.map((name, i) => {
-    const key = `${year}-${String(i + 1).padStart(2, "0")}`;
-    const ganado = state.quotes
-      .filter(q => q.status === "Ganado" && q.date.startsWith(key))
-      .reduce((sum, q) => sum + calcQuote(q).total, 0);
-    const cobrado = collectionRows()
-      .filter(c => c.status === "Pagado" && (c.paidDate || "").startsWith(key))
-      .reduce((sum, c) => sum + c.amount, 0);
+  const currentMk = `${year}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const penRows = months.map((name, i) => {
+    const monthNum = i + 1;
+    const key = `${year}-${String(monthNum).padStart(2, "0")}`;
+    const isCurrent = key === currentMk;
+    const target = getMonthTarget(year, monthNum);
+    const goal = target.pen || 0;
+    const ganado = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
+    const cobrado = collectionRows().filter(c => (c.currency||"PEN") === "PEN" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
     const pct = goal > 0 ? Math.round((ganado / goal) * 100) : 0;
-    return [name, fmt(goal), fmt(ganado), fmt(cobrado), `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>`];
+    const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
+    return [nameTd, goal > 0 ? fmt(goal) : "—", fmt(ganado), fmt(cobrado), goal > 0 ? `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>` : "—"];
   });
-  return table(["Mes", "Meta", "Ganado", "Cobrado", "% Meta"], rows);
+  const usdRows = months.map((name, i) => {
+    const monthNum = i + 1;
+    const key = `${year}-${String(monthNum).padStart(2, "0")}`;
+    const isCurrent = key === currentMk;
+    const target = getMonthTarget(year, monthNum);
+    const goalUsd = target.usd || 0;
+    const ganado = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
+    const cobrado = collectionRows().filter(c => c.currency === "USD" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
+    const pct = goalUsd > 0 ? Math.round((ganado / goalUsd) * 100) : 0;
+    const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
+    return [nameTd, goalUsd > 0 ? fmt(goalUsd, "USD") : "—", fmt(ganado, "USD"), fmt(cobrado, "USD"), goalUsd > 0 ? `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>` : "—"];
+  });
+  return `
+    <div class="annual-proj-tables">
+      <div class="annual-proj-col">
+        <div class="annual-proj-subtitle">Soles (S/)</div>
+        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows)}
+      </div>
+      <div class="annual-proj-col">
+        <div class="annual-proj-subtitle">Dólares ($)</div>
+        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows)}
+      </div>
+    </div>`;
 }
 
 function collectionRows() {
   return state.collections.map(c => {
     const quote = state.quotes.find(q => q.id === c.quoteId);
-    return { ...c, quote, client: quote?.client || "Sin cotizacion", service: quote?.service || "", code: quote?.code || "-", currency: c.currency || quote?.currency || "PEN" };
+    return { ...c, quote, client: quote?.client || "Sin cotizacion", service: quote?.service || "", code: quote?.code || "-", owner: quote?.owner || "—", wonDate: quote?.wonDate || quote?.date || "", currency: c.currency || quote?.currency || "PEN" };
+  });
+}
+
+function buildCajaRows() {
+  const rows = [];
+
+  collectionRows().filter(c => c.status === "Pagado").forEach(c => {
+    rows.push({
+      id: `col-${c.id}`, date: c.paidDate || c.dueDate, type: "ingreso",
+      concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
+      category: "Cobro de venta", amount: c.amount, currency: c.currency || "PEN",
+      status: "Confirmado", source: "Cobro", sourceType: "collection", sourceId: c.id,
+      bankAccount: c.bankAccount || "", repo: c.repo || c.quote?.repo || "", invoice: c.invoice || ""
+    });
+  });
+
+  state.expenses.forEach(e => {
+    rows.push({
+      id: `exp-${e.id}`, date: e.date || today(), type: "egreso",
+      concept: (e.refund ? "↩ " : "") + (e.concept || e.type),
+      category: e.type || "Gasto", amount: e.amount, currency: e.currency || "PEN",
+      status: e.status, source: "Gasto", sourceType: "expense", sourceId: e.id
+    });
+  });
+
+  const teamBanks = state.settings.bankAccounts || [];
+  const findTeamBank = (currency, type) => teamBanks.find(b => {
+    const currMatch = currency === "USD" ? /\$|Dólar|USD/i.test(b) : /S\/|Sol|PEN/i.test(b);
+    const typeMatch = type === "cc" ? /Corriente/i.test(b) : /Personal/i.test(b);
+    return currMatch && typeMatch;
+  }) || teamBanks[0] || "";
+  const teamRemaining = {};
+  teamBanks.forEach(b => {
+    const br = rows.filter(r => r.bankAccount === b && r.status !== "Pendiente");
+    const inn = br.filter(r => r.type === "ingreso").reduce((s, r) => s + r.amount, 0);
+    const out = br.filter(r => r.type === "egreso").reduce((s, r) => s + r.amount, 0);
+    teamRemaining[b] = inn - out;
+  });
+  state.team.forEach(t => {
+    const cur = t.currency || "PEN";
+    const cc = findTeamBank(cur, "cc");
+    const cp = findTeamBank(cur, "cp");
+    let assigned;
+    if (cc && teamRemaining[cc] >= t.amount) { teamRemaining[cc] -= t.amount; assigned = cc; }
+    else { assigned = cp || cc; }
+    rows.push({
+      id: `team-${t.id}`, date: t.dueDate || monthDate(t.month) || today(), type: "egreso",
+      concept: [t.name, t.role].filter(Boolean).join(" — "),
+      category: "Personal", amount: t.amount, currency: cur,
+      status: t.status, source: "Personal", sourceType: "team", sourceId: t.id,
+      bankAccount: assigned
+    });
+    if (profileHasCommission(t.role)) {
+      const comm = calcTeamCommission(t.name);
+      if (comm > 0) {
+        rows.push({
+          id: `comm-${t.id}`, date: t.dueDate || monthDate(t.month) || today(), type: "egreso",
+          concept: `${t.name} — Interno (comisión de ventas)`,
+          category: "Comisión", amount: comm, currency: cur,
+          status: t.status, source: "Gasto variable", sourceType: "commission", sourceId: t.id,
+          invoice: t.commInvoice || "", repo: t.commRepo || "",
+          bankAccount: assigned
+        });
+      }
+    }
+  });
+
+  (state.taxPayments || []).forEach(t => {
+    rows.push({
+      id: `tax-${t.id}`, date: t.date, type: "egreso",
+      concept: `${t.type} · ${t.period}`,
+      category: "Impuesto", amount: t.amount, currency: "PEN",
+      status: t.status, source: "SUNAT", sourceType: "tax", sourceId: t.id,
+      invoice: t.sunatRef || ""
+    });
+  });
+
+  (state.cashEntries || []).forEach(e => {
+    rows.push({ ...e, source: "Manual", sourceType: "cashEntry", sourceId: e.id, bankAccount: e.bankAccount || "" });
+  });
+
+  return rows.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+}
+
+function getAccountBalance(accountName) {
+  const rows = buildCajaRows().filter(r => r.bankAccount === accountName && r.status !== "Pendiente");
+  const ingresos = rows.filter(r => r.type === "ingreso").reduce((s, r) => s + r.amount, 0);
+  const egresos  = rows.filter(r => r.type === "egreso").reduce((s, r) => s + r.amount, 0);
+  return ingresos - egresos;
+}
+
+function assignFixedExpenses() {
+  const banks = state.settings.bankAccounts || [];
+  const fixed = state.settings.fixedExpenses || [];
+
+  const find = (currency, type) => banks.find(b => {
+    const isPEN = /S\/|Sol|PEN/i.test(b);
+    const isUSD = /\$|Dólar|USD/i.test(b);
+    const isCorriente = /Corriente/i.test(b);
+    const isPersonal  = /Personal/i.test(b);
+    const currMatch = currency === "PEN" ? isPEN : isUSD;
+    const typeMatch  = type === "primary" ? isCorriente : isPersonal;
+    return currMatch && typeMatch;
+  }) || banks[0] || "";
+
+  const remaining = {};
+  banks.forEach(b => { remaining[b] = getAccountBalance(b); });
+
+  return fixed.map(f => {
+    const primary  = find(f.currency, "primary");
+    const fallback = find(f.currency, "fallback");
+    let assigned;
+    if (primary && remaining[primary] >= f.amount) {
+      remaining[primary] -= f.amount;
+      assigned = primary;
+    } else {
+      assigned = fallback || primary;
+    }
+    return { ...f, assignedAccount: assigned };
   });
 }
 
@@ -651,13 +1176,79 @@ function addDays(date, days) {
   return d.toISOString().slice(0, 10);
 }
 
+function addBusinessDays(date, days) {
+  const d = new Date(`${date}T00:00:00`);
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return d.toISOString().slice(0, 10);
+}
+
 function normalizeStatus(status) {
   return String(status || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-");
 }
 
 function nextQuoteCode() {
   const nums = state?.quotes?.map(q => Number(String(q.code).match(/\d+/)?.[0] || 0)).filter(Boolean) || [285];
-  return `PPTO ${String(Math.max(...nums, 285) + 1).padStart(4, "0")}`;
+  return String(Math.max(...nums, 285) + 1).padStart(4, "0");
+}
+
+function fmtDate(str) {
+  if (!str || str === "—") return str || "—";
+  const m = String(str).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : str;
+}
+
+function displayCode(code) {
+  return String(code || "").replace(/^PPTO\s*/i, "");
+}
+
+const tablePages = {};
+function getTablePage(key) {
+  if (!tablePages[key]) tablePages[key] = { page: 1, pageSize: 10 };
+  return tablePages[key];
+}
+
+function renderPaginator(key, page, totalPages, pageSize, total) {
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const to   = Math.min(page * pageSize, total);
+  const sizes = [10, 50, 100, 200];
+
+  const nums = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) nums.push(i);
+  } else {
+    const set = new Set([1, 2, page - 1, page, page + 1, totalPages - 1, totalPages].filter(p => p >= 1 && p <= totalPages));
+    [...set].sort((a, b) => a - b).forEach(p => nums.push(p));
+  }
+
+  let pages = "";
+  let prev = 0;
+  nums.forEach(p => {
+    if (prev && p - prev > 1) pages += `<span class="pag-ellipsis">…</span>`;
+    pages += `<button class="pag-btn ${p === page ? "active" : ""}" data-pag-key="${escapeAttr(key)}" data-pag-page="${p}">${p}</button>`;
+    prev = p;
+  });
+
+  return `
+    <div class="paginator">
+      <div class="pag-left">
+        <span class="pag-info">${from}–${to} de ${total}</span>
+        <div class="pag-controls">
+          <button class="pag-btn pag-nav" data-pag-key="${escapeAttr(key)}" data-pag-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>‹</button>
+          ${pages}
+          <button class="pag-btn pag-nav" data-pag-key="${escapeAttr(key)}" data-pag-page="${page + 1}" ${page >= totalPages ? "disabled" : ""}>›</button>
+        </div>
+      </div>
+      <div class="pag-size-group">
+        ${sizes.map(s => `<button class="pag-size-btn ${s === pageSize ? "active" : ""}" data-pag-key="${escapeAttr(key)}" data-pag-size="${s}">${s}</button>`).join("")}
+        <span class="pag-size-label">filas</span>
+      </div>
+    </div>
+  `;
 }
 
 function syncClientsFromActivity(targetState = state) {
@@ -688,212 +1279,362 @@ function syncQuoteSideEffects(targetState, q) {
   }
   const calc = calcQuote(q, targetState);
   const existing = targetState.collections.filter(c => c.quoteId === q.id);
-  const parts = q.paymentType === "split" ? [0.5, 0.5] : q.paymentType === "thirds" ? [1/3, 1/3, 1/3] : [1];
+  const cuotas = Number(q.cuotas) || 1;
+  const parts = cuotas === 3 ? [1/3, 1/3, 1/3] : cuotas === 2 ? [0.5, 0.5] : [1];
   const totalParts = parts.length;
   const next = parts.map((part, index) => {
     const old = existing.find(c => c.part === index + 1) || {};
     const label = totalParts === 1 ? "Pago 100%" : `Pago ${index + 1}/${totalParts}`;
-    const dueDateOffset = index * 30;
+    const firstDueDate = (existing.find(c => c.part === 1) || {}).dueDate || (q.wonDate || q.date);
+    const dueDate = old.dueDate || (index === 1 ? addBusinessDays(firstDueDate, 10) : (q.wonDate || q.date));
     return {
       id: old.id || uid(),
       quoteId: q.id,
       currency: q.currency || "PEN",
       part: index + 1,
       label,
-      dueDate: old.dueDate || addDays(q.date, dueDateOffset),
+      dueDate,
       amount: calc.total * part,
       detraction: calc.detraction * part,
-      status: old.status || (index === 0 ? "Facturado" : "Pendiente"),
+      status: old.status || "Pendiente",
       paidDate: old.paidDate || "",
-      invoice: old.invoice || "",
-      bankAccount: old.bankAccount || ""
+      invoice: index === 0 ? (q.invoice || old.invoice || "") : (old.invoice || ""),
+      bankAccount: old.bankAccount || q.bankAccount || "",
+      repo: old.repo || ""
     };
   });
   targetState.collections = targetState.collections.filter(c => c.quoteId !== q.id).concat(next);
-
-  // Auto-create invoicedSale entries for each payment
-  if (!targetState.invoicedSales) targetState.invoicedSales = [];
-  const igvRate = targetState.settings.igvRate;
-  next.forEach(collection => {
-    const alreadyExists = targetState.invoicedSales.some(s => s.quoteId === q.id && s.part === collection.part);
-    if (alreadyExists) return;
-    const igv = q.hasIgv ? collection.amount * igvRate / (1 + igvRate) : 0;
-    targetState.invoicedSales.push(newInvoicedSale({
-      date: collection.dueDate,
-      client: q.client,
-      service: q.service,
-      subtotal: collection.amount - igv,
-      igv,
-      total: collection.amount,
-      currency: q.currency || "PEN",
-      quoteId: q.id,
-      part: collection.part
-    }));
-  });
 }
 
 function renderNav() {
+  const mainItems     = navItems.filter(([id]) => id !== "settings");
+  const settingsItem  = navItems.find(([id]) => id === "settings");
+  const btnHtml = ([id, label, iconName]) => `
+    <button class="nav-btn ${id === activeView ? "active" : ""}" data-view="${id}" data-label="${label}" type="button">
+      <span class="nav-icon">${icon(iconName)}</span><span class="nav-label">${label}</span>
+    </button>`;
   const nav = document.querySelector("#mainNav");
-  nav.innerHTML = navItems.map(([id, label, iconName]) => `
-    <button class="nav-btn ${id === activeView ? "active" : ""}" data-view="${id}" type="button">
-      <span class="nav-icon">${icon(iconName)}</span><span>${label}</span>
-    </button>
-  `).join("");
-  nav.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => {
+  nav.innerHTML = mainItems.map(btnHtml).join("");
+  const settingsEl = document.querySelector("#sidebarSettings");
+  if (settingsEl && settingsItem) settingsEl.innerHTML = btnHtml(settingsItem);
+  document.querySelectorAll(".nav-btn").forEach(btn => btn.addEventListener("click", () => {
     activeView = btn.dataset.view;
+    showContentLoader();
     render();
+    hideContentLoader(50);
   }));
 }
 
 function render() {
+  dashboardRange = getCurrentRange();
+  localStorage.setItem("nebumia-active-view", activeView);
   renderNav();
   syncProfileUI();
   const item = navItems.find(([id]) => id === activeView);
-  viewRoot.innerHTML = `<h1 class="page-title">${item[1]}</h1>${views[activeView]()}`;
+  const viewContent = views[activeView]();
+  const hasCustomHeader = viewContent.includes("data-page-header");
+  viewRoot.innerHTML = `${hasCustomHeader ? "" : `<h1 class="page-title">${item[1]}</h1>`}${viewContent}`;
   bindViewEvents();
   drawCharts();
 }
 
 const views = {
   dashboard() {
-    const snapshot = dashboardSnapshot();
-    const openLeads = snapshot.leads.filter(l => !["Ganado", "Cerrado perdido"].includes(l.status));
-    const opportunityAmount = openLeads.reduce((sum, lead) => sum + lead.estimatedValue, 0);
-    const wonSales = snapshot.won;
-    const lostSales = snapshot.lost;
-    const lostAmount = lostSales.reduce((sum, quote) => sum + calcQuote(quote).total, 0);
-    const upcoming = snapshot.collections.filter(r => r.status !== "Pagado").slice(0, 4);
+    const s = dashboardSnapshot();
+    const upcoming = collectionRows().filter(r => r.status !== "Pagado").sort((a,b) => (a.dueDate||"").localeCompare(b.dueDate||"")).slice(0, 5);
+    const salesByOwner = group(s.won, "owner", q => q.total);
+    const salesByCategory = group(s.won, "category", q => q.total);
+    const salesBySource = group(s.leads.filter(l => l.status === "Ganado"), "source", l => l.estimatedValue || 0);
+    const leadsNew = s.leads.filter(l => l.status === "Nuevo").length;
+    const leadsProp = s.leads.filter(l => l.status === "Propuesta").length;
+    const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
+    const funnelMax = Math.max(leadsNew + leadsProp + quotedCount + s.won.length + s.lost.length, 1);
+    const alertCount = s.overdueCollections.length + s.pendingSunat.length + s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).length;
+
     return `
+      ${onboardingBannerHTML()}
       ${dashboardFilterBar()}
-      <section class="metric-grid dashboard-metrics ${dashboardSections.has("metrics") ? "" : "hidden"}" data-dashboard-section="metrics">
-        ${metric("Oportunidades", openLeads.length, `${snapshot.leads.length} registradas`, "up", "8%", "purple")}
-        ${metric("Pipeline de oportunidades", fmtMixed(openLeads, l => l.estimatedValue), `${openLeads.length} oportunidades abiertas`, "up", "2%", "amber")}
-        ${metric("Ventas ganadas", fmtMixed(snapshot.won, q => q.total), `${wonSales.length} cotizaciones ganadas`, "up", "12%", "mint")}
-        ${metric("Utilidad neta", fmt(snapshot.netProfit), `Cobrado menos egresos${snapshot.roas ? ` · ROAS ${snapshot.roas.toFixed(1)}x` : ""}`, snapshot.netProfit >= 0 ? "up" : "down", "", "coral")}
-      </section>
-      <section class="dashboard-grid">
-        <div class="panel chart-panel ${dashboardSections.has("revenue") ? "" : "hidden"}" data-dashboard-section="revenue">
+
+      <!-- KPIs -->
+      <div class="dash-kpi-grid" data-dash-section="metrics">
+        <div class="kpi-card kpi-meta">
+          <div class="kpi-top">
+            <span class="kpi-label">Meta mensual</span>
+            <span class="kpi-pct ${s.goalPctPEN >= 100 ? "kpi-pct--ok" : s.goalPctPEN >= 50 ? "kpi-pct--warn" : "kpi-pct--low"}">${s.goalPctPEN}%</span>
+          </div>
+          <div class="kpi-value">${fmt(s.wonThisMonthPEN)}</div>
+          <div class="kpi-sub">de ${fmt(s.goal)} · ${currentMonthName()}</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.goalPctPEN}%;background:${s.goalPctPEN>=100?"var(--mint)":s.goalPctPEN>=50?"var(--brand)":"var(--coral)"}"></div></div>
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const wonPENTotal = s.wonPEN.reduce((a,q)=>a+q.total,0);
+            const wonPct = s.goal > 0 ? Math.round(wonPENTotal / s.goal * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Ventas ganadas</span><span class="kpi-pct ${wonPct>=100?"kpi-pct--ok":wonPct>=50?"kpi-pct--warn":"kpi-pct--low"}">${wonPct}% meta</span></div>
+            <div class="kpi-value kpi-value--blue">${fmt(wonPENTotal)}</div>
+            <div class="kpi-sub">${s.wonPEN.length} ${s.wonPEN.length===1?"venta":"ventas"} · periodo</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const lostAmt = s.lostPEN.reduce((a,q)=>a+calcQuote(q).total,0);
+            const totalClosed = s.wonPEN.length + s.lostPEN.length;
+            const lossPct = totalClosed > 0 ? Math.round(s.lostPEN.length / totalClosed * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPct}% tasa</span></div>
+            <div class="kpi-value kpi-value--coral">${fmt(lostAmt)}</div>
+            <div class="kpi-sub">${s.lostPEN.length} ${s.lostPEN.length===1?"venta perdida":"ventas perdidas"} · periodo</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
+            const totalQuotedPEN = s.wonPEN.length + openPEN.length + s.lostPEN.length;
+            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span></div>
+            <div class="kpi-value kpi-value--purple">${fmt(s.pipelinePEN)}</div>
+            <div class="kpi-sub">${s.wonPEN.length} ganados de ${totalQuotedPEN} cotizaciones</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top"><span class="kpi-label">Conversión</span></div>
+          <div class="kpi-value kpi-value--mint">${s.convRate}%</div>
+          <div class="kpi-sub">${s.wonLeads} ganados de ${s.totalLeads} leads</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.convRate}%;background:var(--mint)"></div></div>
+        </div>
+      </div>
+
+      <!-- KPIs USD -->
+      <div class="dash-kpi-grid" data-dash-section="metrics">
+        <div class="kpi-card kpi-meta">
+          <div class="kpi-top">
+            <span class="kpi-label">Meta mensual $</span>
+            ${s.goalUSD > 0 ? `<span class="kpi-pct ${s.goalPctUSD >= 100 ? "kpi-pct--ok" : s.goalPctUSD >= 50 ? "kpi-pct--warn" : "kpi-pct--low"}">${s.goalPctUSD}%</span>` : ""}
+          </div>
+          <div class="kpi-value">${fmt(s.wonThisMonthUSD, "USD")}</div>
+          <div class="kpi-sub">${s.goalUSD > 0 ? `de ${fmt(s.goalUSD, "USD")} · ${currentMonthName()}` : `${currentMonthName()} · en dólares`}</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.goalPctUSD}%;background:${s.goalPctUSD>=100?"var(--mint)":s.goalPctUSD>=50?"var(--brand)":"var(--coral)"}"></div></div>
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const wonUSDTotal = s.wonUSD.reduce((a,q)=>a+q.total,0);
+            return `<div class="kpi-top"><span class="kpi-label">Ganadas en $</span></div>
+            <div class="kpi-value kpi-value--blue">${fmt(wonUSDTotal, "USD")}</div>
+            <div class="kpi-sub">${s.wonUSD.length} ${s.wonUSD.length===1?"venta":"ventas"} · periodo</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const lostUSDTotal = s.lostUSD.reduce((a,q)=>a+calcQuote(q).total,0);
+            const totalClosedUSD = s.wonUSD.length + s.lostUSD.length;
+            const lossPctUSD = totalClosedUSD > 0 ? Math.round(s.lostUSD.length / totalClosedUSD * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Perdidas en $</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
+            <div class="kpi-value kpi-value--coral">${fmt(lostUSDTotal, "USD")}</div>
+            <div class="kpi-sub">${s.lostUSD.length} ${s.lostUSD.length===1?"venta perdida":"ventas perdidas"} · periodo</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const openUSD = s.openQuotes.filter(q => q.currency === "USD");
+            const totalQuotedUSD = s.wonUSD.length + openUSD.length + s.lostUSD.length;
+            return `<div class="kpi-top"><span class="kpi-label">Pipeline en $</span></div>
+            <div class="kpi-value kpi-value--purple">${fmt(s.pipelineUSD, "USD")}</div>
+            <div class="kpi-sub">${s.wonUSD.length} ganados de ${totalQuotedUSD} cotizaciones</div>`;
+          })()}
+        </div>
+        <div class="kpi-card">
+          ${(() => {
+            const openUSD = s.openQuotes.filter(q => q.currency === "USD");
+            const totalUSDQ = s.wonUSD.length + s.lostUSD.length + openUSD.length;
+            const convUSD = totalUSDQ > 0 ? Math.round(s.wonUSD.length / totalUSDQ * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Conversión $</span></div>
+            <div class="kpi-value kpi-value--mint">${convUSD}%</div>
+            <div class="kpi-sub">${s.wonUSD.length} ganados de ${totalUSDQ} cotizaciones en $</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${convUSD}%;background:var(--mint)"></div></div>`;
+          })()}
+        </div>
+      </div>
+
+      <!-- Fila 2: Ingresos vs Egresos + Embudo comercial -->
+      <div class="dash-main-grid" data-dash-grid>
+        <div class="panel chart-panel" data-dash-section="revenue">
           <div class="panel-head">
-            <div><h3>Ingresos</h3><p>${fmtMixed(snapshot.won, q => q.total)} vendidos · ${fmtMixed(snapshot.collections.filter(r => r.status === "Pagado"), r => r.amount)} cobrado</p></div>
+            <div><h3>Ingresos vs Egresos</h3><p>Últimos 6 meses · vendido vs cobrado</p></div>
           </div>
           <canvas id="revenueChart" class="chart"></canvas>
         </div>
-        <aside class="panel agenda-panel ${dashboardSections.has("collections") ? "" : "hidden"}" data-dashboard-section="collections">
-          <div class="panel-head">
-            <div><h3>Cobros proximos</h3><p>Seguimiento de clientes</p></div>
+        <div class="panel" data-dash-section="pipeline">
+          <div class="panel-head"><div><h3>Embudo comercial</h3><p>Leads → cierre</p></div></div>
+          <div class="funnel-flow">
+            ${dashFunnelChart([
+              {label:"Nuevos",    count:leadsNew,         color:"var(--brand)"},
+              {label:"Propuesta", count:leadsProp,        color:"#7c3aed"},
+              {label:"Cotizado",  count:quotedCount,      color:"#0891b2"},
+              {label:"Ganado",    count:s.won.length,     color:"var(--mint)"},
+              {label:"Perdido",   count:s.lost.length,    color:"var(--coral)"},
+            ])}
           </div>
-          <div class="timeline">
-            ${upcoming.length ? upcoming.map(r => `
-              <div class="timeline-item">
-                <small>${r.dueDate}</small>
-                <strong>${r.client}</strong>
-                <span>${r.label} · ${fmt(r.amount)}</span>
-                ${badge(r.status)}
+        </div>
+      </div>
+
+      <!-- Fila 3: Por categoría + Por fuente + Comerciales -->
+      <div class="dash-mid-grid" data-dash-grid>
+        <div class="panel" data-dash-section="profitability">
+          <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
+          ${salesByCategory.length ? miniBars(salesByCategory) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+        </div>
+        <div class="panel" data-dash-section="salesSource">
+          <div class="panel-head"><div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div>
+          ${salesBySource.length ? miniBars(salesBySource) : `<p class="fe-empty">Sin datos de fuente.</p>`}
+        </div>
+        <div class="panel" data-dash-section="salesOwner">
+          <div class="panel-head"><div><h3>Comerciales</h3><p>Ventas del periodo</p></div></div>
+          ${salesByOwner.length ? `<div class="ranking-list">${salesByOwner.map((o, i) => {
+            const comm = calcTeamCommission(o.label);
+            return `<div class="ranking-item">
+              <div class="ranking-pos">${i+1}</div>
+              <div class="ranking-info">
+                <strong>${escapeHtml(o.label)}</strong>
+                <span>${fmt(o.value)}</span>
               </div>
-            `).join("") : `<div class="empty-state">Sin cobros pendientes.</div>`}
+              ${comm > 0 ? `<div class="ranking-comm">Comisión<strong>${fmt(comm)}</strong></div>` : ""}
+            </div>`;
+          }).join("")}</div>` : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+        </div>
+      </div>
+
+      <!-- Fila 4: Cobros próximos + Actividad reciente -->
+      <div class="dash-bottom-grid" data-dash-grid>
+        <div class="panel" data-dash-section="collections">
+          <div class="panel-head"><div><h3>Cobros próximos</h3><p>Pendientes ordenados por fecha</p></div></div>
+          <div class="timeline">
+            ${upcoming.length ? upcoming.map(r => {
+              const isOverdue = r.dueDate && r.dueDate < today();
+              return `<div class="timeline-item ${isOverdue ? "timeline-item--overdue" : ""}">
+                <div class="timeline-row"><strong>${escapeHtml(r.client)}</strong>${badge(r.status)}</div>
+                <div class="timeline-row"><span>${escapeHtml(r.label||r.code||"—")} · ${fmt(r.amount, r.currency)}</span><small>${fmtDate(r.dueDate)}</small></div>
+              </div>`;
+            }).join("") : `<div class="empty-state">Sin cobros pendientes.</div>`}
           </div>
-        </aside>
-        <div class="panel ${dashboardSections.has("pipeline") ? "" : "hidden"}" data-dashboard-section="pipeline">
-          <div class="panel-head"><div><h3>Pipeline comercial</h3><p>Estado de oportunidades</p></div></div>
-          <div class="kanban-mini">
-            ${miniStage("Nuevo", snapshot.leads.filter(l => l.status === "Nuevo").length)}
-            ${miniStage("Propuesta", snapshot.leads.filter(l => l.status === "Propuesta").length)}
-            ${miniStage("Cotizado", snapshot.quotes.filter(q => q.status === "Cotizado").length)}
-            ${miniStage("Ganado", snapshot.won.length)}
-          </div>
         </div>
-        <div class="panel ${dashboardSections.has("profitability") ? "" : "hidden"}" data-dashboard-section="profitability">
-          <div class="panel-head"><div><h3>Rentabilidad por servicio</h3><p>Ventas menos egresos</p></div></div>
-          ${miniBars(group(snapshot.won, "category", q => q.total))}
+        <div class="panel" data-dash-section="activity">
+          <div class="panel-head"><div><h3>Actividad reciente</h3><p>Últimos movimientos registrados</p></div></div>
+          ${dashRecentActivity()}
         </div>
-        <div class="panel ${dashboardSections.has("salesOwner") ? "" : "hidden"}" data-dashboard-section="salesOwner">
-          <div class="panel-head"><div><h3>Ventas por comercial</h3><p>Rendimiento y base de comisiones</p></div></div>
-          ${miniBars(group(snapshot.won, "owner", q => q.total))}
-        </div>
-        <div class="panel annual-panel ${dashboardSections.has("annualProjection") ? "" : "hidden"}" data-dashboard-section="annualProjection">
-          <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div></div>
-          ${annualProjectionTable()}
-        </div>
-      </section>
+      </div>
+
+      <!-- Fila 5: Proyección anual -->
+      <div class="panel" data-dash-section="annualProjection" style="margin-bottom:14px">
+        <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div></div>
+        ${annualProjectionTables()}
+      </div>
     `;
   },
-  leads() {
-    const leads = state.leads.filter(lead => dateInRange(lead.date));
-    const openLeads = leads.filter(l => !["Ganado", "Cerrado perdido"].includes(l.status));
-    return `
-      <section class="metric-grid">
-        ${metric("Leads abiertos", openLeads.length, "Aun no cerrados")}
-        ${metric("Pipeline estimado", fmtMixed(openLeads, l => l.estimatedValue), "Oportunidades abiertas")}
-        ${metric("Cotizados", leads.filter(l => l.quoteId).length, "Leads con PPTO vinculado")}
-        ${metric("Fuentes activas", new Set(leads.map(l => l.source)).size, "Canales de adquisicion")}
-      </section>
-      ${moduleToolbar({
-        search: "Buscar cliente, fuente o servicio",
-        filters: `<select id="leadStatus">${options(["Todos"].concat(leadStatuses), "Todos")}</select>`,
-        action: "lead"
-      })}
-      <div id="leadsTable">${leadsTable(leads)}</div>
-    `;
-  },
+  leads() { activeView = "quotes"; render(); return ""; },
   quotes() {
     const quotes = state.quotes.filter(quote => dateInRange(quote.date));
-    const quoteTotal = quotes.reduce((sum, quote) => sum + calcQuote(quote).total, 0);
-    const won = quotes.filter(quote => quote.status === "Ganado");
+    const active = quotes.filter(q => q.status === "Por cotizar" || q.status === "Cotizado");
+    const won = quotes.filter(q => q.status === "Ganado");
+
+    const totalPEN = quotes.filter(q => (q.currency || "PEN") === "PEN").reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const totalUSD = quotes.filter(q => q.currency === "USD").reduce((sum, q) => sum + calcQuote(q).total, 0);
+
+    const wonPEN = won.filter(q => (q.currency || "PEN") === "PEN").reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const wonUSD = won.filter(q => q.currency === "USD").reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const convPEN = totalPEN > 0 ? Math.round(wonPEN / totalPEN * 100) : 0;
+    const convUSD = totalUSD > 0 ? Math.round(wonUSD / totalUSD * 100) : 0;
+    const wonNote = [
+      totalPEN > 0 ? `S/ ${wonPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})} (${convPEN}%)` : "",
+      totalUSD > 0 ? `$ ${wonUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})} (${convUSD}%)` : ""
+    ].filter(Boolean).join("  ·  ") || "S/ 0.00 (0%)";
+
     return `
       <section class="metric-grid">
-        ${metric("Cotizaciones", quotes.length, "Propuestas en el periodo", "", "", "purple")}
-        ${metric("Monto cotizado", fmt(quoteTotal), "Valor total con impuestos", "", "", "amber")}
-        ${metric("Cotizaciones ganadas", won.length, `${fmt(won.reduce((sum, quote) => sum + calcQuote(quote).total, 0))} cerrados`, "", "", "mint")}
-        ${metric("Conversión", `${quotes.length ? Math.round((won.length / quotes.length) * 100) : 0}%`, "Ganadas sobre cotizadas", "", "", "coral")}
+        ${metric("Cotizaciones activas", active.length, "Por cotizar y cotizado", "", "", "purple")}
+        ${metric("Monto cotizado S/", `S/ ${totalPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en soles", "", "", "amber")}
+        ${metric("Monto cotizado $", `$ ${totalUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en dólares", "", "", "blue")}
+        ${metric("Ventas generadas", won.length, wonNote, "", "", "mint")}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o servicio",
         filters: `<select id="quoteStatus"><option value="">Todos los estados</option>${options(quoteStatuses)}</select><select id="quoteYear"><option value="">Todos los años</option>${Array.from({length: new Date().getFullYear() - 2021}, (_, i) => 2022 + i).reverse().map(y => `<option value="${y}">${y}</option>`).join("")}</select>`,
-        action: "quote"
+        action: "quote",
+        metricsToggle: true
       })}
       <div id="quotesTable">${quotesTable(quotes)}</div>
     `;
   },
   clients() {
-    const clients = state.clients.filter(client => [...state.leads, ...state.quotes].some(item =>
-      item.client.toLowerCase() === client.name.toLowerCase() && dateInRange(item.date)
-    ));
-    const rows = clients.map(client => {
-      const qs = state.quotes.filter(q => q.client.toLowerCase() === client.name.toLowerCase() && dateInRange(q.date));
-      const won = qs.filter(q => q.status === "Ganado");
-      const leads = state.leads.filter(l => l.client.toLowerCase() === client.name.toLowerCase() && dateInRange(l.date));
-      return [client.name, client.contact || "-", client.email || "-", leads.length, qs.length, fmt(won.reduce((s, q) => s + calcQuote(q).total, 0)), clientActions(client.id)];
-    });
-    const clientRevenue = state.quotes.filter(q => q.status === "Ganado" && dateInRange(q.date)).reduce((sum, q) => sum + calcQuote(q).total, 0);
-    const clientCollections = collectionRows().filter(row => dateInRange(row.paidDate || row.dueDate));
+    const allClients = state.clients;
+    const tipos = [...new Set(allClients.map(c => c.clientType).filter(Boolean))].sort();
+    const paises = [...new Set(allClients.map(c => c.country).filter(Boolean))].sort();
+    const rows = allClients.map(client => [
+      escapeHtml(client.name),
+      escapeHtml(client.ruc || "—"),
+      fmtDate(client.date) || "—",
+      escapeHtml(client.contact || "—"),
+      client.email ? `<a href="mailto:${escapeAttr(client.email)}" class="action-link">${escapeHtml(client.email)}</a>` : "—",
+      escapeHtml(client.phone || "—"),
+      client.clientType ? `<span class="badge-type">${escapeHtml(client.clientType)}</span>` : "—",
+      escapeHtml(client.country || "—"),
+      escapeHtml(client.owner || "—"),
+      clientActions(client.id)
+    ]);
+    const clientFilters = `
+      <select data-table-filter><option value="">Todos los tipos</option>${tipos.map(t => `<option>${escapeHtml(t)}</option>`).join("")}</select>
+      <select data-table-filter><option value="">Todos los países</option>${paises.map(p => `<option>${escapeHtml(p)}</option>`).join("")}</select>
+    `;
+    const clientsWithQuotes = new Set(state.quotes.map(q => q.client)).size;
+    const clientsWithSales = new Set(wonQuotes().map(q => q.client)).size;
+    const activeCountries = new Set(allClients.map(c => c.country).filter(Boolean)).size;
     return `
       <section class="metric-grid">
-        ${metric("Clientes activos", clients.length, "Con actividad en el periodo", "", "", "purple")}
-        ${metric("Nuevas oportunidades", state.leads.filter(l => dateInRange(l.date)).length, "Leads vinculados", "", "", "amber")}
-        ${metric("Facturación", fmt(clientRevenue), "Ventas ganadas", "", "", "mint")}
-        ${metric("Por cobrar", fmt(clientCollections.filter(r => r.status !== "Pagado").reduce((sum, r) => sum + r.amount, 0)), "Saldo pendiente", "", "", "coral")}
+        ${metric("Total clientes", allClients.length, `${tipos.length} tipo${tipos.length !== 1 ? "s" : ""} registrado${tipos.length !== 1 ? "s" : ""}`, "", "", "purple")}
+        ${metric("Con cotizaciones", clientsWithQuotes, "Clientes en pipeline activo", "", "", "amber")}
+        ${metric("Con ventas ganadas", clientsWithSales, "Clientes con al menos 1 cierre", "", "", "mint")}
+        ${metric("Países activos", activeCountries, `De ${allClients.length} clientes registrados`, "", "", "blue")}
       </section>
-      ${moduleToolbar({ search: "Buscar cliente, contacto o correo", action: "client" })}
-      ${table(["Cliente", "Contacto", "Correo", "Leads", "Cotizaciones", "Facturacion", "Acciones"], rows)}`;
+      ${moduleToolbar({ search: "Buscar cliente, contacto o correo", filters: clientFilters, action: "client", metricsToggle: true })}
+      ${table(["Cliente", "RUC / DNI", "Fecha", "Contacto principal", "Correo electrónico", "Teléfono", "Tipo", "País", "Comercial", "Acciones"], rows, "clients")}`;
+
   },
   sales() {
-    const sales = wonQuotes().filter(sale => dateInRange(sale.date));
-    const salesTotal = sales.reduce((sum, sale) => sum + sale.total, 0);
+    const sales = wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date));
+    const salesPEN = sales.filter(s => (s.currency || "PEN") === "PEN");
+    const salesUSD = sales.filter(s => s.currency === "USD");
+    const totalPEN = salesPEN.reduce((sum, s) => sum + calcQuote(s).total, 0);
+    const totalUSD = salesUSD.reduce((sum, s) => sum + calcQuote(s).total, 0);
+    const fmtAmt = (v, cur) => `${cur === "USD" ? "$" : "S/"} ${v.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    const penDetail = salesPEN.length ? salesPEN.map(s => fmtAmt(calcQuote(s).total, "PEN")).join("  ·  ") : "Sin ventas en soles";
+    const usdDetail = salesUSD.length ? salesUSD.map(s => fmtAmt(calcQuote(s).total, "USD")).join("  ·  ") : "Sin ventas en dólares";
+    const totalComisiones = sales.reduce((sum, s) => sum + calcQuote(s).commission, 0);
     return `
       <section class="metric-grid">
         ${metric("Ventas ganadas", sales.length, "Cierres del periodo", "", "", "purple")}
-        ${metric("Ingresos vendidos", fmt(salesTotal), "Total con IGV", "", "", "amber")}
-        ${metric("Ticket promedio", fmt(sales.length ? salesTotal / sales.length : 0), "Promedio por venta", "", "", "mint")}
-        ${metric("Comisiones", fmt(sales.reduce((sum, sale) => sum + sale.commission, 0)), "Base comercial", "", "", "coral")}
+        ${metric("Ventas en soles", fmtAmt(totalPEN, "PEN"), penDetail, "", "", "amber")}
+        ${metric("Ventas en dólares", fmtAmt(totalUSD, "USD"), usdDetail, "", "", "blue")}
+        ${metric("Comisiones", fmtAmt(totalComisiones, "PEN"), "Base comercial", "", "", "coral")}
       </section>
-      ${moduleToolbar({ search: "Buscar venta, cliente o servicio", action: "quote" })}
-      ${table(["PPTO", "Cliente", "Servicio", "Subtotal", "IGV", "Total", "Detraccion", "Comision", "Moneda", "Acciones"], sales.map(s => {
-      const cur = s.currency || "PEN";
-      return [s.code, s.client, s.service, fmt(s.subtotal, cur), fmt(s.igv, cur), fmt(s.total, cur), fmt(s.detraction, cur), fmt(s.commission, cur), `<span class="currency-badge ${cur.toLowerCase()}">${cur}</span>`, `<button class="action-link" data-edit-quote="${s.id}" type="button">${icon("edit")}<span>Editar</span></button>`];
-    }))}`;
+      ${moduleToolbar({ search: "Buscar venta, cliente o servicio", filters: `<select data-table-filter><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select><select data-table-filter><option value="">Todos los tipos de pago</option><option>1 pago</option><option>2 pagos</option><option>3 pagos</option></select>`, action: "sale", metricsToggle: true })}
+      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Factura", "Subtotal", "IGV", "Detracción", "Comisión", "Cuenta", "Tipo de pago", "Estado", "Acciones"], sales.map(s => {
+        const cur = s.currency || "PEN";
+        const cuotas = Number(s.cuotas) || 1;
+        const tipoPago = cuotas === 3 ? "3 pagos" : cuotas === 2 ? "2 pagos" : "1 pago";
+        return [
+          displayCode(s.code), fmtDate(s.wonDate || s.date),
+          `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
+          escapeHtml(s.client),
+          escapeHtml(s.invoice || "—"),
+          fmt(s.subtotal, cur), fmt(s.igv, cur),
+          fmt(s.detraction, cur), fmt(s.commission, cur),
+          escapeHtml(s.bankAccount || "—"),
+          tipoPago,
+          badge(s.status),
+          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+        ];
+      }), "sales")}`;
+
   },
   collections() {
-    const collections = collectionRows().filter(row => dateInRange(row.paidDate || row.dueDate));
+    const collections = collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate));
     const paid = collections.filter(row => row.status === "Pagado");
     const pending = collections.filter(row => row.status !== "Pagado");
     const overdue = collections.filter(row => row.status === "Vencido");
@@ -907,80 +1648,213 @@ const views = {
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o cobro",
         filters: `<select data-table-filter><option value="">Todos los estados</option>${options(paymentStatuses)}</select>`,
-        action: "quote"
+        metricsToggle: true
       })}
-      ${table(["PPTO", "Cliente", "Pago", "Fecha PP", "Fecha RP", "Monto", "Detracción", "Factura", "Cuenta", "Moneda", "Estado", "Acciones"], collections.map(r => [
-      r.code, r.client, r.label, r.dueDate, r.paidDate || "—", fmt(r.amount, r.currency), fmt(r.detraction, r.currency), r.invoice || "—", r.bankAccount || "—", `<span class="currency-badge ${(r.currency || "pen").toLowerCase()}">${r.currency || "PEN"}</span>`, badge(r.status), collectionActions(r)
-    ]))}`;
+      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Factura", "Fecha PP", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], collections.map(r => {
+        const nroPago = r.label === "Pago 100%" ? "1/1" : r.label.replace("Pago ", "");
+        const netAmount = r.amount - r.detraction;
+        const collRepo = r.repo || r.quote?.repo || "";
+        const repoIcon = collRepo
+          ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
+          : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+        return [
+          displayCode(r.code),
+          fmtDate(r.wonDate),
+          `<div class="cell-clamp2">${escapeHtml(r.service)}</div>`,
+          escapeHtml(r.client),
+          escapeHtml(r.invoice || "—"),
+          fmtDate(r.dueDate),
+          r.paidDate ? fmtDate(r.paidDate) : "—",
+          fmt(r.amount, r.currency),
+          fmt(r.detraction, r.currency),
+          fmt(netAmount, r.currency),
+          escapeHtml(r.bankAccount || "—"),
+          nroPago,
+          repoIcon,
+          badge(r.status),
+          collectionActions(r)
+        ];
+      }), "collections")}`;
+
   },
   finance() {
-    const snapshot = dashboardSnapshot();
-    const t = { revenue: snapshot.revenue, paid: snapshot.paid, expenses: snapshot.outflows };
-    const paidRows = snapshot.collections.filter(row => row.status === "Pagado");
+    const banks = state.settings.bankAccounts || [];
+    if (activeCajaTab === "general" && banks.length) activeCajaTab = banks[0];
+    const tab = activeCajaTab || banks[0] || "";
+    const q      = (document.querySelector("[data-search-finance]")?.value || "").toLowerCase();
+    const fuente = document.querySelector("[data-caja-fuente]")?.value || "";
+    const cat    = document.querySelector("[data-caja-cat]")?.value || "";
+
+    // Generate virtual fixed expense rows for each month in the selected range
+    const assignedFixed = assignFixedExpenses();
+    const fixedRows = [];
+    if (assignedFixed.length) {
+      let cursor = new Date(dashboardRange.start + "T00:00:00");
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const rangeEnd = new Date(dashboardRange.end + "T00:00:00");
+      while (cursor <= rangeEnd) {
+        const monthStr = isoDate(cursor);
+        assignedFixed.forEach(f => {
+          fixedRows.push({
+            id: `fixed-${f.id}-${monthStr}`,
+            date: monthStr,
+            type: "egreso",
+            concept: f.concept,
+            category: f.category || "Gasto fijo",
+            amount: f.amount,
+            currency: f.currency,
+            status: "Confirmado",
+            source: "Fijo",
+            sourceType: "fixedExpense",
+            sourceId: f.id,
+            bankAccount: f.assignedAccount || ""
+          });
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+
+    let all = [...buildCajaRows(), ...fixedRows].filter(r =>
+      r.sourceType === "collection"
+        ? (r.date || "") >= dashboardRange.start
+        : dateInRange(r.date)
+    );
+
+    // Bank tab filter
+    if (tab !== "general") {
+      all = all.filter(r => r.bankAccount === tab);
+    }
+
+    const matchesCaja = (r, term) =>
+      (r.concept || "").toLowerCase().includes(term) ||
+      (r.category || "").toLowerCase().includes(term) ||
+      (r.source || "").toLowerCase().includes(term);
+
+    const ingresos = all.filter(r => r.type === "ingreso");
+    const egresos  = all.filter(r => r.type === "egreso");
+
+    const fuentes = [...new Set(all.map(r => r.source).filter(Boolean))].sort();
+    const cats    = [...new Set(all.map(r => r.category).filter(Boolean))].sort();
+
+    const ingresosFiltered = ingresos.filter(r =>
+      (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
+    );
+    const egresosFiltered = egresos.filter(r =>
+      (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
+    );
+
+    const sumPEN = rows => rows.filter(r => r.currency === "PEN").reduce((s, r) => s + r.amount, 0);
+    const sumUSD = rows => rows.filter(r => r.currency === "USD").reduce((s, r) => s + r.amount, 0);
+    const totalIn  = sumPEN(ingresos);
+    const totalOut = sumPEN(egresos);
+    const pendingCobros = collectionRows().filter(c => c.status !== "Pagado");
+    const pending = pendingCobros.reduce((s, c) => s + c.amount, 0);
+
+    const editBtn = row => {
+      if (row.sourceType === "expense")   return `<div class="row-actions"><button class="action-link" data-edit-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "cashEntry") return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      return "—";
+    };
+
+    const cajaRepoIcon = r => {
+      const repo = r.repo || "";
+      return repo
+        ? `<a href="${escapeAttr(repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
+        : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+    };
+    const cajaTable = (rows, emptyMsg, tableKey) => rows.length
+      ? table(
+          ["Fecha", "Concepto", "Categoría", "Fuente", "Factura", "Repositorio", "Monto", "Estado", "Acciones"],
+          rows.map(r => [
+            fmtDate(r.date),
+            escapeHtml(r.concept),
+            escapeHtml(r.category),
+            `<span class="source-tag">${r.source}</span>`,
+            escapeHtml(r.invoice || "—"),
+            cajaRepoIcon(r),
+            `<strong>${fmt(r.amount, r.currency)}</strong>`,
+            badge(r.status),
+            editBtn(r)
+          ]),
+          tableKey
+        )
+      : `<div class="empty-state">${emptyMsg}</div>`;
+
+    const tabBtn = (key, label) =>
+      `<button class="caja-bank-btn ${tab === key ? "active" : ""}" data-caja-tab="${escapeAttr(key)}">${escapeHtml(label)}</button>`;
+
     return `
       <section class="metric-grid">
-        ${metric("Ingresos vendidos", fmt(t.revenue), "Ventas ganadas")}
-        ${metric("Cobrado", fmt(t.paid), "Caja efectiva registrada")}
-        ${metric("Gastos + planilla", fmt(t.expenses), "Fijos, variables y equipo")}
-        ${metric("Caja neta estimada", fmt(t.paid - t.expenses), "Cobrado menos egresos")}
+        ${metric("Ingresos", fmt(totalIn), `${ingresos.length} movimientos en PEN`, "up", "", "mint")}
+        ${metric("Egresos", fmt(totalOut), `${egresos.length} movimientos en PEN`, "down", "", "coral")}
+        ${metric("Balance neto", fmt(totalIn - totalOut), "Ingresos – Egresos (S/)", totalIn >= totalOut ? "up" : "down")}
+        ${metric("Por cobrar", fmt(pending), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
       </section>
-      ${moduleToolbar({ search: "Buscar ingreso, egreso o cliente", action: "expense" })}
-      <section class="finance-sections">
-        <div>
-          <div class="section-heading"><h3>Ingresos cobrados</h3><span>${paidRows.length} movimientos</span></div>
-          ${table(["Fecha", "Cliente", "PPTO", "Concepto", "Monto"], paidRows.map(row => [row.paidDate || row.dueDate, row.client, row.code, row.label, fmt(row.amount, row.currency)]))}
+
+      <div class="module-page-header" data-page-header>
+        <h1 class="page-title" style="margin-bottom:0">Caja financiera</h1>
+        ${dateFilterControl()}
+      </div>
+
+      <div class="module-controls module-controls-inline">
+        <div class="module-controls-left">
+          <label class="module-search">${icon("search")}<input data-search-finance type="search" placeholder="Buscar concepto, categoría, fuente…" value="${q}"></label>
+          ${filterPopover("caja-filters", `
+            <select data-caja-fuente class="filter-select">
+              <option value="">Todas las fuentes</option>
+              ${fuentes.map(f => `<option ${fuente === f ? "selected" : ""}>${escapeHtml(f)}</option>`).join("")}
+            </select>
+            <select data-caja-cat class="filter-select">
+              <option value="">Todas las categorías</option>
+              ${cats.map(c => `<option ${cat === c ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
+            </select>
+          `, fuente !== "" || cat !== "")}
+          ${metricsToggleBtn("finance")}
         </div>
-        <div>
-          <div class="section-heading"><h3>Egresos</h3><span>${snapshot.expenses.length} movimientos</span></div>
-          ${table(["Fecha", "Concepto", "Tipo", "Monto", "Moneda", "Pauta", "Doc.", "Estado", "Acciones"], snapshot.expenses.map(e => [
-            e.date || e.month, `${e.refund ? "↩ " : ""}${e.concept}`, e.type,
-            fmt(e.amount, e.currency),
-            `<span class="currency-badge ${(e.currency || "pen").toLowerCase()}">${e.currency || "PEN"}</span>`,
-            e.isAdSpend ? `<span class="badge-ok">Ads</span>` : "—",
-            e.docLink ? `<a href="${escapeAttr(e.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
-            badge(e.status),
-            `<button class="action-link" data-edit-expense="${e.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-          ]))}
+        <div class="module-controls-right">
+          <button class="secondary-action" data-export-state type="button">${icon("download")}<span>Exportar</span></button>
+          <button class="create-action" data-open-cash-entry="ingreso" type="button">${icon("plus")}<span>Ingreso manual</span></button>
+          <button class="create-action" data-open-cash-entry="egreso" type="button">${icon("plus")}<span>Egreso manual</span></button>
         </div>
-      </section>
-    `;
-  },
-  taxes() {
-    const won = wonQuotes().filter(item => dateInRange(item.date));
-    const igv = won.reduce((sum, item) => sum + item.igv, 0);
-    const detractionsBilled = collectionRows().filter(r => r.status === "Pagado").reduce((sum, r) => sum + r.detraction, 0);
-    const detractionsPlanned = won.reduce((sum, item) => sum + item.detraction, 0);
-    const taxPayments = (state.taxPayments || []);
-    const detPaid = taxPayments.filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
-    const saldoDet = detractionsBilled - detPaid;
-    return `
-      <section class="metric-grid">
-        ${metric("IGV generado", fmt(igv), `${Math.round(state.settings.igvRate * 100)}% en ventas con IGV`, "", "", "purple")}
-        ${metric("Detracción facturada", fmt(detractionsPlanned), `${Math.round(state.settings.detractionRate * 100)}% sobre ops. afectas`, "", "", "amber")}
-        ${metric("Saldo detracción", fmt(saldoDet), "Cobrado – pagado a SUNAT", saldoDet > 0 ? "up" : "", "", "mint")}
-        ${metric("Impuestos pagados", fmt(taxPayments.filter(t => t.status === "Pagado").reduce((s, t) => s + t.amount, 0)), `${taxPayments.filter(t => t.status === "Pagado").length} pagos a SUNAT`, "", "", "coral")}
-      </section>
-      <div class="taxes-layout">
-        <section class="panel">
-          <div class="panel-head"><div><h3>Obligaciones tributarias</h3><p>IGV y detracción generados por ventas ganadas</p></div></div>
-          ${table(["PPTO", "Cliente", "Fecha", "Subtotal", "IGV", "Total", "Detracción"], won.map(item => [
-            item.code, item.client, item.date, fmt(item.subtotal, item.currency), fmt(item.igv, item.currency), fmt(item.total, item.currency), fmt(item.detraction, item.currency)
-          ]))}
-        </section>
-        <section class="panel">
-          <div class="panel-head">
-            <div><h3>Pagos a SUNAT</h3><p>Registro de pagos de impuestos realizados</p></div>
-            <button class="create-action" data-module-action="taxes" type="button">${icon("plus")}<span>Nuevo pago</span></button>
+      </div>
+
+      <div class="caja-bank-tabs">
+        ${banks.map(b => tabBtn(b, b)).join("")}
+      </div>
+
+      <div class="caja-section">
+        <div class="caja-section-head ingreso-head">
+          <div>
+            <h3>Ingresos</h3>
+            <span>${ingresos.length} movimientos</span>
           </div>
-          ${taxPayments.length ? table(["Fecha", "Tipo", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Carpeta", "Acciones"], taxPayments.map(t => [
-            t.date, t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
-            t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
-            `<button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-          ])) : `<div class="empty-state">Sin pagos registrados. Agrega el primer pago a SUNAT.</div>`}
-        </section>
+          <div class="caja-section-totals">
+            ${sumPEN(ingresos) ? `<strong class="caja-total-pen">S/ ${sumPEN(ingresos).toLocaleString("es-PE", {minimumFractionDigits:2})}</strong>` : ""}
+            ${sumUSD(ingresos) ? `<strong class="caja-total-usd">$ ${sumUSD(ingresos).toLocaleString("es-PE", {minimumFractionDigits:2})}</strong>` : ""}
+          </div>
+        </div>
+        ${cajaTable(ingresosFiltered, "Sin ingresos en este periodo.", "caja-in")}
+      </div>
+
+      <div class="caja-section">
+        <div class="caja-section-head egreso-head">
+          <div>
+            <h3>Egresos</h3>
+            <span>${egresos.length} movimientos</span>
+          </div>
+          <div class="caja-section-totals">
+            ${sumPEN(egresos) ? `<strong class="caja-total-pen egreso">S/ ${sumPEN(egresos).toLocaleString("es-PE", {minimumFractionDigits:2})}</strong>` : ""}
+            ${sumUSD(egresos) ? `<strong class="caja-total-usd egreso">$ ${sumUSD(egresos).toLocaleString("es-PE", {minimumFractionDigits:2})}</strong>` : ""}
+          </div>
+        </div>
+        ${cajaTable(egresosFiltered, "Sin egresos en este periodo.", "caja-out")}
       </div>
     `;
   },
+  taxes() { activeView = "comprobantes"; render(); return ""; },
   team() {
     const team = state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month)));
     const paidTeam = team.filter(item => item.status === "Pagado");
@@ -994,107 +1868,491 @@ const views = {
       ${moduleToolbar({
         search: "Buscar persona, rol o estado",
         filters: `<select data-table-filter><option value="">Todos los estados</option><option>Pagado</option><option>Pendiente</option></select>`,
-        action: "payment"
+        action: "payment",
+        metricsToggle: true
       })}
-      ${table(["Fecha", "Nombre", "RUC", "Banco / CCI", "Tipo", "Pago", "RHE", "Estado", "Acciones"], team.map(t => [
-        t.dueDate || t.month, t.name, t.ruc || "—",
-        t.bankName ? `${t.bankName}${t.cci ? " · " + t.cci : ""}` : "—",
-        t.role, fmt(t.amount), t.receipt ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>RHE</span></a>` : "—",
-        badge(t.status),
-        `<button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-      ]))}`;
+      ${table(["Fecha de pago", "Tipo de pago", "Nombre completo", "Moneda", "Monto", "Comisión", "Banco", "Nro de cuenta", "CCI", "RHE", "Estado", "Acciones"], team.map(t => {
+        const comm = profileHasCommission(t.role) ? calcTeamCommission(t.name) : null;
+        return [
+          fmtDate(t.dueDate || t.month), t.role, t.name,
+          t.currency || "PEN", fmt(t.amount, t.currency),
+          comm !== null ? `<strong style="color:var(--brand)">${fmt(comm, t.currency)}</strong>` : `<span style="color:var(--muted)">—</span>`,
+          t.bankName || "—", t.accountNumber || "—", t.cci || "—",
+          t.receipt
+            ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" title="Ver RHE" style="color:var(--brand)">${icon("link")}</a>`
+            : `<span style="color:var(--muted)">${icon("link")}</span>`,
+          badge(t.status),
+          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
+        ];
+      }), "team")}`;
   },
   comprobantes() {
     const purchases = (state.purchases || []);
-    const invoicedSales = (state.invoicedSales || []);
+    const invoicedSales = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status));
+    const taxPayments = (state.taxPayments || []);
     const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
-    const totalSales = invoicedSales.reduce((sum, s) => sum + s.total, 0);
+    const totalSales = invoicedSales.reduce((sum, s) => sum + s.amount, 0);
+    const won = wonQuotes().filter(item => dateInRange(item.wonDate || item.date));
+    const igvGen = won.reduce((sum, item) => sum + item.igv, 0);
+    const detPaid = taxPayments.filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
+    const detBilled = collectionRows().filter(r => r.status === "Pagado").reduce((sum, r) => sum + r.detraction, 0);
+    const igvPaid = taxPayments.filter(t => t.status === "Pagado").reduce((s, t) => s + t.amount, 0);
+
     return `
       <section class="metric-grid">
         ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, "", "", "mint")}
         ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber")}
-        ${metric("IGV ventas", fmt(invoicedSales.reduce((sum, s) => sum + s.igv, 0)), "IGV en comprobantes emitidos", "", "", "purple")}
-        ${metric("IGV compras (crédito)", fmt(purchases.reduce((sum, p) => sum + p.igv, 0)), "IGV a favor (crédito fiscal)", "", "", "coral")}
+        ${metric("IGV generado", fmt(igvGen), "En ventas ganadas del periodo", "", "", "purple")}
+        ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral")}
       </section>
-      <div class="taxes-layout">
-        <section class="panel">
-          <div class="panel-head">
-            <div><h3>Registro de Ventas</h3><p>Facturas y boletas emitidas a clientes</p></div>
-            <button class="create-action" data-module-action="invoicedSale" type="button">${icon("plus")}<span>Nueva venta</span></button>
+
+      <div class="module-page-header" data-page-header>
+        <h1 class="page-title" style="margin-bottom:0">Contabilidad</h1>
+        ${dateFilterControl()}
+      </div>
+      <div class="module-controls module-controls-inline">
+        <div class="module-controls-left">
+          <label class="module-search">${icon("search")}<input id="moduleSearch" type="search" placeholder="Buscar en comprobantes..."></label>
+          ${metricsToggleBtn("comprobantes")}
+        </div>
+        <div class="module-controls-right">
+          <button class="secondary-action" data-import-state type="button">${icon("upload")}<span>Importar</span></button>
+          <button class="secondary-action" data-export-state type="button">${icon("download")}<span>Exportar</span></button>
+          <button class="create-action" data-module-action="invoicedSale" type="button">${icon("plus")}<span>Reg. de venta</span></button>
+          <button class="create-action" data-module-action="purchase" type="button">${icon("plus")}<span>Reg. de compra</span></button>
+          <button class="create-action" data-module-action="taxPayment" type="button">${icon("plus")}<span>Pago SUNAT</span></button>
+          <button class="create-action" data-module-action="declaracion" type="button">${icon("plus")}<span>Declaración</span></button>
+        </div>
+      </div>
+
+      <div class="comp-section">
+        <h2 class="comp-section-title">Registro de ventas</h2>
+        ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.map(s => {
+          const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
+          const netAmount = s.amount - s.detraction;
+          const declaredStatus = s.declared || "Sin declarar";
+          const sRepo = s.repo || s.quote?.repo || "";
+          const sRepoIcon = sRepo
+            ? `<a href="${escapeAttr(sRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
+            : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+          return [
+            fmtDate(s.wonDate),
+            `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
+            escapeHtml(s.client),
+            escapeHtml(s.invoice || "—"),
+            s.paidDate ? fmtDate(s.paidDate) : "—",
+            `<strong>${fmt(s.amount, s.currency)}</strong>`,
+            fmt(s.detraction, s.currency),
+            fmt(netAmount, s.currency),
+            escapeHtml(s.bankAccount || "—"),
+            nroPago,
+            sRepoIcon,
+            badge(declaredStatus),
+            `<div class="row-actions"><button class="action-link" data-edit-collection="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+          ];
+        }), "invoiced-sales")}
+      </div>
+
+      <div class="comp-section">
+        <h2 class="comp-section-title">Registro de compras</h2>
+        ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], purchases.map(p => {
+          const netAmount = p.total - (p.detraction || 0);
+          const declaredStatus = p.declared || "Sin declarar";
+          const repoIcon = p.repo
+            ? `<a href="${escapeAttr(p.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
+            : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+          return [
+            fmtDate(p.date),
+            `<div class="cell-clamp2">${escapeHtml(p.concept)}</div>`,
+            escapeHtml(p.vendor),
+            escapeHtml(p.invoiceNum || "—"),
+            p.paidDate ? fmtDate(p.paidDate) : "—",
+            `<strong>${fmt(p.total, p.currency)}</strong>`,
+            fmt(p.detraction || 0, p.currency),
+            fmt(netAmount, p.currency),
+            escapeHtml(p.bankAccount || "—"),
+            "—",
+            repoIcon,
+            badge(declaredStatus),
+            `<div class="row-actions"><button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-purchase="${p.id}" type="button" title="Eliminar compra">${icon("trash")}</button></div>`
+          ];
+        }), "purchases")}
+      </div>
+
+      <div class="comp-section">
+        <h2 class="comp-section-title">Pago SUNAT</h2>
+        <p class="comp-section-sub">Obligaciones generadas (facturas emitidas)</p>
+        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Acciones"], invoicedSales.map(r => {
+          const igvRate = state.settings.igvRate;
+          const hasIgv = r.quote?.hasIgv;
+          const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
+          const igv = hasIgv ? r.amount - subtotal : 0;
+          const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
+          const period = r.wonDate ? new Date(r.wonDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
+          return [
+            fmtDate(r.wonDate), nroPago,
+            escapeHtml(r.client), escapeHtml(r.invoice || "—"),
+            fmt(subtotal, r.currency), fmt(igv, r.currency),
+            fmt(r.amount, r.currency), fmt(r.detraction, r.currency),
+            `<div class="row-actions"><button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${r.detraction}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button></div>`
+          ];
+        }), "tax-obligations")}
+        <p class="comp-section-sub" style="margin-top:24px">Detracciones pagadas</p>
+        ${table(["Fecha", "Tipo", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Doc.", "Acciones"],
+          taxPayments.filter(t => t.type === "Detracción" || t.type === "Autodetracción").map(t => [
+            fmtDate(t.date), t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
+            t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
+            `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`
+          ]), "tax-payments")}
+      </div>
+
+      <div class="comp-section">
+        <div class="comp-section-head">
+          <div>
+            <h2 class="comp-section-title">Declaración mensual</h2>
+            <p class="comp-section-sub">IGV 1011 · Renta 3121 · Otros pagos SUNAT</p>
           </div>
-          ${invoicedSales.length ? table(["Fecha", "Cliente", "RUC", "Comprobante", "N°", "Servicio", "Base", "IGV", "Total", "Moneda", "Acciones"], invoicedSales.map(s => [
-            s.date, s.client, s.ruc || "—", s.invoiceType, s.invoiceNum || "—", s.service,
-            fmt(s.subtotal, s.currency), fmt(s.igv, s.currency), fmt(s.total, s.currency),
-            `<span class="currency-badge ${(s.currency || "pen").toLowerCase()}">${s.currency || "PEN"}</span>`,
-            `<button class="action-link" data-edit-invoicedsale="${s.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-          ])) : `<div class="empty-state">Sin ventas facturadas. Agrega el primer comprobante.</div>`}
-        </section>
-        <section class="panel">
-          <div class="panel-head">
-            <div><h3>Registro de Compras</h3><p>Facturas y boletas recibidas de proveedores</p></div>
-            <button class="create-action" data-module-action="purchase" type="button">${icon("plus")}<span>Nueva compra</span></button>
-          </div>
-          ${purchases.length ? table(["Fecha", "Proveedor", "RUC", "Comprobante", "N°", "Concepto", "Base", "IGV", "Total", "Moneda", "Acciones"], purchases.map(p => [
-            p.date, p.vendor, p.ruc || "—", p.invoiceType, p.invoiceNum || "—", p.concept,
-            fmt(p.subtotal, p.currency), fmt(p.igv, p.currency), fmt(p.total, p.currency),
-            `<span class="currency-badge ${(p.currency || "pen").toLowerCase()}">${p.currency || "PEN"}</span>`,
-            `<button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}<span>Editar</span></button>`
-          ])) : `<div class="empty-state">Sin compras registradas. Agrega el primer comprobante.</div>`}
-        </section>
+        </div>
+        ${(() => {
+          const declaraciones = state.declaraciones || [];
+          if (!declaraciones.length) return `<div class="empty-state">Sin declaraciones registradas. Usa el botón para registrar el cierre mensual.</div>`;
+          return table(
+            ["Periodo", "IGV 1011", "Renta 3121", "Otro", "Concepto otro", "Total", "Estado", "Acciones"],
+            declaraciones.map(d => {
+              const total = d.igv1011 + d.renta3121 + d.otro;
+              return [
+                escapeHtml(d.period),
+                fmt(d.igv1011), fmt(d.renta3121), fmt(d.otro),
+                escapeHtml(d.otroConcepto || "—"),
+                `<strong>${fmt(total)}</strong>`,
+                badge(d.status),
+                `<div class="row-actions"><button class="action-link" data-edit-declaracion="${d.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-declaracion="${d.id}" type="button">${icon("trash")}</button></div>`
+              ];
+            }), "declaraciones");
+        })()}
       </div>
     `;
   },
   settings() {
-    return `
-      <section class="metric-grid">
-        ${metric("Meta mensual", fmt(state.settings.monthlyGoal), "Objetivo configurado", "", "", "purple")}
-        ${metric("IGV", `${state.settings.igvRate * 100}%`, "Tasa aplicada", "", "", "amber")}
-        ${metric("Detracción", `${state.settings.detractionRate * 100}%`, `Desde ${fmt(state.settings.detractionThreshold)}`, "", "", "mint")}
-        ${metric("Comisión", `${state.settings.commissionRate * 100}%`, "Sobre subtotal sin IGV", "", "", "coral")}
-      </section>
-      <form id="settingsForm" class="settings-layout">
-        <section class="panel settings-panel">
-          <div class="panel-head"><div><h3>Reglas financieras</h3><p>Estos valores afectan los cálculos de toda la plataforma.</p></div></div>
+    const banks = state.settings.bankAccounts || [];
+    const assignedExp = assignFixedExpenses();
+    const totalFixed = assignedExp.filter(f => f.currency === "PEN").reduce((s, f) => s + f.amount, 0);
+    const teamMembers = [...new Map(state.team.map(t => [t.name, t])).values()];
+
+    const settingsTabs = [
+      { key: "financiero", label: "Reglas financieras" },
+      { key: "metas",      label: "Metas de ventas" },
+      { key: "cuentas",    label: "Cuentas bancarias" },
+      { key: "gastos",     label: "Gastos fijos" },
+      { key: "equipo",     label: "Equipo de ventas" },
+      { key: "servicios",  label: "Servicios" },
+      { key: "categorias", label: "Categorías" },
+      { key: "fuentes",    label: "Fuentes" },
+      { key: "perfiles",   label: "Perfiles" },
+    ];
+
+    const tabStrip = `<div class="caja-bank-tabs">
+      ${settingsTabs.map(t => `<button class="caja-bank-btn ${activeSettingsTab === t.key ? "active" : ""}" data-settings-tab="${t.key}">${t.label}</button>`).join("")}
+    </div>`;
+
+    let tabContent = "";
+
+    if (activeSettingsTab === "financiero") {
+      tabContent = `
+        <form id="settingsForm" class="panel settings-panel">
+          <div class="panel-head"><div><h3>Reglas financieras</h3><p>Valores que afectan los cálculos de toda la plataforma.</p></div></div>
           <div class="form-grid">
-            <label>Meta mensual (S/)<input name="monthlyGoal" type="number" min="0" step="100" value="${state.settings.monthlyGoal}" required></label>
             <label>IGV (%)<input name="igvRate" type="number" min="0" max="100" step="0.01" value="${state.settings.igvRate * 100}" required></label>
             <label>Detracción (%)<input name="detractionRate" type="number" min="0" max="100" step="0.01" value="${state.settings.detractionRate * 100}" required></label>
             <label>Umbral de detracción (S/)<input name="detractionThreshold" type="number" min="0" step="1" value="${state.settings.detractionThreshold}" required></label>
             <label>Comisión comercial (%)<input name="commissionRate" type="number" min="0" max="100" step="0.01" value="${state.settings.commissionRate * 100}" required></label>
-            <label>Moneda<select name="currency"><option value="PEN" ${state.settings.currency === "PEN" ? "selected" : ""}>Soles (PEN)</option><option value="USD" ${state.settings.currency === "USD" ? "selected" : ""}>Dólares (USD)</option></select></label>
+            <label>Moneda base<select name="currency"><option value="PEN" ${state.settings.currency === "PEN" ? "selected" : ""}>Soles (PEN)</option><option value="USD" ${state.settings.currency === "USD" ? "selected" : ""}>Dólares (USD)</option></select></label>
           </div>
           <div class="settings-actions">
             <span id="settingsMessage" class="form-note"></span>
-            <button class="primary-action" type="submit">${icon("check")}<span>Guardar configuración</span></button>
+            <button class="primary-action" type="submit">${icon("check")}<span>Guardar cambios</span></button>
           </div>
-        </section>
-        <aside class="panel settings-summary">
-          <h3>Flujo automatizado</h3>
-          <p>Cuando una cotización se marca como ganada, Nebumia calcula impuestos y genera los cobros automáticamente.</p>
-          <div class="split-list">
-            ${alertItem("Cobranza", "Pago completo o modalidad 50% / 50%")}
-            ${alertItem("Detracción", `Se aplica al superar ${fmt(state.settings.detractionThreshold)}`)}
-            ${alertItem("Comisión", "Calculada sobre el subtotal sin IGV")}
-          </div>
-        </aside>
-      </form>
-      <section class="panel settings-panel" style="margin-top:1rem">
-        <div class="panel-head"><div><h3>Cuentas bancarias</h3><p>Cuentas disponibles al registrar cobros (DEP. C. CORRIENTE).</p></div></div>
-        <ul class="bank-accounts-list">
-          ${(state.settings.bankAccounts || []).map((a, i) => `
-            <li class="bank-account-item">
-              <span>${a}</span>
-              <button class="action-link danger" data-delete-bank="${i}" type="button">${icon("trash")}<span>Eliminar</span></button>
-            </li>`).join("")}
-        </ul>
-        <form id="addBankAccountForm" class="form-grid" style="margin-top:1rem">
-          <label class="full">Nueva cuenta<input name="accountName" placeholder="Ej: CC BCP S/" required></label>
-          <div style="grid-column:1/-1;display:flex;justify-content:flex-end">
+        </form>`;
+
+    } else if (activeSettingsTab === "cuentas") {
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Cuentas bancarias</h3><p>Cuentas para registrar cobros y movimientos de caja.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${banks.map((a, i) => `
+              <li class="bank-account-item" data-bank-idx="${i}">
+                <div class="bank-account-order">
+                  <button class="action-link" data-move-bank="${i}" data-dir="-1" type="button" ${i === 0 ? "disabled" : ""}>${icon("chevron-up")}</button>
+                  <button class="action-link" data-move-bank="${i}" data-dir="1" type="button" ${i === banks.length - 1 ? "disabled" : ""}>${icon("chevron-down")}</button>
+                </div>
+                <span class="bank-account-name">${escapeHtml(a)}</span>
+                <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(a)}" data-bank-idx="${i}">
+                <div class="bank-account-actions">
+                  <button class="action-link" data-edit-bank-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-bank-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-bank="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          <form id="addBankAccountForm" class="bank-add-form">
+            <input name="accountName" placeholder="Ej: CC Interbank S/" required>
             <button class="primary-action" type="submit">${icon("plus")}<span>Agregar cuenta</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "gastos") {
+      tabContent = `
+        <section class="panel settings-panel settings-fixed-expenses">
+          <div class="panel-head">
+            <div><h3>Gastos fijos</h3><p>Conceptos recurrentes mensuales. Se asignan a la Cuenta Corriente si tiene saldo suficiente, si no a la Cuenta Personal.</p></div>
           </div>
-        </form>
-      </section>
-    `;
+          ${assignedExp.length ? `
+          <table class="fixed-exp-table">
+            <thead><tr><th>Concepto</th><th>Categoría</th><th>Monto</th><th>Moneda</th><th>Cuenta asignada</th><th></th></tr></thead>
+            <tbody>
+              ${assignedExp.map((f, i) => {
+                const isCC = /Corriente/i.test(f.assignedAccount);
+                return `
+                <tr data-fixed-idx="${i}">
+                  <td><span class="fe-text">${escapeHtml(f.concept)}</span><input class="fe-input" style="display:none" name="concept" value="${escapeAttr(f.concept)}"></td>
+                  <td><span class="fe-text">${escapeHtml(f.category)}</span><input class="fe-input" style="display:none" name="category" value="${escapeAttr(f.category)}"></td>
+                  <td><span class="fe-text">${fmt(f.amount, f.currency)}</span><input class="fe-input" style="display:none" name="amount" type="number" step="0.01" min="0" value="${f.amount}"></td>
+                  <td><span class="fe-text">${f.currency}</span><select class="fe-input" style="display:none" name="currency"><option ${f.currency === "PEN" ? "selected" : ""}>PEN</option><option ${f.currency === "USD" ? "selected" : ""}>USD</option></select></td>
+                  <td><span class="fe-account-tag ${isCC ? "cc" : "cp"}">${escapeHtml(f.assignedAccount)}</span></td>
+                  <td>
+                    <div class="bank-account-actions">
+                      <button class="action-link fe-edit" data-fe-edit="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                      <button class="action-link fe-save" data-fe-save="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                      <button class="action-link danger" data-fe-delete="${i}" type="button">${icon("trash")}</button>
+                    </div>
+                  </td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>` : `<p class="fe-empty">No hay gastos fijos registrados.</p>`}
+          <form id="addFixedExpenseForm" class="fe-add-form">
+            <input name="concept" placeholder="Concepto (Ej: Alquiler oficina)" required>
+            <input name="category" placeholder="Categoría (Ej: Arriendo)" required>
+            <input name="amount" type="number" step="0.01" min="0" placeholder="Monto" required>
+            <select name="currency"><option value="PEN">S/ Soles</option><option value="USD">$ Dólares</option></select>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "equipo") {
+      const members = state.settings.teamMembers || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Equipo de ventas</h3><p>Vendedores y comerciales registrados en el sistema.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${members.map((m, i) => `
+              <li class="bank-account-item" data-member-idx="${i}">
+                <div class="team-member-info">
+                  <div class="team-member-avatar">${escapeHtml(m.name.trim().charAt(0).toUpperCase())}</div>
+                  <span class="bank-account-name">${escapeHtml(m.name)}</span>
+                  <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(m.name)}" data-member-idx="${i}">
+                </div>
+                <div class="bank-account-actions">
+                  <button class="action-link" data-edit-member-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-member-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-member="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!members.length ? `<p class="fe-empty">No hay vendedores registrados.</p>` : ""}
+          <form id="addTeamMemberForm" class="bank-add-form">
+            <input name="memberName" placeholder="Nombre del vendedor" required>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "perfiles") {
+      const profiles = state.profiles || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Perfiles de pago personal</h3><p>Define los roles del equipo. Los perfiles con ★ generan fila de comisión en caja financiera.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${profiles.map((p, i) => `
+              <li class="bank-account-item" data-profile-idx="${i}">
+                <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
+                  <span class="bank-account-name">${escapeHtml(p.name)}</span>
+                  <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(p.name)}" data-profile-idx="${i}">
+                  ${p.hasCommission ? `<span class="badge-type" style="background:var(--brand-light,#e8f0fe);color:var(--brand);font-size:11px">★ Comisión</span>` : ""}
+                </div>
+                <div class="bank-account-actions">
+                  <button class="action-link" data-toggle-profile-comm="${i}" type="button" title="${p.hasCommission ? "Quitar comisión" : "Activar comisión"}">${p.hasCommission ? icon("check") : icon("plus")}<span>${p.hasCommission ? "Comisión ON" : "Comisión OFF"}</span></button>
+                  <button class="action-link" data-edit-profile-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-profile-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-profile="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!profiles.length ? `<p class="fe-empty">No hay perfiles registrados.</p>` : ""}
+          <form id="addProfileForm" class="bank-add-form">
+            <input name="profileName" placeholder="Ej: Diseñador" required>
+            <label style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" name="profileComm"> Aplica comisión</label>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar perfil</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "fuentes") {
+      const sources = state.sources || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Fuentes de clientes</h3><p>Canales y medios por los que llegan los clientes.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${sources.map((s, i) => `
+              <li class="bank-account-item" data-source-idx="${i}">
+                <span class="bank-account-name">${escapeHtml(s)}</span>
+                <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(s)}" data-source-idx="${i}">
+                <div class="bank-account-actions">
+                  <button class="action-link" data-edit-source-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-source-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-source="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!sources.length ? `<p class="fe-empty">No hay fuentes registradas.</p>` : ""}
+          <form id="addSourceForm" class="bank-add-form">
+            <input name="sourceName" placeholder="Ej: LinkedIn" required>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar fuente</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "categorias") {
+      const cats = state.categories || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Categorías de servicios</h3><p>Categorías para clasificar cotizaciones y ventas.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${cats.map((c, i) => `
+              <li class="bank-account-item" data-cat-idx="${i}">
+                <span class="bank-account-name">${escapeHtml(c)}</span>
+                <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(c)}" data-cat-idx="${i}">
+                <div class="bank-account-actions">
+                  <button class="action-link" data-edit-cat-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-cat-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-cat="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!cats.length ? `<p class="fe-empty">No hay categorías registradas.</p>` : ""}
+          <form id="addCategoryForm" class="bank-add-form">
+            <input name="categoryName" placeholder="Ej: Branding" required>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar categoría</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "servicios") {
+      const services = state.services || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Servicios</h3><p>Catálogo de servicios disponibles para cotizaciones y ventas.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${services.map((s, i) => `
+              <li class="bank-account-item" data-service-idx="${i}">
+                <span class="bank-account-name">${escapeHtml(s)}</span>
+                <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(s)}" data-service-idx="${i}">
+                <div class="bank-account-actions">
+                  <button class="action-link" data-edit-service-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-save-service-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
+                  <button class="action-link danger" data-delete-service="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!services.length ? `<p class="fe-empty">No hay servicios registrados.</p>` : ""}
+          <form id="addServiceForm" class="bank-add-form">
+            <input name="serviceName" placeholder="Ej: Diseño web corporativo" required>
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar servicio</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "metas") {
+      const allTargets = getSalesTargets();
+      const yd = allTargets[salesTargetsYear] || { mode: "annual", annualPEN: 0, annualUSD: 0, monthly: {} };
+      const tMode = yd.mode || "annual";
+      const currentYear = new Date().getFullYear();
+      const currentMonthNum = new Date().getMonth() + 1;
+      const currentMonthMk = String(currentMonthNum).padStart(2, "0");
+      const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+      const monthRows = months.map((name, i) => {
+        const monthNum = i + 1;
+        const mk = String(monthNum).padStart(2, "0");
+        // For inputs: use raw stored value so 0 stays 0 (not overridden by fallback)
+        const saved = yd.monthly?.[mk];
+        const rawPen = saved != null ? Number(saved.pen ?? 0) : "";
+        const rawUsd = saved != null ? Number(saved.usd ?? 0) : "";
+        // For display (annual mode): use getMonthTarget which applies fallback
+        const t = tMode !== "monthly" ? getMonthTarget(salesTargetsYear, monthNum) : null;
+        const isCurrent = mk === currentMonthMk && salesTargetsYear === currentYear;
+        return { name, mk, pen: tMode === "monthly" ? rawPen : t.pen, usd: tMode === "monthly" ? rawUsd : t.usd, isCurrent };
+      });
+      const totalPEN = monthRows.reduce((s, r) => s + r.pen, 0);
+      const totalUSD = monthRows.reduce((s, r) => s + r.usd, 0);
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head">
+            <div><h3>Metas de ventas</h3><p>Define metas mensuales en soles y dólares. Se reflejan en el dashboard y proyección anual.</p></div>
+            <select id="salesTargetYear" class="filter-select" style="min-width:90px">
+              ${yearOptions.map(y => `<option value="${y}" ${y === salesTargetsYear ? "selected" : ""}>${y}</option>`).join("")}
+            </select>
+          </div>
+          <div class="targets-mode-row">
+            <label class="targets-mode-opt ${tMode === "annual" ? "active" : ""}">
+              <input type="radio" name="targetsMode" value="annual" data-targets-mode="annual" ${tMode === "annual" ? "checked" : ""}> ${icon("calendar")} Meta anual <span class="targets-mode-hint">Se divide ÷12 por mes</span>
+            </label>
+            <label class="targets-mode-opt ${tMode === "monthly" ? "active" : ""}">
+              <input type="radio" name="targetsMode" value="monthly" data-targets-mode="monthly" ${tMode === "monthly" ? "checked" : ""}> ${icon("edit")} Mensual personalizada <span class="targets-mode-hint">Definir cada mes</span>
+            </label>
+          </div>
+          ${tMode === "annual" ? `
+          <div class="targets-annual-form">
+            <div class="form-grid">
+              <label>Meta anual (S/)<input id="annualPEN" type="number" min="0" step="100" value="${yd.annualPEN || 0}" placeholder="Ej: 96000"></label>
+              <label>Meta anual ($)<input id="annualUSD" type="number" min="0" step="100" value="${yd.annualUSD || 0}" placeholder="Ej: 24000"></label>
+            </div>
+            <div class="settings-actions" style="margin-top:0">
+              <span class="form-note">Se distribuye ${fmt(Math.round((yd.annualPEN || 0) / 12))} / ${fmt(Math.round((yd.annualUSD || 0) / 12), "USD")} por mes</span>
+              <button id="saveAnnualTargets" class="primary-action">${icon("check")}<span>Guardar</span></button>
+            </div>
+          </div>
+          ` : ""}
+          <table class="targets-table">
+            <thead>
+              <tr><th>Mes</th><th>Meta S/</th><th>Meta $</th></tr>
+            </thead>
+            <tbody>
+              ${monthRows.map(r => tMode === "monthly" ? `
+                <tr class="${r.isCurrent ? "targets-row-current" : ""}">
+                  <td class="targets-month-name">${r.name}${r.isCurrent ? `<span class="targets-current-badge">dashboard</span>` : ""}</td>
+                  <td><input class="targets-input" data-mk="${r.mk}" data-cur="pen" type="number" min="0" step="100" value="${r.pen}" placeholder="${state.settings.monthlyGoal || 0}"></td>
+                  <td><input class="targets-input" data-mk="${r.mk}" data-cur="usd" type="number" min="0" step="100" value="${r.usd}" placeholder="0"></td>
+                </tr>
+              ` : `
+                <tr class="${r.isCurrent ? "targets-row-current" : ""}">
+                  <td class="targets-month-name">${r.name}${r.isCurrent ? `<span class="targets-current-badge">dashboard</span>` : ""}</td>
+                  <td class="targets-cell-value">${r.pen > 0 ? fmt(r.pen) : "—"}</td>
+                  <td class="targets-cell-value">${r.usd > 0 ? fmt(r.usd, "USD") : "—"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+            <tfoot>
+              <tr class="targets-total-row">
+                <td>Total anual</td>
+                <td class="targets-cell-value">${totalPEN > 0 ? fmt(totalPEN) : "—"}</td>
+                <td class="targets-cell-value">${totalUSD > 0 ? fmt(totalUSD, "USD") : "—"}</td>
+              </tr>
+            </tfoot>
+          </table>
+          ${tMode === "monthly" ? `
+          <div class="settings-actions">
+            <button id="saveMonthlyTargets" class="primary-action">${icon("check")}<span>Guardar metas</span></button>
+          </div>
+          ` : ""}
+        </section>`;
+    }
+
+    return `${tabStrip}${tabContent}`;
   }
 };
 
@@ -1112,9 +2370,19 @@ function badge(status) {
   return `<span class="status ${normalizeStatus(status)}">${status}</span>`;
 }
 
-function table(headers, rows) {
+function table(headers, rows, key = null) {
   if (!rows.length) return `<div class="empty-state">Sin registros todavia.</div>`;
-  return `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  let displayRows = rows;
+  let paginatorHtml = "";
+  if (key) {
+    const pg = getTablePage(key);
+    const totalPages = Math.max(1, Math.ceil(rows.length / pg.pageSize));
+    pg.page = Math.min(pg.page, totalPages);
+    displayRows = rows.slice((pg.page - 1) * pg.pageSize, pg.page * pg.pageSize);
+    paginatorHtml = renderPaginator(key, pg.page, totalPages, pg.pageSize, rows.length);
+  }
+  const cls = key ? ` class="table-${key}"` : "";
+  return `<div class="table-wrap"><table${cls}><thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
 }
 
 function leadsTable(rows) {
@@ -1135,34 +2403,58 @@ function leadActions(l) {
 }
 
 function quotesTable(rows) {
-  return table(["PPTO", "Mes", "Cliente", "Servicio", "Subtotal", "Total", "Moneda", "Estado", "Acciones"], rows.map(q => {
-    const c = calcQuote(q);
-    const cur = q.currency || "PEN";
-    return [q.code, q.month, q.client, q.service, fmt(q.subtotal, cur), fmt(c.total, cur), `<span class="currency-badge ${cur.toLowerCase()}">${cur}</span>`, badge(q.status), quoteActions(q)];
-  }));
+  return table(
+    ["PPTO", "Fecha", "Categoría", "Servicio", "Comercial", "Cliente", "Subtotal", "IGV", "Total", "Repositorio", "Estado", "Acciones"],
+    rows.map(q => {
+      const c = calcQuote(q);
+      const cur = q.currency || "PEN";
+      const repoIcon = q.repo
+        ? `<a href="${escapeAttr(q.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
+        : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+      return [
+        displayCode(q.code),
+        fmtDate(q.date || q.month),
+        escapeHtml(q.category || "—"),
+        escapeHtml(q.service),
+        escapeHtml(q.owner || "—"),
+        escapeHtml(q.client),
+        fmt(q.subtotal, cur),
+        fmt(c.igv, cur),
+        `<strong>${fmt(c.total, cur)}</strong>`,
+        repoIcon,
+        badge(q.status),
+        quoteActions(q)
+      ];
+    }),
+    "quotes"
+  );
 }
 
 function quoteActions(q) {
   return `
     <div class="row-actions">
       <button class="action-link" data-edit-quote="${q.id}" type="button">${icon("edit")}<span>Editar</span></button>
-      ${q.status !== "Ganado" ? `<button class="action-link" data-win="${q.id}" type="button">${icon("check")}<span>Ganada</span></button>` : ""}
-      ${q.status !== "Perdido" ? `<button class="action-link danger-link" data-lose="${q.id}" type="button">${icon("x")}<span>Perdida</span></button>` : ""}
+      <button class="action-link" data-copy-quote="${q.id}" type="button" title="Duplicar cotización">${icon("copy")}</button>
+      <button class="action-link danger" data-delete-quote="${q.id}" type="button" title="Eliminar cotización">${icon("trash")}</button>
     </div>
   `;
+}
+
+function duplicateQuote(id) {
+  const original = state.quotes.find(q => q.id === id);
+  if (!original) return;
+  const copy = { ...original, id: uid(), code: nextQuoteCode(), status: "Por cotizar", leadId: "" };
+  state.quotes.unshift(copy);
+  saveState();
+  openQuoteDialog(copy);
 }
 
 function clientActions(id) {
-  return `<button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}<span>Editar</span></button>`;
+  return `<div class="row-actions"><button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-client="${id}" type="button">${icon("trash")}</button></div>`;
 }
 
 function collectionActions(r) {
-  return `
-    <div class="row-actions">
-      <button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}<span>Editar</span></button>
-      ${r.status !== "Pagado" ? `<button class="action-link" data-pay="${r.id}" type="button">${icon("creditCard")}<span>Marcar pagado</span></button>` : ""}
-    </div>
-  `;
+  return `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
 }
 
 function options(values, selected = "") {
@@ -1171,6 +2463,89 @@ function options(values, selected = "") {
 
 function ruleCard(title, copy) {
   return `<article class="panel rule-card"><h4>${title}</h4><p>${copy}</p></article>`;
+}
+
+function dashRecentActivity() {
+  const events = [];
+  state.quotes.filter(q => q.status === "Ganado" && q.wonDate).forEach(q => {
+    events.push({ date: q.wonDate, type: "venta", label: `Venta ganada — ${q.client}`, sub: `${q.code} · ${fmt(calcQuote(q).total)}`, color: "var(--mint)" });
+  });
+  collectionRows().filter(c => c.status === "Pagado" && c.paidDate).forEach(c => {
+    events.push({ date: c.paidDate, type: "cobro", label: `Cobro recibido — ${c.client}`, sub: `${c.label || c.code} · ${fmt(c.amount, c.currency)}`, color: "var(--brand)" });
+  });
+  (state.taxPayments || []).filter(t => t.status === "Pagado" && t.date).forEach(t => {
+    events.push({ date: t.date, type: "sunat", label: `Pago SUNAT — ${t.type}`, sub: `${t.period} · ${fmt(t.amount)}`, color: "#f59e0b" });
+  });
+  state.team.filter(t => t.status === "Pagado" && t.dueDate).forEach(t => {
+    events.push({ date: t.dueDate, type: "personal", label: `Pago personal — ${t.name}`, sub: `${t.role} · ${fmt(t.amount, t.currency)}`, color: "#7c3aed" });
+  });
+  (state.cashEntries || []).filter(e => e.date).forEach(e => {
+    events.push({ date: e.date, type: "caja", label: `${e.type === "ingreso" ? "Ingreso" : "Egreso"} — ${e.concept}`, sub: `${e.category || "Manual"} · ${fmt(e.amount, e.currency)}`, color: e.type === "ingreso" ? "var(--mint)" : "var(--coral)" });
+  });
+
+  const sorted = events.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
+
+  if (!sorted.length) return `<div class="empty-state">Sin actividad registrada aún.</div>`;
+
+  return `<div class="activity-feed">${sorted.map(e => `
+    <div class="activity-item">
+      <div class="activity-dot" style="background:${e.color}"></div>
+      <div class="activity-body">
+        <strong>${escapeHtml(e.label)}</strong>
+        <span>${escapeHtml(e.sub)}</span>
+      </div>
+      <div class="activity-date">${fmtDate(e.date)}</div>
+    </div>`).join("")}</div>`;
+}
+
+function dashFunnelChart(steps) {
+  const W = 300, segH = 30, gap = 2;
+  const totalH = steps.length * (segH + gap);
+  // Fixed widths always decreasing — shape is geometric, counts are labels
+  const pcts = [1, 0.80, 0.62, 0.46, 0.32];
+  const poly = i => {
+    const y = i * (segH + gap);
+    const wT = pcts[i] * W, wB = (pcts[i + 1] ?? pcts[i] * 0.76) * W;
+    const xT = (W - wT) / 2, xB = (W - wB) / 2;
+    return { pts: `${xT.toFixed(1)},${y} ${(xT+wT).toFixed(1)},${y} ${(xB+wB).toFixed(1)},${y+segH} ${xB.toFixed(1)},${y+segH}`, cy: (y + segH / 2).toFixed(1), minW: Math.min(wT, wB) };
+  };
+  const defs = steps.map((_, i) => `<clipPath id="fc${i}"><polygon points="${poly(i).pts}"/></clipPath>`).join('');
+  const segs = steps.map((s, i) => {
+    const { pts, cy, minW } = poly(i);
+    const lx = ((W - minW) / 2 + 10).toFixed(1);
+    const rx = ((W + minW) / 2 - 10).toFixed(1);
+    return `<g clip-path="url(#fc${i})">` +
+      `<polygon points="${pts}" fill="${s.color}"/>` +
+      `<text x="${lx}" y="${cy}" dominant-baseline="middle" fill="white" font-size="12" font-weight="600" font-family="system-ui,sans-serif">${s.label}</text>` +
+      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.85)" font-size="13" font-weight="700" font-family="system-ui,sans-serif">${s.count}</text>` +
+      `</g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block"><defs>${defs}</defs>${segs}</svg>`;
+}
+
+function dashAlerts(s) {
+  const items = [];
+  s.overdueCollections.forEach(c => {
+    items.push(`<div class="alert-item alert-item--red">
+      <div class="alert-icon">${icon("clock")}</div>
+      <div class="alert-body"><strong>Cobro vencido</strong><span>${escapeHtml(c.client)} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}</span></div>
+    </div>`);
+  });
+  s.pendingSunat.forEach(t => {
+    items.push(`<div class="alert-item alert-item--amber">
+      <div class="alert-icon">${icon("package")}</div>
+      <div class="alert-body"><strong>SUNAT pendiente</strong><span>${escapeHtml(t.type)} · ${escapeHtml(t.period)} · ${fmt(t.amount)}</span></div>
+    </div>`);
+  });
+  s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).forEach(t => {
+    items.push(`<div class="alert-item alert-item--amber">
+      <div class="alert-icon">${icon("users")}</div>
+      <div class="alert-body"><strong>Pago personal vencido</strong><span>${escapeHtml(t.name)} · ${fmt(t.amount, t.currency)}</span></div>
+    </div>`);
+  });
+  return items.length
+    ? `<div class="alert-list">${items.join("")}</div>`
+    : `<div class="empty-state">${icon("check")} Sin alertas pendientes. Todo al día.</div>`;
 }
 
 function miniBars(data) {
@@ -1198,25 +2573,466 @@ function group(rows, key, valueFn) {
   return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
 }
 
+let _filterPopoverDocListenerAdded = false;
+
+function bindFilterPopovers() {
+  document.querySelectorAll("[data-filter-toggle]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const popover = document.getElementById(btn.dataset.filterToggle);
+      document.querySelectorAll(".filter-popover:not(.hidden)").forEach(p => {
+        if (p !== popover) p.classList.add("hidden");
+      });
+      popover?.classList.toggle("hidden");
+    });
+
+    const popover = document.getElementById(btn.dataset.filterToggle);
+    if (!popover) return;
+    const dot = btn.querySelector(".filter-dot");
+    const resetBtn = popover.querySelector("[data-filter-reset]");
+
+    const checkActive = () => {
+      const active = [...popover.querySelectorAll("select")].some(s => s.value !== "");
+      btn.classList.toggle("filter-active", active);
+      dot?.classList.toggle("hidden", !active);
+      resetBtn?.classList.toggle("hidden", !active);
+    };
+
+    popover.querySelectorAll("select").forEach(s => s.addEventListener("change", checkActive));
+
+    resetBtn?.addEventListener("click", e => {
+      e.stopPropagation();
+      popover.querySelectorAll("select").forEach(s => {
+        s.value = "";
+        s.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      checkActive();
+    });
+  });
+
+  if (!_filterPopoverDocListenerAdded) {
+    document.addEventListener("click", e => {
+      if (!e.target.closest(".filter-btn-wrap")) {
+        document.querySelectorAll(".filter-popover:not(.hidden)").forEach(p => p.classList.add("hidden"));
+      }
+    });
+    _filterPopoverDocListenerAdded = true;
+  }
+}
+
+function applyDashboardSections() {
+  if (activeView !== "dashboard") return;
+  document.querySelectorAll("[data-dash-section]").forEach(el => {
+    el.classList.toggle("dash-section-hidden", !dashboardSections.has(el.dataset.dashSection));
+  });
+  document.querySelectorAll("[data-dash-grid]").forEach(grid => {
+    const hasVisible = [...grid.children].some(c => !c.classList.contains("dash-section-hidden"));
+    grid.classList.toggle("dash-section-hidden", !hasVisible);
+  });
+}
+
+function applyMetricsVisibility() {
+  const visible = isMetricVisible(activeView);
+  if (activeView === "dashboard") {
+    document.querySelectorAll(".dash-kpi-grid").forEach(el => el.classList.toggle("metrics-hidden", !visible));
+  } else {
+    document.querySelectorAll(".metric-grid").forEach(el => el.classList.toggle("metrics-hidden", !visible));
+  }
+}
+
+function bindMetricsToggle() {
+  document.querySelectorAll("[data-metrics-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const next = !isMetricVisible(activeView);
+      setMetricVis(activeView, next);
+      applyMetricsVisibility();
+      document.querySelectorAll("[data-metrics-toggle]").forEach(b => {
+        b.title = next ? "Ocultar métricas" : "Mostrar métricas";
+        b.setAttribute("aria-label", next ? "Ocultar métricas" : "Mostrar métricas");
+        b.innerHTML = icon("layout");
+        b.classList.toggle("filter-active", !next);
+      });
+    });
+  });
+}
+
 function bindViewEvents() {
   bindFilters();
   bindDashboardDateFilter();
   bindDashboardQuickFilters();
   bindModuleToolbar();
+  bindFilterPopovers();
+  bindMetricsToggle();
+  applyMetricsVisibility();
+  applyDashboardSections();
   bindActions("[data-edit-lead]", id => openLeadDialog(state.leads.find(x => x.id === id)));
   bindActions("[data-quote-lead]", id => quoteLead(id));
   bindActions("[data-close-lead]", id => updateLeadStatus(id, "Cerrado perdido"));
   bindActions("[data-edit-quote]", id => openQuoteDialog(state.quotes.find(x => x.id === id)));
+  bindActions("[data-edit-sale]", id => openSaleDialog(state.quotes.find(x => x.id === id)));
+  bindActions("[data-copy-quote]", id => duplicateQuote(id));
+  bindActions("[data-delete-quote]", id => {
+    confirmDelete("Esta cotización y sus cobranzas asociadas serán eliminadas permanentemente.", () => {
+      state.collections = state.collections.filter(c => c.quoteId !== id);
+      state.quotes = state.quotes.filter(q => q.id !== id);
+      saveState(); render();
+    });
+  });
+  bindActions("[data-copy-team]", id => duplicateTeamPayment(id));
   bindActions("[data-win]", id => updateQuoteStatus(id, "Ganado"));
   bindActions("[data-lose]", id => updateQuoteStatus(id, "Perdido"));
   bindActions("[data-edit-client]", id => openClientDialog(state.clients.find(x => x.id === id)));
+  bindActions("[data-delete-client]", id => {
+    if (!confirm("¿Eliminar este cliente? Esta acción no se puede deshacer.")) return;
+    state.clients = state.clients.filter(c => c.id !== id);
+    saveState(); render(); showToast("Cliente eliminado");
+  });
   bindActions("[data-edit-collection]", id => openCollectionDialog(state.collections.find(x => x.id === id)));
+  bindActions("[data-invoice-collection]", id => openInvoiceDialog(id));
+  bindActions("[data-program-cobros]", id => openProgramarCobrosDialog(id));
   bindActions("[data-pay]", id => markCollectionPaid(id));
   bindActions("[data-edit-expense]", id => openExpenseDialog(state.expenses.find(x => x.id === id)));
   bindActions("[data-edit-team]", id => openTeamDialog(state.team.find(x => x.id === id)));
+  bindActions("[data-delete-team]", id => {
+    confirmDelete("Este pago será eliminado permanentemente y no se podrá restablecer.", () => {
+      state.team = state.team.filter(t => t.id !== id);
+      saveState(); render();
+    });
+  });
   bindActions("[data-edit-taxpayment]", id => openTaxPaymentDialog((state.taxPayments || []).find(x => x.id === id)));
+  bindActions("[data-delete-taxpayment]", id => {
+    confirmDelete("Este pago SUNAT será eliminado permanentemente.", () => {
+      state.taxPayments = (state.taxPayments || []).filter(t => t.id !== id);
+      saveState(); render();
+    });
+  });
+  document.querySelectorAll("[data-pay-detraction]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      openTaxPaymentDialog(null, {
+        type: "Detracción",
+        amount: Number(btn.dataset.detAmount || 0),
+        period: btn.dataset.detPeriod || currentMonthName()
+      });
+    });
+  });
+  bindActions("[data-edit-declaracion]", id => openDeclaracionDialog((state.declaraciones || []).find(x => x.id === id)));
+  bindActions("[data-delete-declaracion]", id => {
+    confirmDelete("Esta declaración será eliminada permanentemente.", () => {
+      state.declaraciones = (state.declaraciones || []).filter(d => d.id !== id);
+      saveState(); render();
+    });
+  });
   bindActions("[data-edit-purchase]", id => openPurchaseDialog((state.purchases || []).find(x => x.id === id)));
+  bindActions("[data-delete-purchase]", id => {
+    confirmDelete("Esta compra será eliminada permanentemente.", () => {
+      state.purchases = (state.purchases || []).filter(p => p.id !== id);
+      saveState(); render();
+    });
+  });
   bindActions("[data-edit-invoicedsale]", id => openInvoicedSaleDialog((state.invoicedSales || []).find(x => x.id === id)));
+  bindActions("[data-edit-cash-entry]", id => openCashEntryDialog("egreso", (state.cashEntries || []).find(x => x.id === id)));
+  bindActions("[data-delete-cash-entry]", id => {
+    confirmDelete("Este movimiento será eliminado permanentemente y no se podrá restablecer.", () => {
+      state.cashEntries = (state.cashEntries || []).filter(e => e.id !== id);
+      saveState(); render();
+    });
+  });
+  document.querySelectorAll("[data-pag-page]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.pagKey;
+      const pg = Number(btn.dataset.pagPage);
+      if (!tablePages[key]) tablePages[key] = { page: 1, pageSize: 10 };
+      tablePages[key].page = pg;
+      render();
+    });
+  });
+  document.querySelectorAll("[data-pag-size]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.pagKey;
+      const size = Number(btn.dataset.pagSize);
+      if (!tablePages[key]) tablePages[key] = { page: 1, pageSize: 10 };
+      tablePages[key].pageSize = size;
+      tablePages[key].page = 1;
+      render();
+    });
+  });
+  document.querySelectorAll("[data-caja-tab]").forEach(btn => {
+    btn.addEventListener("click", () => { activeCajaTab = btn.dataset.cajaTab; render(); });
+  });
+  document.querySelectorAll("[data-settings-tab]").forEach(btn => {
+    btn.addEventListener("click", () => { activeSettingsTab = btn.dataset.settingsTab; render(); });
+  });
+
+  // Sales targets handlers
+  document.querySelector("#salesTargetYear")?.addEventListener("change", e => {
+    salesTargetsYear = Number(e.target.value);
+    render();
+  });
+  document.querySelectorAll("[data-targets-mode]").forEach(btn => {
+    btn.addEventListener("change", () => {
+      const all = getSalesTargets();
+      const newMode = btn.dataset.targetsMode;
+      if (!all[salesTargetsYear]) all[salesTargetsYear] = { mode: "annual", annualPEN: 0, annualUSD: 0, monthly: {} };
+      if (newMode === "monthly" && all[salesTargetsYear].mode !== "monthly") {
+        const perPEN = Math.round((all[salesTargetsYear].annualPEN || 0) / 12);
+        const perUSD = Math.round((all[salesTargetsYear].annualUSD || 0) / 12);
+        for (let i = 1; i <= 12; i++) {
+          const mk = String(i).padStart(2, "0");
+          if (!all[salesTargetsYear].monthly[mk]) all[salesTargetsYear].monthly[mk] = { pen: perPEN, usd: perUSD };
+        }
+      }
+      all[salesTargetsYear].mode = newMode;
+      setSalesTargets(all);
+      render();
+    });
+  });
+  document.querySelector("#saveAnnualTargets")?.addEventListener("click", () => {
+    const all = getSalesTargets();
+    if (!all[salesTargetsYear]) all[salesTargetsYear] = { mode: "annual", annualPEN: 0, annualUSD: 0, monthly: {} };
+    all[salesTargetsYear].annualPEN = Number(document.querySelector("#annualPEN")?.value) || 0;
+    all[salesTargetsYear].annualUSD = Number(document.querySelector("#annualUSD")?.value) || 0;
+    setSalesTargets(all);
+    render();
+    showToast("Metas guardadas");
+  });
+  document.querySelector("#saveMonthlyTargets")?.addEventListener("click", () => {
+    const all = getSalesTargets();
+    if (!all[salesTargetsYear]) all[salesTargetsYear] = { mode: "monthly", annualPEN: 0, annualUSD: 0, monthly: {} };
+    all[salesTargetsYear].mode = "monthly";
+    all[salesTargetsYear].monthly = all[salesTargetsYear].monthly || {};
+    document.querySelectorAll(".targets-input[data-cur='pen']").forEach(inp => {
+      const mk = inp.dataset.mk;
+      const usdInp = document.querySelector(`.targets-input[data-mk="${mk}"][data-cur="usd"]`);
+      const penVal = inp.value.trim();
+      const usdVal = usdInp?.value.trim() ?? "";
+      if (penVal === "" && usdVal === "") {
+        delete all[salesTargetsYear].monthly[mk];
+      } else {
+        if (!all[salesTargetsYear].monthly[mk]) all[salesTargetsYear].monthly[mk] = { pen: 0, usd: 0 };
+        all[salesTargetsYear].monthly[mk].pen = penVal === "" ? 0 : Number(penVal);
+        all[salesTargetsYear].monthly[mk].usd = usdVal === "" ? 0 : Number(usdVal);
+      }
+    });
+    all[salesTargetsYear].annualPEN = Object.values(all[salesTargetsYear].monthly).reduce((s, m) => s + (m.pen || 0), 0);
+    all[salesTargetsYear].annualUSD = Object.values(all[salesTargetsYear].monthly).reduce((s, m) => s + (m.usd || 0), 0);
+    setSalesTargets(all);
+    render();
+    showToast("Metas guardadas");
+  });
+
+  const addMemberForm = document.querySelector("#addTeamMemberForm");
+  if (addMemberForm) addMemberForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("memberName").trim();
+    if (!name) return;
+    state.settings.teamMembers = [...(state.settings.teamMembers || []), { name }];
+    saveState(); render();
+    showToast("Vendedor agregado");
+  });
+  document.querySelectorAll("[data-edit-member-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-member-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-member-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveMemberInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.settings.teamMembers[i] = { ...state.settings.teamMembers[i], name: newName };
+      saveState(); render();
+      showToast("Vendedor actualizado");
+    });
+  });
+  document.querySelectorAll("[data-delete-member]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteMember);
+    confirmDelete("Este vendedor será eliminado de la lista y no se podrá restablecer.", () => {
+      state.settings.teamMembers = state.settings.teamMembers.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+  const addProfileForm = document.querySelector("#addProfileForm");
+  if (addProfileForm) addProfileForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const name = fd.get("profileName").trim();
+    if (!name) return;
+    if (!(state.profiles || []).find(p => p.name === name)) {
+      state.profiles = [...(state.profiles || []), { name, hasCommission: fd.get("profileComm") === "on" }];
+      saveState(); render();
+      showToast("Perfil agregado");
+    }
+  });
+  document.querySelectorAll("[data-edit-profile-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-profile-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-profile-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveProfileInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.profiles[i] = { ...state.profiles[i], name: newName };
+      saveState(); render();
+      showToast("Perfil actualizado");
+    });
+  });
+  document.querySelectorAll("[data-toggle-profile-comm]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.toggleProfileComm);
+    state.profiles[i] = { ...state.profiles[i], hasCommission: !state.profiles[i].hasCommission };
+    saveState(); render();
+  }));
+  document.querySelectorAll("[data-delete-profile]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteProfile);
+    confirmDelete("Este perfil será eliminado permanentemente.", () => {
+      state.profiles = state.profiles.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+  const addSourceForm = document.querySelector("#addSourceForm");
+  if (addSourceForm) addSourceForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("sourceName").trim();
+    if (!name) return;
+    if (!(state.sources || []).includes(name)) {
+      state.sources = [...(state.sources || []), name].sort();
+      saveState(); render();
+      showToast("Fuente agregada");
+    }
+  });
+  document.querySelectorAll("[data-edit-source-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-source-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-source-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveSourceInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.sources[i] = newName;
+      state.sources = [...state.sources].sort();
+      saveState(); render();
+      showToast("Fuente actualizada");
+    });
+  });
+  document.querySelectorAll("[data-delete-source]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteSource);
+    confirmDelete("Esta fuente será eliminada permanentemente.", () => {
+      state.sources = state.sources.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+  const addCategoryForm = document.querySelector("#addCategoryForm");
+  if (addCategoryForm) addCategoryForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("categoryName").trim();
+    if (!name) return;
+    if (!(state.categories || []).includes(name)) {
+      state.categories = [...(state.categories || []), name].sort();
+      saveState(); render();
+      showToast("Categoría agregada");
+    }
+  });
+  document.querySelectorAll("[data-edit-cat-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-cat-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-cat-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveCatInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.categories[i] = newName;
+      state.categories = [...state.categories].sort();
+      saveState(); render();
+      showToast("Categoría actualizada");
+    });
+  });
+  document.querySelectorAll("[data-delete-cat]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteCat);
+    confirmDelete("Esta categoría será eliminada del catálogo permanentemente.", () => {
+      state.categories = state.categories.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+  const addServiceForm = document.querySelector("#addServiceForm");
+  if (addServiceForm) addServiceForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const name = new FormData(e.currentTarget).get("serviceName").trim();
+    if (!name) return;
+    if (!(state.services || []).includes(name)) {
+      state.services = [...(state.services || []), name].sort();
+      saveState(); render();
+      showToast("Servicio agregado");
+    }
+  });
+  document.querySelectorAll("[data-edit-service-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-service-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-service-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveServiceInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.services[i] = newName;
+      state.services = [...state.services].sort();
+      saveState(); render();
+      showToast("Servicio actualizado");
+    });
+  });
+  document.querySelectorAll("[data-delete-service]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteService);
+    confirmDelete("Este servicio será eliminado del catálogo permanentemente.", () => {
+      state.services = state.services.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+  document.querySelectorAll("[data-open-cash-entry]").forEach(btn => {
+    btn.addEventListener("click", () => openCashEntryDialog(btn.dataset.openCashEntry));
+  });
+  document.querySelector("[data-search-finance]")?.addEventListener("input", (e) => {
+    const val = e.target.value;
+    render();
+    const inp = document.querySelector("[data-search-finance]");
+    if (inp) { inp.focus(); inp.setSelectionRange(val.length, val.length); }
+  });
+  document.querySelector("[data-caja-fuente]")?.addEventListener("change", () => render());
+  document.querySelector("[data-caja-cat]")?.addEventListener("change", () => render());
   const settingsForm = document.querySelector("#settingsForm");
   if (settingsForm) settingsForm.addEventListener("submit", saveSettings);
   const addBankForm = document.querySelector("#addBankAccountForm");
@@ -1227,37 +3043,135 @@ function bindViewEvents() {
       state.settings.bankAccounts = [...(state.settings.bankAccounts || []), name];
       saveState();
       render();
+      showToast("Cuenta bancaria agregada");
     }
   });
   document.querySelectorAll("[data-delete-bank]").forEach(btn => btn.addEventListener("click", () => {
     const i = Number(btn.getAttribute("data-delete-bank"));
-    state.settings.bankAccounts = state.settings.bankAccounts.filter((_, idx) => idx !== i);
-    saveState();
-    render();
+    confirmDelete("Esta cuenta bancaria será eliminada permanentemente y no se podrá restablecer.", () => {
+      state.settings.bankAccounts = state.settings.bankAccounts.filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
   }));
+  document.querySelectorAll("[data-move-bank]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.moveBank);
+    const dir = Number(btn.dataset.dir);
+    const arr = [...state.settings.bankAccounts];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    state.settings.bankAccounts = arr;
+    activeCajaTab = "general";
+    saveState(); render();
+  }));
+  document.querySelectorAll("[data-edit-bank-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.editBankInline);
+      const li = btn.closest("li");
+      li.querySelector(".bank-account-name").style.display = "none";
+      li.querySelector(".bank-account-edit-input").style.display = "";
+      li.querySelector(".bank-account-edit-input").focus();
+      btn.style.display = "none";
+      li.querySelector("[data-save-bank-inline]").style.display = "";
+    });
+  });
+  document.querySelectorAll("[data-save-bank-inline]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.saveBankInline);
+      const li = btn.closest("li");
+      const newName = li.querySelector(".bank-account-edit-input").value.trim();
+      if (!newName) return;
+      state.settings.bankAccounts[i] = newName;
+      saveState(); render();
+      showToast("Cuenta bancaria actualizada");
+    });
+  });
+
+  const addFixedExpForm = document.querySelector("#addFixedExpenseForm");
+  if (addFixedExpForm) addFixedExpForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const entry = { id: uid(), concept: fd.get("concept").trim(), category: fd.get("category").trim(), amount: Number(fd.get("amount")), currency: fd.get("currency") || "PEN" };
+    if (!entry.concept || !entry.amount) return;
+    state.settings.fixedExpenses = [...(state.settings.fixedExpenses || []), entry];
+    saveState(); render();
+    showToast("Gasto fijo agregado");
+  });
+
+  document.querySelectorAll("[data-fe-edit]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tr = btn.closest("tr");
+      tr.querySelectorAll(".fe-text").forEach(el => el.style.display = "none");
+      tr.querySelectorAll(".fe-input").forEach(el => el.style.display = "");
+      tr.querySelector(".fe-edit").style.display = "none";
+      tr.querySelector(".fe-save").style.display = "";
+    });
+  });
+
+  document.querySelectorAll("[data-fe-save]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.feSave);
+      const tr = btn.closest("tr");
+      const concept = tr.querySelector("[name=concept]").value.trim();
+      const category = tr.querySelector("[name=category]").value.trim();
+      const amount = Number(tr.querySelector("[name=amount]").value);
+      const currency = tr.querySelector("[name=currency]").value;
+      if (!concept || !amount) return;
+      state.settings.fixedExpenses[i] = { ...state.settings.fixedExpenses[i], concept, category, amount, currency };
+      saveState(); render();
+      showToast("Gasto fijo actualizado");
+    });
+  });
+
+  document.querySelectorAll("[data-fe-delete]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.feDelete);
+      confirmDelete("Este gasto fijo será eliminado permanentemente y no se podrá restablecer.", () => {
+        state.settings.fixedExpenses = state.settings.fixedExpenses.filter((_, idx) => idx !== i);
+        saveState(); render();
+      });
+    });
+  });
+}
+
+function setDashboardSections(sections, filterId) {
+  dashboardSections = new Set(sections);
+  activeDashboardFilter = filterId || null;
+  localStorage.setItem(DASH_SECTIONS_KEY, JSON.stringify([...dashboardSections]));
 }
 
 function bindDashboardQuickFilters() {
   if (activeView !== "dashboard") return;
-  const allSections = ["metrics", "revenue", "collections", "pipeline", "profitability", "salesOwner", "annualProjection"];
+  const allSections = ["metrics", "revenue", "pipeline", "profitability", "salesSource", "salesOwner", "collections", "activity", "annualProjection"];
   const presets = {
     all: allSections,
-    commercial: ["metrics", "pipeline", "salesOwner"],
-    finance: ["metrics", "revenue", "collections", "profitability"]
+    commercial: ["metrics", "pipeline", "profitability", "salesSource", "salesOwner"],
+    finance: ["metrics", "revenue", "collections", "activity", "annualProjection"]
   };
 
-  document.querySelectorAll("[data-dashboard-preset]").forEach(button => {
-    button.addEventListener("click", () => {
-      dashboardSections = new Set(presets[button.dataset.dashboardPreset] || allSections);
+  document.querySelectorAll("[data-dashboard-preset]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      setDashboardSections(presets[btn.dataset.dashboardPreset] || allSections, btn.dataset.dashboardPreset);
       render();
     });
   });
 
-  document.querySelectorAll("[data-saved-dashboard-filter]").forEach(button => {
-    button.addEventListener("click", () => {
-      const filter = dashboardSavedFilters.find(item => item.id === button.dataset.savedDashboardFilter);
+  document.querySelectorAll("[data-saved-dashboard-filter]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const filter = dashboardSavedFilters.find(f => f.id === btn.dataset.savedDashboardFilter);
       if (!filter) return;
-      dashboardSections = new Set(filter.sections);
+      setDashboardSections(filter.sections, filter.id);
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-dashboard-filter]").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const id = btn.dataset.deleteDashboardFilter;
+      dashboardSavedFilters = dashboardSavedFilters.filter(f => f.id !== id);
+      localStorage.setItem(DASHBOARD_FILTERS_KEY, JSON.stringify(dashboardSavedFilters));
+      if (activeDashboardFilter === id) activeDashboardFilter = null;
       render();
     });
   });
@@ -1269,9 +3183,10 @@ function bindDashboardQuickFilters() {
     const name = document.querySelector("#dashboardFilterName").value.trim();
     const sections = [...builder.querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
     if (!name || !sections.length) return;
-    dashboardSavedFilters.push({ id: uid(), name, sections });
+    const newFilter = { id: uid(), name, sections };
+    dashboardSavedFilters.push(newFilter);
     localStorage.setItem(DASHBOARD_FILTERS_KEY, JSON.stringify(dashboardSavedFilters));
-    dashboardSections = new Set(sections);
+    setDashboardSections(sections, newFilter.id);
     render();
   });
 }
@@ -1294,13 +3209,13 @@ function bindDashboardDateFilter() {
 
   document.querySelector("#closeDateFilter").addEventListener("click", close);
   document.querySelector("#resetDateFilter").addEventListener("click", () => {
-    dashboardRange = getDashboardPreset("thisYear");
+    setCurrentRange(getDashboardPreset("thisMonth"));
     render();
   });
 
   document.querySelectorAll("[data-date-preset]").forEach(button => {
     button.addEventListener("click", () => {
-      dashboardRange = getDashboardPreset(button.dataset.datePreset);
+      setCurrentRange(getDashboardPreset(button.dataset.datePreset));
       render();
     });
   });
@@ -1317,7 +3232,7 @@ function bindDashboardDateFilter() {
       error.textContent = "La fecha inicial no puede ser posterior a la fecha final.";
       return;
     }
-    dashboardRange = { key: "custom", start, end, label: "Rango personalizado" };
+    setCurrentRange({ key: "custom", start, end, label: "Rango personalizado" });
     render();
   });
 }
@@ -1327,7 +3242,6 @@ function saveSettings(event) {
   const data = Object.fromEntries(new FormData(event.currentTarget));
   state.settings = {
     ...state.settings,
-    monthlyGoal: Number(data.monthlyGoal),
     igvRate: Number(data.igvRate) / 100,
     detractionRate: Number(data.detractionRate) / 100,
     detractionThreshold: Number(data.detractionThreshold),
@@ -1337,8 +3251,7 @@ function saveSettings(event) {
   state.quotes.forEach(quote => syncQuoteSideEffects(state, quote));
   saveState();
   render();
-  const message = document.querySelector("#settingsMessage");
-  if (message) message.textContent = "Configuración guardada correctamente.";
+  showToast("Configuración guardada");
 }
 
 function bindActions(selector, handler) {
@@ -1381,13 +3294,13 @@ function bindFilters() {
 
 function bindModuleToolbar() {
   const search = document.querySelector("#moduleSearch");
-  const tableFilter = document.querySelector("[data-table-filter]");
+  const tableFilters = [...document.querySelectorAll("[data-table-filter]")];
   const filterTableRows = () => {
     const term = search?.value.trim().toLowerCase() || "";
-    const status = tableFilter?.value.toLowerCase() || "";
+    const active = tableFilters.map(f => f.value.toLowerCase()).filter(Boolean);
     document.querySelectorAll(".table-wrap tbody tr").forEach(row => {
       const text = row.textContent.toLowerCase();
-      row.hidden = !text.includes(term) || (status && !text.includes(status));
+      row.hidden = !text.includes(term) || !active.every(f => text.includes(f));
     });
   };
 
@@ -1400,18 +3313,23 @@ function bindModuleToolbar() {
       });
     });
   }
-  tableFilter?.addEventListener("change", filterTableRows);
+  tableFilters.forEach(f => f.addEventListener("change", filterTableRows));
 
-  document.querySelector("[data-module-action]")?.addEventListener("click", event => {
-    const action = event.currentTarget.dataset.moduleAction;
-    if (action === "leads") openLeadDialog();
-    else if (action === "clients") openClientDialog();
-    else if (action === "finance") openExpenseDialog();
-    else if (action === "team") openTeamDialog();
-    else if (action === "taxes") openTaxPaymentDialog();
-    else if (action === "purchase") openPurchaseDialog();
-    else if (action === "invoicedSale") openInvoicedSaleDialog();
-    else openQuoteDialog();
+  document.querySelectorAll("[data-module-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.moduleAction;
+      if (action === "lead") openLeadDialog();
+      else if (action === "client" || action === "clients") openClientDialog();
+      else if (action === "finance") openExpenseDialog();
+      else if (action === "team") openTeamDialog();
+      else if (action === "taxPayment") openTaxPaymentDialog();
+      else if (action === "purchase") openPurchaseDialog();
+      else if (action === "invoicedSale") openInvoicedSaleDialog();
+      else if (action === "sales") openSaleDialog();
+      else if (action === "collections") openQuoteDialog();
+      else if (action === "declaracion") openDeclaracionDialog();
+      else openQuoteDialog();
+    });
   });
 
   document.querySelector("[data-export-state]")?.addEventListener("click", exportState);
@@ -1464,6 +3382,7 @@ function updateQuoteStatus(id, status) {
   const q = state.quotes.find(item => item.id === id);
   if (!q) return;
   q.status = status;
+  if (status === "Ganado" && !q.wonDate) q.wonDate = today();
   syncQuoteSideEffects(state, q);
   saveState();
   render();
@@ -1510,6 +3429,7 @@ function dialogShell(type, title, body, submitText = "Guardar") {
     </div>
   `;
   bindDialogCloseControls(quoteDialog);
+  attachFormValidation(quoteForm);
   quoteDialog.showModal();
 }
 
@@ -1528,24 +3448,55 @@ function setupDialogs() {
   });
 }
 
+function clientSelect(selected, attrs = "") {
+  const opts = state.clients.map(c =>
+    `<option value="${escapeAttr(c.name)}" ${c.name === selected ? "selected" : ""}>${escapeHtml(c.name)}</option>`
+  ).join("");
+  return `<select name="client" required ${attrs}><option value="">— Seleccionar cliente —</option>${opts}</select>`;
+}
+
+function categorySelect(selected) {
+  const cats = state.categories || [];
+  const opts = cats.map(c => `<option value="${escapeAttr(c)}" ${c === selected ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+  return `<select name="category"><option value="">— Categoría —</option>${opts}</select>`;
+}
+
+function ownerSelect(selected) {
+  const owners = (state.settings.teamMembers || []).map(m => m.name).filter(Boolean);
+  const opts = owners.map(o => `<option value="${escapeAttr(o)}" ${o === selected ? "selected" : ""}>${escapeHtml(o)}</option>`).join("");
+  return `<select name="owner"><option value="">— Comercial —</option>${opts}</select>`;
+}
+
+function serviceSelect(selected) {
+  const services = state.services || [];
+  const opts = services.map(s => `<option value="${escapeAttr(s)}" ${s === selected ? "selected" : ""}>${escapeHtml(s)}</option>`).join("");
+  return `<select name="service" required><option value="">— Seleccionar servicio —</option>${opts}</select>`;
+}
+
+function saveServiceIfNew(serviceName) {
+  if (!serviceName) return;
+  if (!(state.services || []).includes(serviceName)) {
+    state.services = [...(state.services || []), serviceName].sort();
+  }
+}
+
 function openLeadDialog(lead = null) {
   const item = lead || newLead();
   editingId = lead && state.leads.some(l => l.id === lead.id) ? lead.id : "";
   dialogShell("lead", editingId ? "Editar lead" : "Nuevo lead", `
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
-      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
+      <label>Cliente${clientSelect(item.client)}</label>
       <label>Contacto<input name="contact" value="${escapeAttr(item.contact)}"></label>
-      <label>Fuente<input name="source" list="dl-sources" value="${escapeAttr(item.source)}" required></label>
-      <label>Canal<input name="channel" list="dl-channels" value="${escapeAttr(item.channel)}"></label>
-      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}" required></label>
-      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
+      <label>Fuente<input name="source" value="${escapeAttr(item.source)}" required></label>
+      <label>Canal<input name="channel" value="${escapeAttr(item.channel)}"></label>
+      <label>Comercial${ownerSelect(item.owner)}</label>
+      <label class="full">Servicio${serviceSelect(item.service)}</label>
       <label>Valor estimado<input name="estimatedValue" type="number" min="0" step="0.01" value="${item.estimatedValue}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Estado<select name="status">${options(leadStatuses, item.status)}</select></label>
       <label class="full">Notas<textarea name="notes" rows="3">${escapeHtml(item.notes)}</textarea></label>
     </div>
-    ${buildDatalicists()}
   `);
   bindDialogAutofills();
 }
@@ -1553,60 +3504,258 @@ function openLeadDialog(lead = null) {
 function openQuoteDialog(q = null, isNewFromLead = false) {
   const item = q || newQuote();
   editingId = !isNewFromLead && q && state.quotes.some(existing => existing.id === q.id) ? q.id : "";
-  dialogShell("quote", editingId ? "Editar cotizacion" : "Nueva cotizacion", `
+  const igvRate = state.settings.igvRate || 0.18;
+  const commRate = state.settings.commissionRate || 0.05;
+  const c = calcQuote(item);
+  dialogShell("quote", editingId ? "Editar cotización" : "Nueva cotización", `
     <div class="form-grid">
       <label>PPTO<input name="code" value="${escapeAttr(item.code || nextQuoteCode())}" required></label>
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
-      <label>Categoria<input name="category" list="dl-categories" value="${escapeAttr(item.category)}" required></label>
-      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
-      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}" required></label>
-      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
-      <label>Monto sin IGV<input name="subtotal" type="number" min="0" step="0.01" value="${item.subtotal}" required></label>
-      <label>Moneda<select name="currency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+      <label>Categoría${categorySelect(item.category)}</label>
+      <label>Comercial${ownerSelect(item.owner)}</label>
+      <label class="full">Servicio${serviceSelect(item.service)}</label>
+      <label class="full">Cliente${clientSelect(item.client)}</label>
+      <div class="full quote-subtotal-block">
+        <div class="quote-subtotal-row">
+          <label style="flex:1">Subtotal (sin IGV)<input name="subtotal" id="quoteSubtotal" type="number" min="0" step="0.01" value="${item.subtotal || ""}" required placeholder="0.00"></label>
+          <label>Moneda<select name="currency" id="quoteCurrency"><option value="PEN" ${(item.currency || "PEN") === "PEN" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+          <label class="check-row quote-igv-check"><input name="hasIgv" id="quoteHasIgv" type="checkbox" ${item.hasIgv ? "checked" : ""}> Aplica IGV (${Math.round(igvRate * 100)}%)</label>
+        </div>
+        <div class="quote-calc-preview" id="quoteCalcPreview">
+          <div class="calc-item"><span>IGV</span><strong id="previewIGV">${fmt(c.igv, item.currency || "PEN")}</strong></div>
+          <div class="calc-item"><span>Total</span><strong id="previewTotal">${fmt(c.total, item.currency || "PEN")}</strong></div>
+          <div class="calc-item accent"><span>Comisión ${Math.round(commRate * 100)}%</span><strong id="previewComm">${fmt(c.commission, item.currency || "PEN")}</strong></div>
+        </div>
+      </div>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
-      <label>Tipo de pago<select name="paymentType"><option value="split" ${item.paymentType === "split" ? "selected" : ""}>50% / 50%</option><option value="thirds" ${item.paymentType === "thirds" ? "selected" : ""}>3 cuotas (33/33/33)</option><option value="full" ${item.paymentType === "full" ? "selected" : ""}>100%</option></select></label>
-      <label class="check-row"><input name="hasIgv" type="checkbox" ${item.hasIgv ? "checked" : ""}> Aplica IGV</label>
       <input name="leadId" type="hidden" value="${escapeAttr(item.leadId || "")}">
-      <label class="full">Repositorio<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
+      <input name="cuotas" type="hidden" value="${item.cuotas || 2}">
+      <label class="full">Repositorio (Drive)<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
       <label class="full">Comentarios<textarea name="comments" rows="3">${escapeHtml(item.comments)}</textarea></label>
     </div>
-    ${buildDatalicists()}
   `);
   bindDialogAutofills();
+  bindQuoteCalcPreview();
 }
 
 function openClientDialog(client = null) {
-  const item = client || newClient();
+  const item = client || newClient({ date: today() });
   editingId = client && state.clients.some(c => c.id === client.id) ? client.id : "";
   dialogShell("client", editingId ? "Editar cliente" : "Nuevo cliente", `
     <div class="form-grid">
-      <label>Cliente<input name="name" list="dl-clients" value="${escapeAttr(item.name)}" required></label>
-      <label>RUC<input name="ruc" value="${escapeAttr(item.ruc)}" placeholder="20XXXXXXXXX"></label>
-      <label>Contacto<input name="contact" value="${escapeAttr(item.contact)}"></label>
-      <label>Correo<input name="email" type="email" value="${escapeAttr(item.email)}"></label>
+      <label>Cliente<input name="name" value="${escapeAttr(item.name)}" required></label>
+      <label>RUC / DNI<input name="ruc" value="${escapeAttr(item.ruc)}" placeholder="20XXXXXXXXX" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="11"></label>
+      <label>Fecha de alta<input name="date" type="date" value="${escapeAttr(item.date)}"></label>
+      <label>Contacto principal<input name="contact" value="${escapeAttr(item.contact)}"></label>
+      <label>Correo electrónico<input name="email" type="email" value="${escapeAttr(item.email)}"></label>
       <label>Teléfono<input name="phone" value="${escapeAttr(item.phone)}" placeholder="+51 9XXXXXXXX"></label>
-      <label>Comercial<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}"></label>
+      <label>Tipo de cliente<select name="clientType"><option value="">— Seleccionar —</option><option value="B2B" ${item.clientType === "B2B" ? "selected" : ""}>B2B</option><option value="Natural" ${item.clientType === "Natural" ? "selected" : ""}>Natural</option></select></label>
+      <label class="ac-label">País<input id="clientCountryInput" name="country" value="${escapeAttr(item.country || "Perú")}" autocomplete="off" placeholder="Buscar país..."></label>
+      <label>Comercial${ownerSelect(item.owner)}</label>
+      <label>Fuente<select name="source"><option value="">— Fuente —</option>${(state.sources || []).map(s => `<option value="${escapeAttr(s)}" ${s === item.source ? "selected" : ""}>${escapeHtml(s)}</option>`).join("")}</select></label>
       <label class="full">Notas<textarea name="notes" rows="3">${escapeHtml(item.notes)}</textarea></label>
     </div>
-    ${buildDatalicists()}
   `);
   bindDialogAutofills();
+  initAC(
+    document.getElementById("clientCountryInput"),
+    () => countriesList,
+    { label: "país", onSelect: () => {}, onCreate: null }
+  );
+}
+
+function openSaleDialog(quote = null) {
+  const item = quote || newQuote({ status: "Ganado", wonDate: today() });
+  editingId = quote && state.quotes.some(q => q.id === quote.id) ? quote.id : "";
+  const clientNames = state.clients.map(c => c.name);
+  const igvRate  = state.settings.igvRate  || 0.18;
+  const commRate = state.settings.commissionRate || 0.05;
+  const detRate  = state.settings.detractionRate || 0.12;
+  const c = calcQuote(item);
+  const cur = item.currency || "PEN";
+  dialogShell("sale", editingId ? "Editar venta" : "Nueva venta", `
+    <div class="form-grid">
+      <label>PPTO<input name="code" value="${escapeAttr(item.code || nextQuoteCode())}" required></label>
+      <label>Fecha de venta<input name="wonDate" type="date" value="${escapeAttr(item.wonDate || item.date || today())}" required></label>
+      <label>Cliente${clientSelect(item.client)}</label>
+      <label>Comercial${ownerSelect(item.owner)}</label>
+      <label>Categoría${categorySelect(item.category)}</label>
+      <label>Tipo de pago<select name="cuotas">
+        <option value="1" ${(item.cuotas || 1) == 1 ? "selected" : ""}>1 pago</option>
+        <option value="2" ${(item.cuotas || 1) == 2 ? "selected" : ""}>2 pagos</option>
+        <option value="3" ${(item.cuotas || 1) == 3 ? "selected" : ""}>3 pagos</option>
+      </select></label>
+      <label class="full">Servicio${serviceSelect(item.service)}</label>
+      <label>Factura<input name="invoice" value="${escapeAttr(item.invoice || "")}" placeholder="Ej: F001-00001"></label>
+      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${item.bankAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}</select></label>
+      <div class="full quote-subtotal-block">
+        <div class="quote-subtotal-row">
+          <label style="flex:1">Subtotal (sin IGV)<input name="subtotal" id="saleSubtotal" type="number" min="0" step="0.01" value="${item.subtotal || ""}" required placeholder="0.00"></label>
+          <label>Moneda<select name="currency" id="saleCurrency"><option value="PEN" ${cur !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${cur === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+          <label class="check-row quote-igv-check"><input name="hasIgv" id="saleHasIgv" type="checkbox" ${item.hasIgv ? "checked" : ""}> Aplica IGV (${Math.round(igvRate * 100)}%)</label>
+        </div>
+        <div class="quote-calc-preview" id="saleCalcPreview">
+          <div class="calc-item"><span>IGV</span><strong id="salePreviewIGV">${fmt(c.igv, cur)}</strong></div>
+          <div class="calc-item"><span>Total</span><strong id="salePreviewTotal">${fmt(c.total, cur)}</strong></div>
+          <div class="calc-item"><span>Detracción ${Math.round(detRate * 100)}%</span><strong id="salePreviewDet">${fmt(c.detraction, cur)}</strong></div>
+          <div class="calc-item accent"><span>Comisión ${Math.round(commRate * 100)}%</span><strong id="salePreviewComm">${fmt(c.commission, cur)}</strong></div>
+        </div>
+      </div>
+    </div>
+  `);
+  bindDialogAutofills();
+  bindSaleCalcPreview();
+}
+
+function saveSale(data) {
+  saveServiceIfNew(data.service);
+  const existing = editingId ? state.quotes.find(q => q.id === editingId) : null;
+  const item = newQuote({
+    ...data,
+    subtotal: Number(data.subtotal),
+    hasIgv: data.hasIgv === "on",
+    status: "Ganado",
+    wonDate: data.wonDate || existing?.wonDate || today()
+  });
+  if (editingId) state.quotes = state.quotes.map(q => q.id === editingId ? { ...q, ...item, id: editingId } : q);
+  else state.quotes.unshift(item);
+  const saved = editingId ? state.quotes.find(q => q.id === editingId) : state.quotes[0];
+  syncQuoteSideEffects(state, saved);
+  activeView = "sales";
 }
 
 function openCollectionDialog(row) {
   if (!row) return;
   editingId = row.id;
-  dialogShell("collection", "Editar cobro", `
-    <div class="form-grid">
-      <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate}" required></label>
-      <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
-      <label>Monto<input name="amount" type="number" step="0.01" value="${row.amount}" required></label>
-      <label>Detracción<input name="detraction" type="number" step="0.01" value="${row.detraction}"></label>
+  const quote = state.quotes.find(q => q.id === row.quoteId);
+  const clientRecord = state.clients.find(c => c.name === (quote?.client || ""));
+  const client = quote?.client || "—";
+  const ruc = clientRecord?.ruc || "—";
+  const service = quote?.service || "—";
+  const owner = quote?.owner || "—";
+  const code = quote?.code ? displayCode(quote.code) : "—";
+  const wonDate = fmtDate(quote?.wonDate || quote?.date || "");
+  const currency = row.currency || quote?.currency || "PEN";
+  const nroPago = row.label === "Pago 100%" ? "1/1" : (row.label || "").replace("Pago ", "");
+  const sym = currency === "USD" ? "$" : "S/";
+  const calc = quote ? calcQuote(quote, state) : { igv: 0, total: 0, detraction: 0 };
+  const subtotal = quote?.subtotal || 0;
+  dialogShell("collection", "Editar cobranza", `
+    <div class="coll-info-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="coll-info-item"><span class="coll-info-label">PPTO</span><span class="coll-info-value">${escapeHtml(code)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Fecha venta</span><span class="coll-info-value">${escapeHtml(wonDate)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Comercial</span><span class="coll-info-value">${escapeHtml(owner)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Cliente</span><span class="coll-info-value">${escapeHtml(client)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">RUC / DNI</span><span class="coll-info-value">${escapeHtml(ruc)}</span></div>
+      <div class="coll-info-item" style="grid-column:span 1"><span class="coll-info-label">Servicio</span><span class="coll-info-value" style="white-space:normal;word-break:break-word">${escapeHtml(service)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Subtotal</span><span class="coll-info-value">${sym} ${subtotal.toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">IGV</span><span class="coll-info-value">${sym} ${calc.igv.toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Total</span><span class="coll-info-value">${sym} ${calc.total.toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Detracción</span><span class="coll-info-value">${sym} ${calc.detraction.toFixed(2)}</span></div>
+    </div>
+    <div class="form-grid" style="margin-top:16px">
+      <label>Nro Pago<input name="nroPago" value="${escapeAttr(nroPago)}" readonly style="background:var(--surface);color:var(--muted);cursor:default"></label>
       <label>Estado<select name="status">${options(paymentStatuses, row.status)}</select></label>
-      <label>Factura<input name="invoice" value="${escapeAttr(row.invoice)}" placeholder="F001-000..."></label>
-      <label class="full">Cuenta (DEP. C. CORRIENTE)<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${row.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Factura<input name="invoice" value="${escapeAttr(row.invoice || "")}" placeholder="F001-00001"></label>
+      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${row.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate || ""}"></label>
+      <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
+      <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(row.repo || "")}" placeholder="https://..."></label>
     </div>
   `);
+}
+
+function openInvoiceDialog(collectionId) {
+  const raw = state.collections.find(c => c.id === collectionId);
+  if (!raw) return;
+  editingId = collectionId;
+  const quote = state.quotes.find(q => q.id === raw.quoteId);
+  const clientRecord = state.clients.find(c => c.name === (quote?.client || ""));
+  const currency = raw.currency || quote?.currency || "PEN";
+  const sym = currency === "USD" ? "$" : "S/";
+  const netAmount = (raw.amount || 0) - (raw.detraction || 0);
+  const nroPago = raw.label === "Pago 100%" ? "1/1" : (raw.label || "").replace("Pago ", "");
+  const code = quote?.code ? displayCode(quote.code) : "—";
+  const client = quote?.client || "—";
+  const ruc = clientRecord?.ruc || "—";
+  const service = quote?.service || "—";
+  const wonDate = fmtDate(quote?.wonDate || quote?.date || "");
+  dialogShell("invoiceCollection", "Emitir factura", `
+    <div class="coll-info-grid" style="grid-template-columns: repeat(4,1fr)">
+      <div class="coll-info-item"><span class="coll-info-label">PPTO</span><span class="coll-info-value">${escapeHtml(code)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Nro Pago</span><span class="coll-info-value">${escapeHtml(nroPago)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Fecha venta</span><span class="coll-info-value">${escapeHtml(wonDate)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Moneda</span><span class="coll-info-value">${escapeHtml(currency)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Cliente</span><span class="coll-info-value">${escapeHtml(client)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">RUC / DNI</span><span class="coll-info-value">${escapeHtml(ruc)}</span></div>
+      <div class="coll-info-item" style="grid-column:span 2"><span class="coll-info-label">Servicio</span><span class="coll-info-value">${escapeHtml(service)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Total</span><span class="coll-info-value">${sym} ${(raw.amount || 0).toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Detracción</span><span class="coll-info-value">${sym} ${(raw.detraction || 0).toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Monto a recibir</span><span class="coll-info-value">${sym} ${netAmount.toFixed(2)}</span></div>
+    </div>
+    <div class="form-grid" style="margin-top:16px">
+      <label>Número de factura<input name="invoice" value="${escapeAttr(raw.invoice || "")}" placeholder="F001-00001" required></label>
+      <label>Fecha de emisión<input name="invoiceDate" type="date" value="${raw.invoiceDate || today()}" required></label>
+      <label class="full">Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${raw.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label class="full">Observaciones<textarea name="invoiceNotes" rows="2" placeholder="Notas adicionales...">${escapeHtml(raw.invoiceNotes || "")}</textarea></label>
+    </div>
+  `, "Emitir factura");
+}
+
+function saveInvoiceCollection(data) {
+  state.collections = state.collections.map(c =>
+    c.id === editingId
+      ? { ...c, invoice: data.invoice, invoiceDate: data.invoiceDate, bankAccount: data.bankAccount || "", invoiceNotes: data.invoiceNotes || "", status: "Facturado" }
+      : c
+  );
+  activeView = "collections";
+}
+
+function openProgramarCobrosDialog(quoteId) {
+  const q = state.quotes.find(x => x.id === quoteId);
+  if (!q) return;
+  editingId = quoteId;
+  const current = q.cuotas || 2;
+  const calc = calcQuote(q, state);
+  const sym = q.currency === "USD" ? "$" : "S/";
+  const previewForCuotas = n => {
+    const parts = n === 3 ? [1/3,1/3,1/3] : n === 2 ? [0.5,0.5] : [1];
+    return parts.map((p, i) => {
+      const label = n === 1 ? "Pago 100%" : `Pago ${i+1}/${n}`;
+      return `<div class="cuota-preview-row"><span>${label}</span><strong>${sym} ${(calc.total * p).toFixed(2)}</strong></div>`;
+    }).join("");
+  };
+  dialogShell("programarCobros", `Programar cobros — ${q.code}`, `
+    <div class="form-grid">
+      <label class="full">Número de cuotas
+        <div class="cuotas-btn-group">
+          <button type="button" class="cuotas-opt ${current === 1 ? "active" : ""}" data-cuotas="1">1 cuota<br><small>100% al inicio</small></button>
+          <button type="button" class="cuotas-opt ${current === 2 ? "active" : ""}" data-cuotas="2">2 cuotas<br><small>50% / 50%</small></button>
+          <button type="button" class="cuotas-opt ${current === 3 ? "active" : ""}" data-cuotas="3">3 cuotas<br><small>33% / 33% / 33%</small></button>
+        </div>
+        <input type="hidden" name="cuotas" id="cuotasHidden" value="${current}">
+      </label>
+      <div class="full cuota-preview" id="cuotaPreview">${previewForCuotas(current)}</div>
+    </div>
+  `);
+  const dialog = document.querySelector("#appDialog");
+  dialog.querySelectorAll(".cuotas-opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      dialog.querySelectorAll(".cuotas-opt").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const n = Number(btn.dataset.cuotas);
+      dialog.querySelector("#cuotasHidden").value = n;
+      dialog.querySelector("#cuotaPreview").innerHTML = previewForCuotas(n);
+    });
+  });
+}
+
+function saveProgramarCobros(data) {
+  const q = state.quotes.find(x => x.id === editingId);
+  if (!q) return;
+  q.cuotas = Number(data.cuotas) || 2;
+  syncQuoteSideEffects(state, q);
+  activeView = "collections";
 }
 
 function openExpenseDialog(expense = null) {
@@ -1616,8 +3765,8 @@ function openExpenseDialog(expense = null) {
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date || today()}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Tipo<input name="type" list="dl-expense-types" value="${escapeAttr(item.type)}" required></label>
-      <label>Encargado<input name="owner" list="dl-owners" value="${escapeAttr(item.owner)}"></label>
+      <label>Tipo<input name="type" value="${escapeAttr(item.type)}" required></label>
+      <label>Encargado${ownerSelect(item.owner)}</label>
       <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Completado"], item.status)}</select></label>
@@ -1625,19 +3774,22 @@ function openExpenseDialog(expense = null) {
       <label><input type="checkbox" name="refund" ${item.refund ? "checked" : ""}> Es devolución</label>
       <label><input type="checkbox" name="isAdSpend" ${item.isAdSpend ? "checked" : ""}> Pauta publicitaria (ads)</label>
     </div>
-    ${buildDatalicists()}
   `);
+  bindDialogAutofills();
 }
 
-function openTaxPaymentDialog(record = null) {
+function openTaxPaymentDialog(record = null, prefill = {}) {
   const item = record || newTaxPayment();
   editingId = record?.id || "";
+  const typeVal = prefill.type || item.type;
+  const amountVal = prefill.amount !== undefined ? prefill.amount : item.amount;
+  const periodVal = prefill.period || item.period;
   dialogShell("taxPayment", editingId ? "Editar pago a SUNAT" : "Nuevo pago a SUNAT", `
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
-      <label>Tipo<select name="type">${options(["IGV 1011", "Renta 3121", "Detracción", "Otro"], item.type)}</select></label>
-      <label>Periodo<select name="period">${options(months, item.period)}</select></label>
-      <label>Monto<input name="amount" type="number" min="0" step="0.01" value="${item.amount}" required></label>
+      <label>Tipo<select name="type">${options(["IGV 1011", "Renta 3121", "Detracción", "Autodetracción", "Otro"], typeVal)}</select></label>
+      <label>Periodo<select name="period">${options(months, periodVal)}</select></label>
+      <label>Monto<input name="amount" type="number" min="0" step="0.01" value="${amountVal}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
       <label>Ref. SUNAT<input name="sunatRef" value="${escapeAttr(item.sunatRef)}" placeholder="N° operación SUNAT"></label>
       <label class="full">Link carpeta<input name="docLink" type="url" value="${escapeAttr(item.docLink)}" placeholder="https://drive.google.com/..."></label>
@@ -1648,19 +3800,53 @@ function openTaxPaymentDialog(record = null) {
 function openTeamDialog(payment = null) {
   const item = payment || newTeamPayment();
   editingId = payment && state.team.some(t => t.id === payment.id) ? payment.id : "";
+  const profiles = state.profiles || [];
+  const isComm = profileHasCommission(item.role) || (!editingId && profileHasCommission(profiles[0]?.name));
+  const comm = calcTeamCommission(item.name);
+  const profileOpts = profiles.map(p => `<option value="${escapeAttr(p.name)}" ${p.name === item.role ? "selected" : ""}>${escapeHtml(p.name)}${p.hasCommission ? " ★" : ""}</option>`).join("");
   dialogShell("team", editingId ? "Editar pago" : "Nuevo pago de personal", `
     <div class="form-grid">
       <label>Fecha<input name="dueDate" type="date" value="${item.dueDate || today()}" required></label>
-      <label>Nombre<input name="name" value="${escapeAttr(item.name)}" required></label>
-      <label>Tipo<input name="role" value="${escapeAttr(item.role)}" required></label>
+      <label>Perfil<select name="role"><option value="">— Seleccionar perfil —</option>${profileOpts}</select></label>
+      <label>Nombre completo<input name="name" value="${escapeAttr(item.name)}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
       <label>Monto<input name="amount" type="number" step="0.01" value="${item.amount}" required></label>
       <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
-      <label>RUC<input name="ruc" value="${escapeAttr(item.ruc)}" placeholder="20XXXXXXXXX"></label>
-      <label>Banco<input name="bankName" value="${escapeAttr(item.bankName)}" placeholder="Interbank, BCP..."></label>
+      <label>Nombre de Banco<input name="bankName" value="${escapeAttr(item.bankName)}" placeholder="Interbank, BCP..."></label>
+      <label>Nro de cuenta<input name="accountNumber" value="${escapeAttr(item.accountNumber)}" placeholder="000-0000000-0-00"></label>
       <label class="full">CCI<input name="cci" value="${escapeAttr(item.cci)}" placeholder="00300000000000000000"></label>
       <label class="full">Link RHE<input name="receipt" type="url" value="${escapeAttr(item.receipt)}" placeholder="https://..."></label>
+      ${isComm ? `
+      <div class="form-divider full">Comisión de ventas <strong style="color:var(--brand)">${fmt(comm, item.currency)}</strong></div>
+      <label>Factura comisión<input name="commInvoice" value="${escapeAttr(item.commInvoice)}" placeholder="S/N o número de factura"></label>
+      <label class="full">Repositorio comisión<input name="commRepo" type="url" value="${escapeAttr(item.commRepo)}" placeholder="https://drive.google.com/..."></label>
+      ` : `<input type="hidden" name="commInvoice" value="${escapeAttr(item.commInvoice)}"><input type="hidden" name="commRepo" value="${escapeAttr(item.commRepo)}">`}
     </div>
-    ${buildDatalicists()}
+  `);
+  bindDialogAutofills();
+}
+
+function openDeclaracionDialog(record = null, prefill = {}) {
+  const item = record || newDeclaracion();
+  editingId = record?.id || "";
+  const igvRate = state.settings.igvRate || 0.18;
+  const igvVentas = collectionRows()
+    .filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status))
+    .reduce((s, r) => s + (r.quote?.hasIgv ? r.amount - r.amount / (1 + igvRate) : 0), 0);
+  const creditoFiscal = (state.purchases || [])
+    .reduce((s, p) => s + (p.igv || 0), 0);
+  const igvSugerido = Math.max(0, igvVentas - creditoFiscal);
+  dialogShell("declaracion", editingId ? "Editar declaración" : "Nueva declaración mensual", `
+    <div class="form-grid">
+      <label>Periodo<select name="period">${options(months, prefill.period || item.period)}</select></label>
+      <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
+      <label>IGV 1011 (S/)<input name="igv1011" type="number" min="0" step="0.01" value="${prefill.igv1011 !== undefined ? prefill.igv1011 : item.igv1011 || igvSugerido.toFixed(2)}" placeholder="Calculado: ${fmt(igvSugerido)}" required></label>
+      <label>Renta 3121 (S/)<input name="renta3121" type="number" min="0" step="0.01" value="${item.renta3121}" required></label>
+      <label>Otro (S/)<input name="otro" type="number" min="0" step="0.01" value="${item.otro}" required></label>
+      <label>Concepto otro<input name="otroConcepto" value="${escapeAttr(item.otroConcepto)}" placeholder="Ej: ITAN, multa..."></label>
+      <label class="full">Notas<textarea name="notes" rows="2">${escapeHtml(item.notes)}</textarea></label>
+    </div>
+    <p class="form-note">Referencia: IGV ventas ${fmt(igvVentas)} · Crédito fiscal ${fmt(creditoFiscal)} · IGV estimado ${fmt(igvSugerido)}</p>
   `);
 }
 
@@ -1671,16 +3857,20 @@ function openPurchaseDialog(purchase = null) {
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Proveedor<input name="vendor" list="dl-vendors" value="${escapeAttr(item.vendor)}" required></label>
-      <label>RUC proveedor<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
+      <label>Proveedor<input name="vendor" value="${escapeAttr(item.vendor)}" required></label>
+      <label>RUC proveedor<input name="ruc" value="${escapeAttr(item.ruc)}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="11"></label>
       <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
       <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
       <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required></label>
       <label>Base imponible<input name="subtotal" type="number" step="0.01" value="${item.subtotal}" required></label>
       <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
       <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
+      <label>Detracción<input name="detraction" type="number" step="0.01" value="${item.detraction || 0}"></label>
+      <label>Fecha RP<input name="paidDate" type="date" value="${item.paidDate || ""}"></label>
+      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${item.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Estado declaración<select name="declared">${options(["Sin declarar", "Declarado"], item.declared || "Sin declarar")}</select></label>
+      <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(item.repo || "")}" placeholder="https://..."></label>
     </div>
-    ${buildDatalicists()}
   `);
   bindDialogAutofills();
 }
@@ -1692,48 +3882,167 @@ function openInvoicedSaleDialog(sale = null) {
     <div class="form-grid">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
       <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
-      <label>Cliente<input name="client" list="dl-clients" value="${escapeAttr(item.client)}" required></label>
-      <label>RUC cliente<input name="ruc" value="${escapeAttr(item.ruc)}"></label>
+      <label>Cliente${clientSelect(item.client)}</label>
+      <label>RUC cliente<input name="ruc" value="${escapeAttr(item.ruc)}" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="11"></label>
       <label>Tipo comprobante<select name="invoiceType">${options(["Factura", "Boleta", "Recibo", "Otro"], item.invoiceType)}</select></label>
       <label>N° comprobante<input name="invoiceNum" value="${escapeAttr(item.invoiceNum)}" placeholder="F001-0000001"></label>
-      <label class="full">Servicio<input name="service" list="dl-services" value="${escapeAttr(item.service)}" required></label>
+      <label class="full">Servicio${serviceSelect(item.service)}</label>
       <label>Base imponible<input name="subtotal" type="number" step="0.01" value="${item.subtotal}" required></label>
       <label>IGV<input name="igv" type="number" step="0.01" value="${item.igv}"></label>
       <label>Total<input name="total" type="number" step="0.01" value="${item.total}" required></label>
     </div>
-    ${buildDatalicists()}
   `);
   bindDialogAutofills();
 }
 
-function handleEntitySubmit(event) {
-  if (event.submitter.value === "cancel") return;
-  event.preventDefault();
-  const data = Object.fromEntries(new FormData(event.currentTarget));
-  if (editingType === "lead") saveLead(data);
-  if (editingType === "quote") saveQuote(data);
-  if (editingType === "client") saveClient(data);
-  if (editingType === "collection") saveCollection(data);
-  if (editingType === "expense") saveExpense(data);
-  if (editingType === "taxPayment") saveTaxPayment(data);
-  if (editingType === "team") saveTeam(data);
-  if (editingType === "purchase") savePurchase(data);
-  if (editingType === "invoicedSale") saveInvoicedSale(data);
+function openCashEntryDialog(type = "egreso", entry = null) {
+  const defaultBank = activeCajaTab && activeCajaTab !== "general" ? activeCajaTab : (state.settings.bankAccounts?.[0] || "");
+  const item = entry || newCashEntry({ type, bankAccount: defaultBank });
+  editingId = entry?.id || "";
+  const isIngreso = (entry?.type || type) === "ingreso";
+  const catOptions = isIngreso
+    ? ["Cobro de venta", "Adelanto", "Otro ingreso"]
+    : ["Gasto fijo", "Gasto variable", "Personal", "Impuesto", "Inversión", "Otro egreso"];
+  const bankOpts = (state.settings.bankAccounts || []);
+  dialogShell("cashEntry", editingId ? "Editar movimiento" : (isIngreso ? "Nuevo ingreso" : "Nuevo egreso"), `
+    <div class="form-grid">
+      <input type="hidden" name="type" value="${isIngreso ? "ingreso" : "egreso"}">
+      <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
+      <label>Moneda<select name="currency"><option value="PEN" ${item.currency !== "USD" ? "selected" : ""}>Soles (S/)</option><option value="USD" ${item.currency === "USD" ? "selected" : ""}>Dólares ($)</option></select></label>
+      <label class="full">Concepto<input name="concept" value="${escapeAttr(item.concept)}" required placeholder="${isIngreso ? "Ej: Pago proyecto Calma Vital" : "Ej: Correo corporativo"}"></label>
+      <label>Categoría<select name="category"><option value="">— Categoría —</option>${catOptions.map(c => `<option value="${escapeAttr(c)}" ${item.category === c ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}</select></label>
+      <label>Monto<input name="amount" type="number" step="0.01" min="0" value="${item.amount || ""}" required></label>
+      <label>Estado<select name="status">${options(["Confirmado", "Pendiente"], item.status)}</select></label>
+      <label>Cuenta bancaria<select name="bankAccount"><option value="">— Sin cuenta —</option>${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${item.bankAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}</select></label>
+      <label>Factura<input name="invoice" value="${escapeAttr(item.invoice || "")}" placeholder="F001-00001"></label>
+      <label class="full">Notas<textarea name="notes" rows="2">${escapeHtml(item.notes)}</textarea></label>
+    </div>
+  `);
+  bindDialogAutofills();
+}
+
+function saveCashEntry(data) {
+  const item = newCashEntry({ ...data, id: editingId || undefined });
+  if (!state.cashEntries) state.cashEntries = [];
+  if (editingId) state.cashEntries = state.cashEntries.map(e => e.id === editingId ? item : e);
+  else state.cashEntries.unshift(item);
+  const banks = state.settings.bankAccounts || [];
+  if (item.bankAccount && banks.includes(item.bankAccount)) activeCajaTab = item.bankAccount;
+  else if (banks.length) activeCajaTab = banks[0];
   saveState();
-  quoteDialog.close();
-  render();
+  activeView = "finance";
+}
+
+function bindQuoteCalcPreview() {
+  const subtotalEl = document.getElementById("quoteSubtotal");
+  const igvEl      = document.getElementById("quoteHasIgv");
+  const curEl      = document.getElementById("quoteCurrency");
+  const previewEl  = document.getElementById("quoteCalcPreview");
+  if (!subtotalEl || !previewEl) return;
+
+  const igvRate  = state.settings.igvRate  || 0.18;
+  const commRate = state.settings.commissionRate || 0.05;
+
+  const update = () => {
+    const subtotal = parseFloat(subtotalEl.value) || 0;
+    const hasIgv   = igvEl?.checked || false;
+    const cur      = curEl?.value || "PEN";
+    const sym      = cur === "USD" ? "$" : "S/";
+    const igv      = hasIgv ? subtotal * igvRate : 0;
+    const total    = subtotal + igv;
+    const comm     = subtotal * commRate;
+    const f = n => sym + " " + n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById("previewIGV").textContent  = f(igv);
+    document.getElementById("previewTotal").textContent = f(total);
+    document.getElementById("previewComm").textContent = f(comm);
+    previewEl.classList.toggle("has-igv", hasIgv);
+  };
+
+  subtotalEl.addEventListener("input", update);
+  igvEl?.addEventListener("change", update);
+  curEl?.addEventListener("change", update);
+  update();
+}
+
+function bindSaleCalcPreview() {
+  const subtotalEl = document.getElementById("saleSubtotal");
+  const igvEl      = document.getElementById("saleHasIgv");
+  const curEl      = document.getElementById("saleCurrency");
+  const previewEl  = document.getElementById("saleCalcPreview");
+  if (!subtotalEl || !previewEl) return;
+
+  const igvRate   = state.settings.igvRate  || 0.18;
+  const commRate  = state.settings.commissionRate || 0.05;
+  const detRate   = state.settings.detractionRate || 0.12;
+  const threshold = state.settings.detractionThreshold ?? 700;
+
+  const update = () => {
+    const subtotal = parseFloat(subtotalEl.value) || 0;
+    const hasIgv   = igvEl?.checked || false;
+    const cur      = curEl?.value || "PEN";
+    const sym      = cur === "USD" ? "$" : "S/";
+    const igv      = hasIgv ? subtotal * igvRate : 0;
+    const total    = subtotal + igv;
+    const det      = total > threshold && hasIgv && cur === "PEN" ? total * detRate : 0;
+    const comm     = subtotal * commRate;
+    const f = n => sym + " " + n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById("salePreviewIGV").textContent   = f(igv);
+    document.getElementById("salePreviewTotal").textContent = f(total);
+    document.getElementById("salePreviewDet").textContent   = f(det);
+    document.getElementById("salePreviewComm").textContent  = f(comm);
+    previewEl.classList.toggle("has-igv", hasIgv);
+  };
+
+  subtotalEl.addEventListener("input", update);
+  igvEl?.addEventListener("change", update);
+  curEl?.addEventListener("change", update);
+  update();
+}
+
+function handleEntitySubmit(event) {
+  if (event.submitter?.value === "cancel") return;
+  event.preventDefault();
+  try {
+    if (!validateFormBeforeSubmit(event.currentTarget)) return;
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    if (editingType === "lead") saveLead(data);
+    if (editingType === "quote") saveQuote(data);
+    if (editingType === "client") saveClient(data);
+    if (editingType === "sale") saveSale(data);
+    if (editingType === "collection") saveCollection(data);
+    if (editingType === "invoiceCollection") saveInvoiceCollection(data);
+    if (editingType === "expense") saveExpense(data);
+    if (editingType === "taxPayment") saveTaxPayment(data);
+    if (editingType === "team") saveTeam(data);
+    if (editingType === "purchase") savePurchase(data);
+    if (editingType === "invoicedSale") saveInvoicedSale(data);
+    if (editingType === "declaracion") saveDeclaracion(data);
+    if (editingType === "programarCobros") { saveProgramarCobros(data); saveState(); quoteDialog.close(); render(); showToast(); return; }
+    if (editingType === "cashEntry") { saveCashEntry(data); quoteDialog.close(); render(); showToast(); return; }
+    saveState();
+    quoteDialog.close();
+    render();
+    showToast();
+  } catch (err) {
+    console.error("Error al guardar:", err);
+    showToast("Error al guardar: " + err.message);
+  }
 }
 
 function saveLead(data) {
+  saveServiceIfNew(data.service);
   const item = newLead(data);
   if (editingId) state.leads = state.leads.map(l => l.id === editingId ? { ...l, ...item, id: editingId, quoteId: l.quoteId } : l);
   else state.leads.unshift(item);
   syncClientsFromActivity();
-  activeView = "leads";
+  activeView = "quotes";
 }
 
 function saveQuote(data) {
-  const item = newQuote({ ...data, subtotal: Number(data.subtotal), hasIgv: data.hasIgv === "on" });
+  saveServiceIfNew(data.service);
+  const existing = editingId ? state.quotes.find(q => q.id === editingId) : null;
+  const item = newQuote({ ...data, subtotal: Number(data.subtotal), hasIgv: data.hasIgv === "on", wonDate: existing?.wonDate || "" });
+  if (item.status === "Ganado" && !item.wonDate) item.wonDate = today();
   if (editingId) state.quotes = state.quotes.map(q => q.id === editingId ? { ...q, ...item, id: editingId } : q);
   else state.quotes.unshift(item);
   const saved = editingId ? state.quotes.find(q => q.id === editingId) : state.quotes[0];
@@ -1749,7 +4058,20 @@ function saveClient(data) {
 }
 
 function saveCollection(data) {
-  state.collections = state.collections.map(c => c.id === editingId ? { ...c, ...data, amount: Number(data.amount), detraction: Number(data.detraction || 0), bankAccount: data.bankAccount || "" } : c);
+  state.collections = state.collections.map(c => {
+    if (c.id !== editingId) return c;
+    const paidDate = data.paidDate || (data.status === "Pagado" ? today() : c.paidDate);
+    return {
+      ...c,
+      status: data.status || c.status,
+      invoice: data.invoice !== undefined ? data.invoice : c.invoice,
+      bankAccount: data.bankAccount || c.bankAccount || "",
+      dueDate: data.dueDate || c.dueDate,
+      paidDate,
+      declared: data.declared || c.declared || "Sin declarar",
+      repo: data.repo !== undefined ? data.repo : (c.repo || "")
+    };
+  });
   activeView = "collections";
 }
 
@@ -1764,7 +4086,14 @@ function saveTaxPayment(data) {
   const item = newTaxPayment(data);
   if (editingId) state.taxPayments = (state.taxPayments || []).map(t => t.id === editingId ? { ...t, ...item, id: editingId } : t);
   else state.taxPayments = [item, ...(state.taxPayments || [])];
-  activeView = "taxes";
+  activeView = "comprobantes";
+}
+
+function saveDeclaracion(data) {
+  const item = newDeclaracion(data);
+  if (editingId) state.declaraciones = (state.declaraciones || []).map(d => d.id === editingId ? { ...d, ...item, id: editingId } : d);
+  else state.declaraciones = [item, ...(state.declaraciones || [])];
+  activeView = "comprobantes";
 }
 
 function savePurchase(data) {
@@ -1788,6 +4117,13 @@ function saveTeam(data) {
   activeView = "team";
 }
 
+function duplicateTeamPayment(id) {
+  const original = state.team.find(t => t.id === id);
+  if (!original) return;
+  state.team.unshift({ ...original, id: uid(), status: "Pendiente" });
+  saveState(); render();
+}
+
 function escapeHtml(text = "") {
   return String(text).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[ch]));
 }
@@ -1796,47 +4132,193 @@ function escapeAttr(text = "") {
   return escapeHtml(text);
 }
 
-function buildDatalicists() {
-  const dl = (id, vals) => `<datalist id="${id}">${[...new Set(vals.filter(Boolean))].map(v => `<option value="${escapeAttr(v)}">`).join("")}</datalist>`;
-  return [
-    dl("dl-clients",  state.clients.map(c => c.name)),
-    dl("dl-owners",   [...state.leads, ...state.quotes, ...state.team].map(i => i.owner || i.name).filter(s => s && s.length > 1)),
-    dl("dl-categories", state.quotes.map(q => q.category)),
-    dl("dl-services", state.quotes.map(q => q.service).slice(0, 40)),
-    dl("dl-expense-types", state.expenses.map(e => e.type)),
-    dl("dl-sources",  state.leads.map(l => l.source)),
-    dl("dl-channels", state.leads.map(l => l.channel)),
-    dl("dl-vendors",  (state.purchases || []).map(p => p.vendor))
-  ].join("");
+function initAC(input, getOptions, { label = "opción", onSelect = null, onCreate = null } = {}) {
+  let dropdown = null;
+  let activeIdx = -1;
+
+  function getOpts() {
+    return [...new Set(getOptions().filter(Boolean))];
+  }
+
+  function positionDropdown() {
+    const r = input.getBoundingClientRect();
+    dropdown.style.top = (r.bottom + window.scrollY + 4) + "px";
+    dropdown.style.left = (r.left + window.scrollX) + "px";
+    dropdown.style.width = r.width + "px";
+  }
+
+  function render(term) {
+    const all = getOpts();
+    const q = term.trim().toLowerCase();
+    const filtered = all.filter(o => o.toLowerCase().includes(q)).slice(0, 10);
+    const isNew = q.length > 0 && !all.some(o => o.toLowerCase() === q);
+
+    if (!filtered.length && !isNew) { close(); return; }
+
+    if (!dropdown) {
+      dropdown = document.createElement("div");
+      dropdown.className = "ac-dropdown";
+      document.body.appendChild(dropdown);
+    }
+    positionDropdown();
+
+    dropdown.innerHTML = filtered.map((opt, i) =>
+      `<div class="ac-option" data-idx="${i}" data-value="${escapeAttr(opt)}">${escapeHtml(opt)}</div>`
+    ).join("") + (isNew
+      ? `<div class="ac-create" data-create="${escapeAttr(term.trim())}">← crear ${escapeHtml(label)} <strong>"${escapeHtml(term.trim())}"</strong></div>`
+      : "");
+
+    dropdown.querySelectorAll(".ac-option").forEach(el => {
+      el.addEventListener("mousedown", e => { e.preventDefault(); pick(el.dataset.value); });
+    });
+    const cEl = dropdown.querySelector(".ac-create");
+    if (cEl) cEl.addEventListener("mousedown", e => { e.preventDefault(); create(cEl.dataset.create); });
+
+    activeIdx = -1;
+  }
+
+  function close() {
+    if (dropdown) { dropdown.remove(); dropdown = null; }
+    activeIdx = -1;
+  }
+
+  function pick(value) {
+    input.value = value;
+    close();
+    if (onSelect) onSelect(value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function create(value) {
+    if (onCreate) onCreate(value);
+    pick(value);
+  }
+
+  input.addEventListener("input", () => {
+    const t = input.value;
+    if (!t) { close(); return; }
+    render(t);
+  });
+
+  input.addEventListener("focus", () => { if (input.value) render(input.value); });
+  input.addEventListener("blur", () => setTimeout(close, 180));
+
+  input.addEventListener("keydown", e => {
+    if (!dropdown) {
+      if (e.key === "Enter") return;
+      return;
+    }
+    const items = [...dropdown.querySelectorAll(".ac-option, .ac-create")];
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, items.length - 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+    } else if (e.key === "Enter") {
+      if (activeIdx >= 0) {
+        e.preventDefault();
+        items[activeIdx].dispatchEvent(new MouseEvent("mousedown"));
+        return;
+      }
+      const q = input.value.trim();
+      const isNew = q && !getOpts().some(o => o.toLowerCase() === q.toLowerCase());
+      if (isNew) { e.preventDefault(); create(q); }
+    } else if (e.key === "Escape") {
+      close();
+    }
+    items.forEach((el, i) => el.classList.toggle("active", i === activeIdx));
+  });
+
+  window.addEventListener("scroll", () => { if (dropdown) positionDropdown(); }, true);
+  window.addEventListener("resize", () => { if (dropdown) positionDropdown(); });
 }
 
 function bindDialogAutofills() {
   const form = quoteDialog.querySelector("form");
   if (!form) return;
-  const clientInput = form.querySelector('[name="client"], [name="name"]');
-  if (!clientInput) return;
+
+  // RUC/DNI: solo números, máx 11 dígitos
+  form.querySelectorAll("input[name='ruc']").forEach(inp => {
+    inp.addEventListener("input", () => {
+      inp.value = inp.value.replace(/\D/g, "").slice(0, 11);
+    });
+  });
+
+  const uniq = arr => [...new Set(arr.filter(s => s && s.length > 0))];
+  const getClients    = () => uniq(state.clients.map(c => c.name));
+  const getOwners     = () => uniq([...state.leads, ...state.quotes, ...state.team].map(i => i.owner || i.name));
+  const getCategories = () => uniq(state.quotes.map(q => q.category));
+  const getServices   = () => uniq(state.quotes.map(q => q.service));
+  const getSources    = () => uniq(state.leads.map(l => l.source));
+  const getChannels   = () => uniq(state.leads.map(l => l.channel));
+  const getExpTypes   = () => uniq(state.expenses.map(e => e.type));
+  const getVendors    = () => uniq((state.purchases || []).map(p => p.vendor));
+
   const fill = (name, value) => {
     const el = form.querySelector(`[name="${name}"]`);
     if (el && !el.value) el.value = value || "";
   };
-  clientInput.addEventListener("input", () => {
-    const found = state.clients.find(c => c.name.toLowerCase() === clientInput.value.trim().toLowerCase());
+
+  const onClientSelect = name => {
+    const found = state.clients.find(c => c.name.toLowerCase() === name.toLowerCase());
+    const set = (fieldName, value) => {
+      const el = form.querySelector(`[name="${fieldName}"]`);
+      if (el) el.value = found ? (value || "") : "";
+    };
+    set("ruc",        found?.ruc);
+    set("contact",    found?.contact);
+    set("email",      found?.email);
+    set("phone",      found?.phone);
+    set("owner",      found?.owner);
+    set("clientType", found?.clientType);
+    set("country",    found?.country);
+  };
+
+  const onVendorSelect = name => {
+    const found = (state.purchases || []).find(p => p.vendor.toLowerCase() === name.toLowerCase());
     if (!found) return;
     fill("ruc", found.ruc);
-    fill("contact", found.contact);
-    fill("email", found.email);
-    fill("phone", found.phone);
-    fill("owner", found.owner);
-  });
-  // Vendor autofill for purchases
-  const vendorInput = form.querySelector('[name="vendor"]');
-  if (vendorInput) {
-    vendorInput.addEventListener("input", () => {
-      const found = (state.purchases || []).find(p => p.vendor.toLowerCase() === vendorInput.value.trim().toLowerCase());
-      if (!found) return;
-      fill("ruc", found.ruc);
+  };
+
+  const createClient = name => {
+    if (!state.clients.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+      state.clients.unshift(newClient({ name }));
+      saveState();
+    }
+  };
+
+  const getTeamNames  = () => uniq(state.team.map(t => t.name));
+  const getTeamRoles  = () => uniq(state.team.map(t => t.role));
+  const getTeamBanks  = () => uniq(state.team.map(t => t.bankName).filter(Boolean));
+
+  const isTeam = editingType === "team";
+
+  const acMap = [
+    { names: isTeam ? [] : ["client", "name"], getOpts: getClients,    label: "cliente",    onSelect: onClientSelect, onCreate: createClient },
+    { names: isTeam ? ["name"]  : [],          getOpts: getTeamNames,  label: "persona" },
+    { names: isTeam ? ["role"]  : [],          getOpts: getTeamRoles,  label: "tipo" },
+    { names: isTeam ? ["bankName"] : [],       getOpts: getTeamBanks,  label: "banco" },
+    { names: ["owner"],                        getOpts: getOwners,     label: "comercial" },
+    { names: ["category"],                     getOpts: getCategories, label: "categoría" },
+    { names: ["service"],                      getOpts: getServices,   label: "servicio" },
+    { names: ["source"],                       getOpts: getSources,    label: "fuente" },
+    { names: ["channel"],                      getOpts: getChannels,   label: "canal" },
+    { names: ["type"],                         getOpts: getExpTypes,   label: "tipo" },
+    { names: ["vendor"],                       getOpts: getVendors,    label: "proveedor",  onSelect: onVendorSelect },
+  ];
+
+  acMap.forEach(({ names, getOpts, label, onSelect = null, onCreate = null }) => {
+    names.forEach(name => {
+      const input = form.querySelector(`[name="${name}"]`);
+      if (!input) return;
+      if (input.tagName === "SELECT") {
+        if (onSelect) input.addEventListener("change", () => onSelect(input.value));
+      } else {
+        initAC(input, getOpts, { label, onSelect, onCreate });
+      }
     });
-  }
+  });
 }
 
 function drawCharts() {
@@ -1844,78 +4326,188 @@ function drawCharts() {
   if (!canvas) return;
   const ratio = devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
   canvas.width = rect.width * ratio;
   canvas.height = rect.height * ratio;
   const ctx = canvas.getContext("2d");
   ctx.scale(ratio, ratio);
   ctx.clearRect(0, 0, rect.width, rect.height);
-  const snapshot = dashboardSnapshot();
+
+  // Determine granularity from current filter range
+  const rStart = parseDate(dashboardRange.start);
+  const rEnd   = parseDate(dashboardRange.end);
+  const diffDays = Math.round((rEnd - rStart) / 86400000);
+
   const periods = [];
-  const cursor = new Date(parseDate(dashboardRange.start).getFullYear(), parseDate(dashboardRange.start).getMonth(), 1);
-  const last = new Date(parseDate(dashboardRange.end).getFullYear(), parseDate(dashboardRange.end).getMonth(), 1);
-  while (cursor <= last && periods.length < 12) {
-    periods.push({
-      key: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`,
-      label: new Intl.DateTimeFormat("es-PE", { month: "short" }).format(cursor).replace(".", "")
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
+  const dayFmt  = d => new Intl.DateTimeFormat("es-PE", { day:"numeric", month:"short" }).format(d).replace(".","");
+  const monFmt  = d => new Intl.DateTimeFormat("es-PE", { month:"short" }).format(d).replace(".","");
+
+  if (diffDays <= 1) {
+    // Single day → one bar labelled with the date
+    periods.push({ key: dashboardRange.start, label: dayFmt(rStart), type: "day" });
+  } else if (diffDays <= 14) {
+    // Up to 2 weeks → one bar per day
+    const cur = new Date(rStart);
+    while (cur <= rEnd && periods.length <= 14) {
+      const key = cur.toISOString().slice(0, 10);
+      periods.push({ key, label: dayFmt(new Date(key + "T12:00:00")), type: "day" });
+      cur.setDate(cur.getDate() + 1);
+    }
+  } else if (diffDays <= 90) {
+    // Up to 3 months → one bar per week (Mon–Sun)
+    const cur = new Date(rStart);
+    // align to Monday
+    const dow = cur.getDay(); const off = dow === 0 ? -6 : 1 - dow;
+    cur.setDate(cur.getDate() + off);
+    while (cur <= rEnd && periods.length <= 18) {
+      const key = cur.toISOString().slice(0, 10);
+      const label = dayFmt(new Date(key + "T12:00:00"));
+      const weekEnd = new Date(cur); weekEnd.setDate(cur.getDate() + 6);
+      periods.push({ key, keyEnd: weekEnd.toISOString().slice(0, 10), label, type: "week" });
+      cur.setDate(cur.getDate() + 7);
+    }
+  } else {
+    // Month granularity
+    const cur = new Date(rStart.getFullYear(), rStart.getMonth(), 1);
+    const last = new Date(rEnd.getFullYear(), rEnd.getMonth(), 1);
+    while (cur <= last && periods.length <= 24) {
+      const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}`;
+      periods.push({ key, label: monFmt(cur), type: "month" });
+      cur.setMonth(cur.getMonth() + 1);
+    }
   }
-  const labels = periods.map(period => period.label);
-  const values = periods.map(period => snapshot.won
-    .filter(quote => quote.date.startsWith(period.key))
-    .reduce((sum, quote) => sum + quote.total, 0));
-  const max = Math.max(...values, state.settings.monthlyGoal) * 1.15;
-  const pad = 34;
-  ctx.strokeStyle = "#dde5ec";
-  ctx.beginPath();
-  ctx.moveTo(pad, rect.height - pad);
-  ctx.lineTo(rect.width - 10, rect.height - pad);
-  ctx.stroke();
-  labels.forEach((m, i) => {
-    const divisor = Math.max(labels.length - 1, 1);
-    const x = labels.length === 1 ? rect.width / 2 : pad + i * ((rect.width - pad - 20) / divisor);
-    const h = (values[i] / max) * (rect.height - 70);
-    ctx.fillStyle = "#4f7cff";
-    ctx.fillRect(x - 15, rect.height - pad - h, 30, h);
-    ctx.fillStyle = "#657286";
-    ctx.font = "12px Inter, sans-serif";
-    ctx.fillText(m, x - 11, rect.height - 10);
+
+  // Aggregate data per period
+  const allColl = collectionRows();
+  const wonValues = periods.map(p => {
+    if (p.type === "week")
+      return state.quotes.filter(q => q.status === "Ganado" && (q.wonDate||q.date||"") >= p.key && (q.wonDate||q.date||"") <= p.keyEnd).reduce((s,q) => s+calcQuote(q).total, 0);
+    return state.quotes.filter(q => q.status === "Ganado" && (q.wonDate||q.date||"").startsWith(p.key)).reduce((s,q) => s+calcQuote(q).total, 0);
   });
-  const goalY = rect.height - pad - (state.settings.monthlyGoal / max) * (rect.height - 70);
-  ctx.strokeStyle = "#ff8a7a";
-  ctx.setLineDash([6, 5]);
-  ctx.beginPath();
-  ctx.moveTo(pad, goalY);
-  ctx.lineTo(rect.width - 10, goalY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = "#ff8a7a";
-  ctx.fillText("Meta mensual", pad, goalY - 8);
+  const cobValues = periods.map(p => {
+    if (p.type === "week")
+      return allColl.filter(c => c.status === "Pagado" && (c.paidDate||"") >= p.key && (c.paidDate||"") <= p.keyEnd).reduce((s,c) => s+c.amount, 0);
+    return allColl.filter(c => c.status === "Pagado" && (c.paidDate||"").startsWith(p.key)).reduce((s,c) => s+c.amount, 0);
+  });
+  const egrValues = periods.map(p => {
+    const inRange = (d) => p.type === "week" ? d >= p.key && d <= p.keyEnd : d.startsWith(p.key);
+    const expSum  = state.expenses.filter(e => inRange(e.date||"")).reduce((s,e)=>s+e.amount,0);
+    const teamSum = state.team.filter(t => inRange(t.dueDate||monthDate(t.month)||"")).reduce((s,t)=>s+t.amount,0);
+    return expSum + teamSum;
+  });
+
+  const goal = state.settings.monthlyGoal || 0;
+  const showGoal = p => p.type === "month" && goal > 0;
+  const max = Math.max(...wonValues, ...cobValues, ...egrValues, goal) * 1.2 || 1;
+  const padL = 52, padB = 34, padT = 24, padR = 14;
+  const chartW = rect.width - padL - padR;
+  const chartH = rect.height - padB - padT;
+  const n = periods.length;
+  const groupW = chartW / n;
+  const barW = Math.min(20, Math.max(6, groupW * 0.26));
+
+  // Grid lines + Y labels
+  const gridLines = 4;
+  ctx.font = `11px Inter, sans-serif`;
+  for (let i = 0; i <= gridLines; i++) {
+    const v = (max / gridLines) * i;
+    const y = padT + chartH - (v / max) * chartH;
+    ctx.strokeStyle = "#e8eef4";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(rect.width - padR, y); ctx.stroke();
+    ctx.fillStyle = "#94a3b8";
+    const lbl = v >= 1000 ? `${(v/1000).toFixed(v>=10000?0:1)}k` : `${Math.round(v)}`;
+    ctx.fillText(lbl, 2, y + 4);
+  }
+
+  // Bars
+  const drawRoundedBar = (x, y, w, h, r, color) => {
+    if (h < 1) return;
+    r = Math.min(r, w/2, h);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.fill();
+  };
+
+  periods.forEach((p, i) => {
+    const cx = padL + i * groupW + groupW / 2;
+    const gap = barW + 2;
+    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#4f7cff");
+    drawRoundedBar(cx         - barW/2, padT + chartH - (cobValues[i]/max)*chartH, barW, (cobValues[i]/max)*chartH, 3, "#34d399");
+    drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#fb7185");
+    ctx.fillStyle = "#64748b";
+    ctx.font = `${n > 20 ? 9 : 11}px Inter, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(p.label, cx, rect.height - 8);
+    ctx.textAlign = "left";
+  });
+
+  // Goal line (only for month view)
+  if (goal > 0 && periods[0]?.type === "month") {
+    const goalY = padT + chartH - (goal / max) * chartH;
+    ctx.strokeStyle = "#f59e0b";
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(padL, goalY); ctx.lineTo(rect.width - padR, goalY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#f59e0b";
+    ctx.font = `11px Inter, sans-serif`;
+    ctx.fillText("Meta", padL + 4, goalY - 5);
+  }
+
+  // Legend
+  const legendY = padT - 8;
+  const legendItems = [["#4f7cff","Vendido"],["#34d399","Cobrado"],["#fb7185","Egresos"]];
+  let lx = padL;
+  legendItems.forEach(([color, label]) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(lx, legendY, 10, 10);
+    ctx.fillStyle = "#64748b";
+    ctx.font = `11px Inter, sans-serif`;
+    ctx.fillText(label, lx + 13, legendY + 9);
+    lx += ctx.measureText(label).width + 30;
+  });
 }
 
-document.querySelector("#loginForm").addEventListener("submit", event => {
+document.querySelector("#loginForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const credentials = auth();
-  const email = document.querySelector("#email").value;
+  const email = document.querySelector("#email").value.trim();
   const password = document.querySelector("#password").value;
 
   if (authMode === "forgot") {
-    authHint.textContent = `Listo. Enviaremos instrucciones a ${email}.`;
-    setTimeout(() => setAuthMode("login"), 1200);
+    const { error } = await sb.auth.resetPasswordForEmail(email);
+    authHint.textContent = error ? error.message : `Listo. Revisa tu correo ${email}.`;
+    if (!error) setTimeout(() => setAuthMode("login"), 2000);
     return;
   }
 
-  if (email === credentials.email && password === credentials.password) {
-    localStorage.setItem(SESSION_KEY, "active");
-    loginScreen.classList.add("hidden");
-    appShell.classList.remove("hidden");
-    render();
-  } else {
-    alert("Credenciales incorrectas.");
+  const submitBtn = event.currentTarget.querySelector("button[type=submit]");
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Ingresando..."; }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Ingresar"; }
+
+  if (error) {
+    authHint.textContent = "Correo o contraseña incorrectos.";
+    return;
   }
+
+  sbUser = data.user;
+  showSkeleton(activeView);
+  loginScreen.classList.add("hidden");
+  appShell.classList.remove("hidden");
+  await sbLoad();
+  render();
+  hideSkeleton(2000);
+  setTimeout(initOnboarding, 400);
 });
 
-document.querySelector("#changePasswordBtn").addEventListener("click", () => passwordDialog.showModal());
 profileMenuBtn.addEventListener("click", () => {
   const isOpen = !profileDropdown.classList.contains("hidden");
   profileDropdown.classList.toggle("hidden", isOpen);
@@ -1925,9 +4517,38 @@ editProfileBtn.addEventListener("click", () => {
   const current = auth();
   profileForm.elements.profileName.value = current.name || "Administrador";
   profileForm.elements.profileEmail.value = current.email || "admin@bandu.pe";
+  profileForm.elements.newPassword.value = "";
+  profileForm.elements.confirmPassword.value = "";
   document.querySelector("#profileMessage").textContent = "";
+  // populate photo preview
+  const photo = localStorage.getItem("nebumia-profile-photo");
+  const img = document.getElementById("profilePhotoImg");
+  const ini = document.getElementById("profilePhotoInitial");
+  if (photo && img) { img.src = photo; img.style.display = "block"; ini.style.display = "none"; }
+  else if (img) { img.src = ""; img.style.display = "none"; ini.style.display = ""; ini.textContent = (current.name||"N").charAt(0).toUpperCase(); }
   profileDropdown.classList.add("hidden");
   profileDialog.showModal();
+});
+// photo upload preview
+document.getElementById("profilePhotoInput")?.addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById("profilePhotoImg");
+    const ini = document.getElementById("profilePhotoInitial");
+    img.src = ev.target.result;
+    img.style.display = "block";
+    ini.style.display = "none";
+  };
+  reader.readAsDataURL(file);
+});
+document.getElementById("removeProfilePhoto")?.addEventListener("click", () => {
+  const img = document.getElementById("profilePhotoImg");
+  const ini = document.getElementById("profilePhotoInitial");
+  document.getElementById("profilePhotoInput").value = "";
+  img.src = ""; img.style.display = "none";
+  ini.style.display = "";
 });
 profileLogoutBtn.addEventListener("click", logout);
 document.addEventListener("click", event => {
@@ -1938,43 +4559,960 @@ document.addEventListener("click", event => {
 });
 forgotPasswordBtn.addEventListener("click", () => setAuthMode("forgot"));
 themeToggleBtn.addEventListener("click", () => {
-  applyTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
+  const next = document.body.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
+  location.reload();
 });
+
+// ── Notification bell ──────────────────────────────────────────────────────
+function buildNotifAlerts() {
+  const t = today();
+  const soon = new Date(); soon.setDate(soon.getDate() + 7);
+  const soonStr = soon.toISOString().slice(0, 10);
+
+  const items = [];
+  const nowTs = new Date();
+  const nowLabel = nowTs.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + nowTs.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+
+  // Cobros vencidos
+  const allCollections = [
+    ...(state.quotes || []).flatMap(q => (q.collections || []).map(c => ({ ...c, ref: q.client }))),
+    ...(state.cashEntries || []).filter(e => e.type === "cobro"),
+  ];
+  allCollections
+    .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < t)
+    .forEach(c => items.push({ type: "red", section: "Cobros vencidos", nav: "collections", title: `Cobro vencido: ${c.ref || c.description || "Sin descripción"}`, sub: `Venció el ${c.dueDate}`, createdAt: nowLabel }));
+
+  // Cobros próximos (próximos 7 días)
+  allCollections
+    .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate >= t && c.dueDate <= soonStr)
+    .forEach(c => items.push({ type: "amber", section: "Cobros próximos", nav: "collections", title: `Cobro próximo: ${c.ref || c.description || "Sin descripción"}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
+
+  // Pagos de equipo pendientes
+  (state.team || [])
+    .filter(m => m.status === "Pendiente")
+    .forEach(m => items.push({ type: "amber", section: "Pagos equipo", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0)} · ${m.role || ""}`, createdAt: nowLabel }));
+
+  // SUNAT pendiente
+  (state.taxPayments || [])
+    .filter(tp => tp.status === "Pendiente")
+    .forEach(tp => items.push({ type: "amber", section: "SUNAT", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)}`, createdAt: nowLabel }));
+
+  return items;
+}
+
+function renderNotifDropdown() {
+  const items = buildNotifAlerts();
+  const badge = document.querySelector("#notifBadge");
+  const dropdown = document.querySelector("#notifDropdown");
+
+  // Badge
+  if (items.length > 0) {
+    badge.textContent = items.length > 99 ? "99+" : items.length;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+
+  // Group by section
+  const sections = {};
+  items.forEach(it => {
+    if (!sections[it.section]) sections[it.section] = [];
+    sections[it.section].push(it);
+  });
+
+  const dotColor = type => type === "red" ? "#ef4444" : "#4f7cff";
+
+  let html = `<div class="notif-header"><span class="notif-header-title">Notificaciones</span></div><div class="notif-body">`;
+
+  if (items.length === 0) {
+    html += `<div class="notif-empty">Sin alertas pendientes</div>`;
+  } else {
+    Object.entries(sections).forEach(([sec, its]) => {
+      html += `<div class="notif-section-label">${escapeHtml(sec)}</div>`;
+      its.forEach(it => {
+        html += `<div class="notif-item notif-item--${it.type} notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
+          <div class="notif-dot" style="background:${dotColor(it.type)}"></div>
+          <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
+          <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>`;
+      });
+    });
+  }
+
+  html += `</div>`;
+  dropdown.innerHTML = html;
+}
+
+const notifBtn = document.querySelector("#notifBtn");
+const notifDropdown = document.querySelector("#notifDropdown");
+
+notifBtn.addEventListener("click", e => {
+  e.stopPropagation();
+  renderNotifDropdown();
+  notifDropdown.classList.toggle("hidden");
+});
+
+notifDropdown.addEventListener("click", e => {
+  const item = e.target.closest("[data-notif-nav]");
+  if (!item) return;
+  const view = item.dataset.notifNav;
+  if (!view) return;
+  notifDropdown.classList.add("hidden");
+  activeView = view;
+  showContentLoader();
+  render();
+  hideContentLoader(50);
+});
+
+document.addEventListener("click", e => {
+  if (!notifDropdown.classList.contains("hidden") && !notifDropdown.contains(e.target) && e.target !== notifBtn) {
+    notifDropdown.classList.add("hidden");
+  }
+});
+
+function refreshNotifBadge() {
+  const items = buildNotifAlerts();
+  const badge = document.querySelector("#notifBadge");
+  if (items.length > 0) {
+    badge.textContent = items.length > 99 ? "99+" : items.length;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
 quoteForm.addEventListener("submit", handleEntitySubmit);
 
-document.querySelector("#passwordForm").addEventListener("submit", event => {
-  if (event.submitter.value === "cancel") return;
+profileForm.addEventListener("submit", event => {
+  if (event.submitter?.value === "cancel") return;
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  const next = form.get("newPassword");
-  const confirm = form.get("confirmPassword");
-  const message = document.querySelector("#passwordMessage");
-  if (next !== confirm) {
-    message.textContent = "Las contrasenas no coinciden.";
+  const message = document.querySelector("#profileMessage");
+  const newPwd = form.get("newPassword");
+  const confirmPwd = form.get("confirmPassword");
+  if (newPwd && newPwd !== confirmPwd) {
+    message.textContent = "Las contraseñas no coinciden.";
     return;
   }
-  saveAuth({ password: next });
-  message.textContent = "Contrasena actualizada.";
-  setTimeout(() => passwordDialog.close(), 500);
-});
-
-profileForm.addEventListener("submit", event => {
-  if (event.submitter.value === "cancel") return;
-  event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  saveAuth({ name: form.get("profileName"), email: form.get("profileEmail") });
+  const updates = { name: form.get("profileName"), email: form.get("profileEmail") };
+  if (newPwd) updates.password = newPwd;
+  saveAuth(updates);
+  // save photo if uploaded
+  const photoInput = document.getElementById("profilePhotoInput");
+  const img = document.getElementById("profilePhotoImg");
+  if (photoInput?.files[0] && img?.src) {
+    localStorage.setItem("nebumia-profile-photo", img.src);
+  } else if (!img?.src) {
+    localStorage.removeItem("nebumia-profile-photo");
+  }
   syncProfileUI();
   document.querySelector("#email").value = form.get("profileEmail");
-  document.querySelector("#profileMessage").textContent = "Perfil actualizado.";
+  message.textContent = "";
+  showToast(newPwd ? "Perfil y contraseña actualizados" : "Perfil actualizado");
   setTimeout(() => profileDialog.close(), 500);
 });
+
+document.getElementById("helpBtn")?.addEventListener("click", () => {
+  document.getElementById("helpFeedback").textContent = "";
+  document.getElementById("helpForm").reset();
+  profileDropdown.classList.add("hidden");
+  document.getElementById("helpDialog").showModal();
+});
+document.getElementById("helpForm")?.addEventListener("submit", e => {
+  e.preventDefault();
+  const current = auth();
+  const form = new FormData(e.currentTarget);
+  const subject = encodeURIComponent(`[Nebumia] ${form.get("helpSubject")}`);
+  const body = encodeURIComponent(`De: ${current.name} (${current.email})\n\n${form.get("helpMessage")}`);
+  window.open(`mailto:soporte@bandu.pe?subject=${subject}&body=${body}`, "_blank");
+  document.getElementById("helpFeedback").textContent = "✓ Abriendo tu cliente de correo…";
+  setTimeout(() => document.getElementById("helpDialog").close(), 1200);
+});
+
+const SK_SIDEBAR = `
+  <div class="sk-sidebar">
+    <div class="sk-logo">
+      <div class="sk-block" style="width:32px;height:32px;border-radius:8px"></div>
+      <div class="sk-block" style="width:80px;height:16px"></div>
+    </div>
+    <div class="sk-nav">
+      <div class="sk-block" style="width:100%;height:14px"></div>
+      <div class="sk-block" style="width:75%;height:14px"></div>
+      <div class="sk-block" style="width:90%;height:14px"></div>
+      <div class="sk-block" style="width:65%;height:14px"></div>
+      <div class="sk-block" style="width:85%;height:14px"></div>
+      <div class="sk-block" style="width:70%;height:14px"></div>
+      <div class="sk-block" style="width:80%;height:14px"></div>
+      <div class="sk-block" style="width:60%;height:14px"></div>
+    </div>
+  </div>`;
+
+function skMetrics(n) {
+  return `<div class="sk-metrics sk-metrics-${n}">${Array(n).fill('<div class="sk-card"></div>').join("")}</div>`;
+}
+function skToolbar() {
+  return `<div class="sk-toolbar">
+    <div class="sk-block" style="width:220px;height:36px;border-radius:8px"></div>
+    <div class="sk-block" style="width:130px;height:36px;border-radius:8px"></div>
+    <div class="sk-block" style="width:110px;height:36px;border-radius:8px"></div>
+  </div>`;
+}
+function skTable(rows = 5) {
+  return `<div class="sk-table">
+    <div class="sk-row header"></div>
+    ${Array(rows).fill('<div class="sk-row"></div>').join("")}
+  </div>`;
+}
+function skTabs() {
+  return `<div class="sk-tabs">
+    <div class="sk-block" style="width:80px;height:30px;border-radius:20px"></div>
+    <div class="sk-block" style="width:200px;height:30px;border-radius:20px"></div>
+    <div class="sk-block" style="width:200px;height:30px;border-radius:20px"></div>
+  </div>`;
+}
+function skTwoCol() {
+  return `<div class="sk-two-col">
+    <div class="sk-panel"></div>
+    <div class="sk-panel"></div>
+  </div>`;
+}
+
+function skContentFor(view) {
+  const topbar = `<div class="sk-topbar">
+    <div class="sk-block" style="width:180px;height:22px"></div>
+    <div class="sk-block" style="width:100px;height:34px;border-radius:8px"></div>
+  </div>`;
+  switch (view) {
+    case "dashboard":
+      return topbar + skMetrics(4) + skToolbar() + skTable(5);
+    case "quotes":
+      return topbar + skMetrics(2) + skToolbar() + skTable(5);
+    case "sales":
+      return topbar + skMetrics(3) + skToolbar() + skTable(5);
+    case "collections":
+      return topbar + skMetrics(3) + skToolbar() + skTable(5);
+    case "clients":
+      return topbar + skToolbar() + skTable(6);
+    case "finance":
+      return topbar + skMetrics(4) + skTabs() + skToolbar() + skTable(4) + skTable(3);
+    case "team":
+      return topbar + skMetrics(2) + skToolbar() + skTable(5);
+    case "comprobantes":
+      return topbar + skToolbar() + skTable(4) + skTable(4);
+    case "settings":
+      return topbar + skMetrics(4) + skTwoCol();
+    default:
+      return topbar + skMetrics(4) + skToolbar() + skTable(5);
+  }
+}
+
+let _pendingDeleteCallback = null;
+
+function applySidebarState() {
+  appShell.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+  document.body.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+  const btn = document.getElementById("sidebarCollapseBtn");
+  if (btn) {
+    btn.title = sidebarCollapsed ? "Expandir menú" : "Colapsar menú";
+    btn.innerHTML = icon(sidebarCollapsed ? "chevron-right" : "chevron-left");
+  }
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "1" : "0");
+  applySidebarState();
+}
+
+function initConfirmDialog() {
+  const modal  = document.getElementById("confirmModal");
+  const btnOk  = document.getElementById("confirmDeleteBtn");
+  const btnCan = document.getElementById("confirmCancelBtn");
+  if (!modal || !btnOk || !btnCan) return;
+  btnOk.addEventListener("click", () => {
+    modal.classList.add("hidden");
+    if (_pendingDeleteCallback) { _pendingDeleteCallback(); _pendingDeleteCallback = null; }
+  });
+  btnCan.addEventListener("click", () => {
+    modal.classList.add("hidden");
+    _pendingDeleteCallback = null;
+  });
+  modal.addEventListener("click", e => {
+    if (e.target === modal) { modal.classList.add("hidden"); _pendingDeleteCallback = null; }
+  });
+}
+
+function confirmDelete(message, onConfirm) {
+  const modal = document.getElementById("confirmModal");
+  if (!modal) return;
+  document.getElementById("confirmMessage").textContent = message || "Esta acción no se puede revertir. El elemento será eliminado permanentemente.";
+  _pendingDeleteCallback = onConfirm;
+  modal.classList.remove("hidden");
+}
+
+function showToast(message = "Guardado correctamente") {
+  let container = document.getElementById("toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>${message}</span>`;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("visible"));
+  setTimeout(() => {
+    toast.classList.add("hide");
+    setTimeout(() => toast.remove(), 280);
+  }, 3000);
+}
+
+function showContentLoader() {
+  const el = document.getElementById("contentLoader");
+  if (!el) return;
+  el.classList.remove("hidden", "fade-out");
+}
+
+function hideContentLoader(delay = 0) {
+  const el = document.getElementById("contentLoader");
+  if (!el) return;
+  setTimeout(() => {
+    el.classList.add("fade-out");
+    setTimeout(() => el.classList.add("hidden"), 150);
+  }, delay);
+}
+
+function hideSkeleton(delay = 0) {
+  const sk = document.getElementById("preloader");
+  if (!sk) return;
+  setTimeout(() => {
+    sk.classList.add("fade-out");
+    setTimeout(() => sk.remove(), 220);
+  }, delay);
+}
+
+function showSkeleton(view) {
+  let sk = document.getElementById("preloader");
+  if (!sk) {
+    sk = document.createElement("div");
+    sk.id = "preloader";
+    sk.setAttribute("aria-hidden", "true");
+    document.body.prepend(sk);
+  }
+  sk.classList.remove("fade-out");
+  sk.innerHTML = SK_SIDEBAR + `<div class="sk-content">${skContentFor(view)}</div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// INLINE FORM VALIDATION
+// ════════════════════════════════════════════════════════════
+const FIELD_RULES = {
+  date:           { required: true,  msg: "Selecciona una fecha" },
+  dueDate:        { required: true,  msg: "Selecciona una fecha" },
+  wonDate:        { required: true,  msg: "Selecciona una fecha de venta" },
+  code:           { required: true,  msg: "El código PPTO es requerido" },
+  client:         { required: true,  msg: "Selecciona un cliente" },
+  service:        { required: true,  msg: "Selecciona un servicio" },
+  owner:          { required: true,  msg: "Selecciona un comercial" },
+  subtotal:       { required: true,  msg: "Ingresa un monto válido" },
+  estimatedValue: { required: true,  msg: "Ingresa un valor estimado" },
+  name:           { required: true,  minLen: 2, msg: "Ingresa el nombre completo" },
+  type:           { required: true,  msg: "Ingresa el tipo" },
+  concept:        { required: true,  msg: "Ingresa el concepto" },
+  amount:         { required: true,  msg: "Ingresa un monto válido" },
+  email:          { optional: true,  pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, msg: "Correo inválido" },
+  repo:           { optional: true,  pattern: /^$|^https?:\/\/.+/, msg: "Debe ser una URL válida (https://…)" },
+  docLink:        { optional: true,  pattern: /^$|^https?:\/\/.+/, msg: "Debe ser una URL válida (https://…)" },
+  receipt:        { optional: true,  pattern: /^$|^https?:\/\/.+/, msg: "Debe ser una URL válida (https://…)" },
+};
+
+function validateField(name, value) {
+  const rule = FIELD_RULES[name];
+  if (!rule) return null;
+  const v = (value || "").toString().trim();
+  if (rule.required && !v) return rule.msg;
+  if (rule.minLen && v.length > 0 && v.length < rule.minLen) return rule.msg;
+  if (rule.pattern && v && !rule.pattern.test(v)) return rule.msg;
+  return null;
+}
+
+function setFieldState(label, error) {
+  label.classList.remove("label-invalid", "label-valid");
+  const prev = label.querySelector(".field-err-msg");
+  if (prev) prev.remove();
+  if (error) {
+    label.classList.add("label-invalid");
+    const msg = document.createElement("span");
+    msg.className = "field-err-msg";
+    msg.textContent = error;
+    label.appendChild(msg);
+  } else {
+    const input = label.querySelector("input,select,textarea");
+    if (input?.value?.toString().trim()) label.classList.add("label-valid");
+  }
+}
+
+function updateErrorSummary(form) {
+  const invalidCount = form.querySelectorAll(".label-invalid").length;
+  let summary = form.querySelector(".dialog-error-summary");
+  if (!summary) {
+    summary = document.createElement("div");
+    summary.className = "dialog-error-summary";
+    const actions = form.querySelector(".dialog-actions");
+    if (actions) actions.before(summary);
+  }
+  if (invalidCount > 0) {
+    summary.textContent = `${invalidCount} campo${invalidCount === 1 ? "" : "s"} con error — revisa antes de guardar`;
+    summary.classList.add("visible");
+  } else {
+    summary.classList.remove("visible");
+  }
+}
+
+function attachFormValidation(form) {
+  if (!form) return;
+  form.querySelectorAll("input[name], select[name], textarea[name]").forEach(input => {
+    const rule = FIELD_RULES[input.name];
+    if (!rule) return;
+    const label = input.closest("label");
+    if (!label) return;
+    // Required asterisk — wrap text + star in a single span so display:grid doesn't split them onto separate rows
+    if (rule.required && !label.querySelector(".req-star")) {
+      const firstText = [...label.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+      if (firstText) {
+        const wrapper = document.createElement("span");
+        wrapper.className = "field-label-text";
+        wrapper.textContent = firstText.textContent;
+        const star = document.createElement("span");
+        star.className = "req-star";
+        star.setAttribute("aria-hidden", "true");
+        star.textContent = " *";
+        wrapper.appendChild(star);
+        firstText.replaceWith(wrapper);
+      }
+    }
+    const doValidate = () => {
+      setFieldState(label, validateField(input.name, input.value));
+      updateErrorSummary(form);
+    };
+    input.addEventListener("blur", doValidate);
+    if (input.tagName === "SELECT") input.addEventListener("change", doValidate);
+  });
+}
+
+function validateFormBeforeSubmit(form) {
+  let hasError = false;
+  form.querySelectorAll("input[name], select[name], textarea[name]").forEach(input => {
+    if (!FIELD_RULES[input.name]) return;
+    const label = input.closest("label");
+    if (!label) return;
+    const error = validateField(input.name, input.value);
+    setFieldState(label, error);
+    if (error) hasError = true;
+  });
+  updateErrorSummary(form);
+  if (hasError) {
+    const firstInvalid = form.querySelector(".label-invalid input, .label-invalid select, .label-invalid textarea");
+    if (firstInvalid) firstInvalid.focus();
+  }
+  return !hasError;
+}
+
+// ════════════════════════════════════════════════════════════
+// COMMAND PALETTE (Ctrl/Cmd + K)
+// ════════════════════════════════════════════════════════════
+let cpSelectedIdx = 0;
+let cpCurrentItems = [];
+
+const CP_ACTIONS = [
+  { type: "action", label: "Nueva cotización",     sub: "Crear cotización o lead",         icon: "fileText",  iconBg: "#eff3ff", action: "new-quote"  },
+  { type: "action", label: "Nuevo lead",            sub: "Registrar oportunidad comercial", icon: "target",    iconBg: "#ecfdf5", action: "new-lead"   },
+  { type: "action", label: "Nuevo cliente",         sub: "Agregar cliente a la base",       icon: "users",     iconBg: "#fdf4ff", action: "new-client" },
+  { type: "action", label: "Nueva venta",           sub: "Registrar venta ganada",          icon: "receipt",   iconBg: "#fff7ed", action: "new-sale"   },
+  { type: "action", label: "Nuevo pago de equipo",  sub: "Registrar pago a personal",       icon: "briefcase", iconBg: "#f5f3ff", action: "new-team"   },
+];
+
+const CP_MODULES = [
+  { type: "module", label: "Dashboard",       sub: "Vista general de la agencia",    icon: "layout",   iconBg: "#f0fdf4", nav: "dashboard"     },
+  { type: "module", label: "Clientes",        sub: "Base de clientes",               icon: "users",    iconBg: "#eff3ff", nav: "clients"       },
+  { type: "module", label: "Cotizaciones",    sub: "Pipeline y cotizaciones",        icon: "fileText", iconBg: "#fffbeb", nav: "quotes"        },
+  { type: "module", label: "Ventas",          sub: "Ventas ganadas",                 icon: "receipt",  iconBg: "#f0fdf4", nav: "sales"         },
+  { type: "module", label: "Cobranzas",       sub: "Cobros pendientes y pagados",    icon: "wallet",   iconBg: "#eff3ff", nav: "collections"   },
+  { type: "module", label: "Caja financiera", sub: "Ingresos, egresos y balance",   icon: "banknote", iconBg: "#fdf4ff", nav: "finance"       },
+  { type: "module", label: "Contabilidad",    sub: "SUNAT, compras, facturas",       icon: "book",     iconBg: "#fff7ed", nav: "comprobantes"  },
+  { type: "module", label: "Pago personal",   sub: "Pagos al equipo",               icon: "briefcase",iconBg: "#f5f3ff", nav: "team"          },
+  { type: "module", label: "Configuración",   sub: "Ajustes del sistema",            icon: "settings", iconBg: "#f8fafc", nav: "settings"      },
+];
+
+function buildCPIndex() {
+  const items = [];
+  const fmtAmt = (amt, curr) => fmt(Number(amt) || 0, curr || "PEN");
+
+  // Clientes
+  (state.clients || []).forEach(c => items.push({
+    type: "client", nav: "clients", icon: "users", iconBg: "#eff3ff", badge: c.clientType || null,
+    label: c.name,
+    sub: [c.ruc ? "RUC " + c.ruc : null, c.clientType, c.contact].filter(Boolean).join(" · "),
+    _s: [c.name, c.ruc, c.contact, c.email, c.phone, c.clientType].join(" ")
+  }));
+
+  // Cotizaciones — TODAS (incluyendo Ganadas) → siempre buscables como cotización
+  (state.quotes || []).forEach(q => {
+    const base_s = [q.code, q.client, q.service, q.category, q.owner, q.status, q.comments, q.month].join(" ");
+    items.push({
+      type: "quote", nav: "quotes", icon: "fileText", iconBg: "#fffbeb", badge: q.status || null,
+      label: (q.code || "") + (q.client ? " — " + q.client : ""),
+      sub: [q.service, fmtAmt(q.subtotal, q.currency), q.status].filter(Boolean).join(" · "),
+      _s: base_s
+    });
+    // Ganadas también en Ventas (módulo separado)
+    if (q.status === "Ganado") {
+      items.push({
+        type: "sale", nav: "sales", icon: "receipt", iconBg: "#f0fdf4", badge: "Ganado",
+        label: (q.code || "") + (q.client ? " — " + q.client : ""),
+        sub: [q.service, fmtAmt(q.subtotal, q.currency), "Ganado"].filter(Boolean).join(" · "),
+        _s: base_s
+      });
+    }
+  });
+
+  // Leads
+  (state.leads || []).forEach(l => items.push({
+    type: "lead", nav: "quotes", icon: "target", iconBg: "#ecfdf5", badge: l.status || null,
+    label: (l.client || "Sin cliente") + (l.service ? " · " + l.service : ""),
+    sub: [l.source, l.status, l.estimatedValue ? fmtAmt(l.estimatedValue, l.currency) : null].filter(Boolean).join(" · "),
+    _s: [l.client, l.service, l.source, l.channel, l.owner, l.status, l.notes].join(" ")
+  }));
+
+  // Cobranzas
+  (state.collections || []).forEach(c => {
+    const q = (state.quotes || []).find(x => x.id === c.quoteId);
+    items.push({
+      type: "collection", nav: "collections", icon: "wallet", iconBg: "#eff3ff", badge: c.status || null,
+      label: [q ? q.code : null, q ? q.client : null].filter(Boolean).join(" — ") + (c.label ? " · " + c.label : ""),
+      sub: [fmtAmt(c.amount, c.currency), c.status, c.dueDate].filter(Boolean).join(" · "),
+      _s: [q ? q.code : "", q ? q.client : "", c.status, c.label, c.invoice].join(" ")
+    });
+  });
+
+  // Gastos (caja financiera)
+  (state.expenses || []).forEach(e => items.push({
+    type: "expense", nav: "finance", icon: "banknote", iconBg: "#fdf4ff", badge: e.status || null,
+    label: e.concept || "Gasto",
+    sub: [e.type, fmtAmt(e.amount, e.currency), e.status].filter(Boolean).join(" · "),
+    _s: [e.concept, e.type, e.status, e.owner].join(" ")
+  }));
+
+  // Pago personal (equipo)
+  (state.team || []).forEach(t => items.push({
+    type: "team", nav: "team", icon: "briefcase", iconBg: "#f5f3ff", badge: t.status || null,
+    label: (t.name || "Sin nombre") + (t.role ? " · " + t.role : ""),
+    sub: [t.month, fmtAmt(t.amount), t.status].filter(Boolean).join(" · "),
+    _s: [t.name, t.role, t.month, t.status].join(" ")
+  }));
+
+  // Pagos SUNAT / tributos
+  (state.taxPayments || []).forEach(tp => items.push({
+    type: "taxpayment", nav: "comprobantes", icon: "book", iconBg: "#fff7ed", badge: tp.status || null,
+    label: (tp.type || "SUNAT") + " — " + (tp.period || ""),
+    sub: [fmtAmt(tp.amount), tp.status].filter(Boolean).join(" · "),
+    _s: [tp.type, tp.period, tp.status, tp.sunatRef].join(" ")
+  }));
+
+  // Compras
+  (state.purchases || []).forEach(p => items.push({
+    type: "purchase", nav: "comprobantes", icon: "book", iconBg: "#fff7ed", badge: p.invoiceType || null,
+    label: (p.vendor || "Proveedor") + (p.invoiceNum ? " · " + p.invoiceNum : ""),
+    sub: [p.concept, fmtAmt(p.subtotal || p.amount, p.currency)].filter(Boolean).join(" · "),
+    _s: [p.vendor, p.ruc, p.invoiceNum, p.concept, p.declared].join(" ")
+  }));
+
+  // Ventas facturadas
+  (state.invoicedSales || []).forEach(inv => {
+    const invQ = (state.quotes || []).find(x => x.id === inv.quoteId);
+    items.push({
+      type: "invoicedsale", nav: "comprobantes", icon: "receipt", iconBg: "#f0fdf4", badge: inv.invoiceType || null,
+      label: (inv.invoiceNum || inv.invoiceType || "Factura") + (inv.client ? " — " + inv.client : ""),
+      sub: [inv.service, fmtAmt(inv.total, inv.currency)].filter(Boolean).join(" · "),
+      _s: [inv.client, inv.ruc, inv.invoiceNum, inv.service, inv.invoiceType, invQ ? invQ.code : ""].join(" ")
+    });
+  });
+
+  // Caja financiera — filas computadas (ingresos de cobranzas, egresos de gastos, pagos, etc.)
+  try {
+    buildCajaRows().forEach(row => items.push({
+      type: "cashentry", nav: "finance", icon: row.type === "ingreso" ? "banknote" : "banknote", iconBg: row.type === "ingreso" ? "#f0fdf4" : "#fdf4ff", badge: row.type === "ingreso" ? "Ingreso" : "Egreso",
+      label: row.concept || "Movimiento de caja",
+      sub: [row.category, fmtAmt(row.amount, row.currency), row.status].filter(Boolean).join(" · "),
+      _s: [row.concept, row.category, row.source, row.type, row.status, row.invoice].join(" ")
+    }));
+  } catch(_) {}
+  // Entradas manuales de caja (ya incluidas en buildCajaRows pero indexadas también por sus campos propios)
+  (state.cashEntries || []).forEach(ce => items.push({
+    type: "cashentry", nav: "finance", icon: "banknote", iconBg: "#f0fdf4", badge: ce.type || null,
+    label: ce.concept || "Movimiento de caja",
+    sub: [ce.type === "ingreso" ? "Ingreso" : "Egreso", fmtAmt(ce.amount, ce.currency), ce.category].filter(Boolean).join(" · "),
+    _s: [ce.concept, ce.category, ce.type, ce.bankAccount].join(" ")
+  }));
+
+  // Declaraciones mensuales SUNAT
+  (state.declaraciones || []).forEach(d => items.push({
+    type: "declaracion", nav: "comprobantes", icon: "book", iconBg: "#fff7ed", badge: d.status || null,
+    label: "Declaración — " + (d.period || ""),
+    sub: [d.status, d.notes].filter(Boolean).join(" · "),
+    _s: ["declaracion", "declaración", d.period, d.status, d.otroConcepto, d.notes].join(" ")
+  }));
+
+  // Servicios ofrecidos
+  (state.services || []).forEach(s => items.push({
+    type: "service", nav: "settings", icon: "settings", iconBg: "#f8fafc",
+    label: s, sub: "Servicio ofrecido",
+    _s: s
+  }));
+
+  return items;
+}
+
+function cpHighlight(text, query) {
+  if (!query) return escapeHtml(text);
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return escapeHtml(text);
+  return escapeHtml(text.slice(0, idx)) +
+    `<span class="cp-hl">${escapeHtml(text.slice(idx, idx + query.length))}</span>` +
+    escapeHtml(text.slice(idx + query.length));
+}
+
+function renderCPItems(items, query) {
+  if (!items.length) return `<div class="cp-empty">Sin resultados para "<strong>${escapeHtml(query)}</strong>"</div>`;
+  const groups = {};
+  items.forEach(it => {
+    const g = it.type === "action"       ? "Acciones rápidas"
+            : it.type === "module"       ? "Módulos"
+            : it.type === "client"       ? "Clientes"
+            : it.type === "quote"        ? "Cotizaciones"
+            : it.type === "sale"         ? "Ventas"
+            : it.type === "lead"         ? "Leads"
+            : it.type === "collection"   ? "Cobranzas"
+            : it.type === "expense"      ? "Gastos"
+            : it.type === "team"         ? "Pago personal"
+            : it.type === "taxpayment"   ? "SUNAT"
+            : it.type === "purchase"     ? "Compras"
+            : it.type === "invoicedsale" ? "Ventas facturadas"
+            : it.type === "cashentry"    ? "Caja financiera"
+            : it.type === "declaracion"  ? "Declaraciones"
+            : it.type === "service"      ? "Servicios" : "Resultados";
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(it);
+  });
+  let html = ""; let gi = 0;
+  Object.entries(groups).forEach(([label, its]) => {
+    html += `<div class="cp-section">${label}</div>`;
+    its.forEach(it => {
+      const idx = gi++;
+      const iconEl = `<div class="cp-item-icon" style="background:${it.iconBg}">${icon(it.icon)}</div>`;
+      const badgeEl = it.badge ? `<span class="cp-item-badge" style="background:${it.iconBg};color:var(--muted)">${escapeHtml(it.badge)}</span>` : "";
+      html += `<div class="cp-item${idx === cpSelectedIdx ? " cp-active" : ""}" data-cp-idx="${idx}">
+        ${iconEl}
+        <div class="cp-item-body">
+          <div class="cp-item-title">${cpHighlight(it.label, query)}</div>
+          ${it.sub ? `<div class="cp-item-sub">${escapeHtml(it.sub)}</div>` : ""}
+        </div>
+        ${badgeEl}
+        <span class="cp-enter-hint">↵</span>
+      </div>`;
+    });
+  });
+  return html;
+}
+
+function filterCP(query) {
+  if (!query.trim()) {
+    cpCurrentItems = [...CP_ACTIONS, ...CP_MODULES];
+  } else {
+    const q = query.toLowerCase();
+    cpCurrentItems = [...CP_ACTIONS, ...CP_MODULES, ...buildCPIndex()]
+      .filter(it => (it._s || it.label + " " + (it.sub || "")).toLowerCase().includes(q))
+      .slice(0, 25);
+  }
+  cpSelectedIdx = 0;
+  document.getElementById("cpResults").innerHTML = renderCPItems(cpCurrentItems, query);
+  bindCPClicks();
+}
+
+function bindCPClicks() {
+  document.querySelectorAll(".cp-item").forEach(el => {
+    el.addEventListener("click", () => executeCPItem(cpCurrentItems[parseInt(el.dataset.cpIdx, 10)]));
+    el.addEventListener("mouseenter", () => {
+      cpSelectedIdx = parseInt(el.dataset.cpIdx, 10);
+      document.querySelectorAll(".cp-item").forEach((e, i) => e.classList.toggle("cp-active", i === cpSelectedIdx));
+    });
+  });
+}
+
+function executeCPItem(item) {
+  if (!item) return;
+  closeCommandPalette();
+  if (item.action) {
+    const actionMap = {
+      "new-quote":  () => { activeView = "quotes";   render(); setTimeout(openQuoteDialog,  60); },
+      "new-lead":   () => { activeView = "quotes";   render(); setTimeout(openLeadDialog,   60); },
+      "new-client": () => { activeView = "clients";  render(); setTimeout(openClientDialog, 60); },
+      "new-sale":   () => { activeView = "sales";    render(); setTimeout(openSaleDialog,   60); },
+      "new-team":   () => { activeView = "team";     render(); setTimeout(openTeamDialog,   60); },
+    };
+    (actionMap[item.action] || (() => {}))();
+  } else if (item.nav) {
+    activeView = item.nav;
+    showContentLoader();
+    render();
+    hideContentLoader(50);
+  }
+}
+
+function openCommandPalette() {
+  const pal = document.getElementById("commandPalette");
+  const inp = document.getElementById("cpInput");
+  if (!pal || !inp) return;
+  pal.classList.remove("hidden");
+  inp.value = "";
+  filterCP("");
+  setTimeout(() => inp.focus(), 30);
+}
+
+function closeCommandPalette() {
+  document.getElementById("commandPalette")?.classList.add("hidden");
+}
+
+function initCommandPalette() {
+  document.getElementById("topbarSearchBtn")?.addEventListener("click", openCommandPalette);
+  document.addEventListener("keydown", e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      const pal = document.getElementById("commandPalette");
+      if (!pal) return;
+      pal.classList.contains("hidden") ? openCommandPalette() : closeCommandPalette();
+      return;
+    }
+    const pal = document.getElementById("commandPalette");
+    if (!pal || pal.classList.contains("hidden")) return;
+    if (e.key === "Escape") { closeCommandPalette(); return; }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      cpSelectedIdx = Math.min(cpSelectedIdx + 1, cpCurrentItems.length - 1);
+      document.querySelectorAll(".cp-item").forEach((el, i) => el.classList.toggle("cp-active", i === cpSelectedIdx));
+      document.querySelector(".cp-item.cp-active")?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      cpSelectedIdx = Math.max(cpSelectedIdx - 1, 0);
+      document.querySelectorAll(".cp-item").forEach((el, i) => el.classList.toggle("cp-active", i === cpSelectedIdx));
+      document.querySelector(".cp-item.cp-active")?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      executeCPItem(cpCurrentItems[cpSelectedIdx]);
+    }
+  });
+  document.getElementById("cpInput")?.addEventListener("input", e => filterCP(e.target.value));
+  document.getElementById("commandPalette")?.addEventListener("click", e => {
+    if (e.target === document.getElementById("commandPalette")) closeCommandPalette();
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// ONBOARDING WIZARD
+// ════════════════════════════════════════════════════════════
+const ONBOARDING_KEY = "nebumia-onboarding-v1";
+
+function getOnboarding() {
+  try { return JSON.parse(localStorage.getItem(ONBOARDING_KEY) || '{"done":false}'); }
+  catch { return { done: false }; }
+}
+function saveOnboarding(data) { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(data)); }
+
+function onboardingHasData() {
+  return (state.settings.monthlyGoal > 0) &&
+         (state.services || []).length > 0 &&
+         state.leads.length > 0;
+}
+
+function onboardingBannerHTML() {
+  if (getOnboarding().done || onboardingHasData()) return "";
+  const hasGoal    = (state.settings.monthlyGoal || 0) > 0;
+  const hasService = (state.services || []).length > 0;
+  const hasLead    = state.leads.length > 0;
+  const steps = [
+    { label: "Meta mensual", done: hasGoal },
+    { label: "Servicios",    done: hasService },
+    { label: "Primer lead",  done: hasLead },
+  ];
+  const doneCount = steps.filter(s => s.done).length;
+  const pct = Math.round(doneCount / 3 * 100);
+  const stepsHtml = steps.map(s =>
+    `<span class="onb-banner-step ${s.done ? "done" : "active"}">${s.done ? "✓ " : ""}${escapeHtml(s.label)}</span>`
+  ).join("");
+  return `<div class="onb-banner">
+    <div class="onb-banner-left">
+      <h4>Completa tu configuración</h4>
+      <p>${doneCount} de 3 pasos completados</p>
+      <div class="onb-banner-steps">${stepsHtml}</div>
+    </div>
+    <div class="onb-banner-right">
+      <div class="onb-banner-pct">${pct}%</div>
+      <div class="onb-banner-label">progreso</div>
+      <button class="onb-continue-btn" onclick="openOnboardingWizard()">Continuar →</button>
+    </div>
+  </div>`;
+}
+
+function renderOnbStep(step) {
+  const content = document.getElementById("onbWizardContent");
+  if (!content) return;
+  const trackHtml = [0, 1, 2].map(i => {
+    const cls = i < step ? "done" : i === step ? "active" : "todo";
+    const dot = `<div class="onb-step-dot ${cls}">${cls === "done" ? "✓" : i + 1}</div>`;
+    return i === 0 ? dot : `<div class="onb-step-line ${i <= step ? "done" : "todo"}"></div>${dot}`;
+  }).join("");
+
+  let bodyHtml = "";
+  if (step === 0) {
+    const cur = state.settings.monthlyGoal || "";
+    bodyHtml = `
+      <div class="onb-step-title">¿Cuánto quieres vender este mes?</div>
+      <div class="onb-step-desc">Define tu objetivo mensual. Aparecerá en el KPI de Meta en tu dashboard.</div>
+      <div style="position:relative">
+        <input id="onbGoalInput" class="onb-input" type="number" min="0" step="100"
+          placeholder="Ej: 8000" value="${cur}" style="padding-right:38px" autofocus>
+        <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none">S/</span>
+      </div>
+      <div class="onb-prefix" style="margin-top:10px;font-size:11px;color:var(--muted)">Puedes cambiarlo en Configuración → Reglas financieras.</div>`;
+  } else if (step === 1) {
+    const tags = (state.services || []).map(s =>
+      `<span class="onb-tag">${escapeHtml(s)}<button onclick="onbRemoveService('${escapeAttr(s)}')" type="button">×</button></span>`
+    ).join("");
+    bodyHtml = `
+      <div class="onb-step-title">¿Qué servicios ofrece tu agencia?</div>
+      <div class="onb-step-desc">Aparecerán al crear cotizaciones. Puedes agregar más desde Configuración.</div>
+      <div class="onb-input-row">
+        <input id="onbServiceInput" class="onb-input" type="text" placeholder="Ej: Meta Ads, CRM, Diseño Web…">
+        <button class="onb-next-btn" onclick="onbAddService()" type="button" style="padding:9px 14px;flex-shrink:0">+ Agregar</button>
+      </div>
+      <div class="onb-tags" id="onbTagsContainer">${tags}</div>`;
+  } else {
+    bodyHtml = `
+      <div style="text-align:center;padding:12px 0 18px">
+        <div style="font-size:44px;margin-bottom:12px">🎉</div>
+        <div class="onb-step-title" style="font-size:16px">¡Todo listo para empezar!</div>
+        <div class="onb-step-desc">Ahora crea tu primer lead para ver el embudo comercial en acción.</div>
+      </div>`;
+  }
+
+  const nextLabel = step < 2 ? "Siguiente →" : "Ir al dashboard";
+  const extraBtn  = step === 2
+    ? `<button class="onb-next-btn" style="background:#059669;margin-right:8px" onclick="onbCreateLead()" type="button">Crear primer lead</button>`
+    : "";
+
+  content.innerHTML = `
+    <div class="onb-head">
+      <div class="onb-head-label">Configuración inicial · Paso ${step + 1} de 3</div>
+      <div class="onb-head-title">Nebumia</div>
+      <div class="onb-steps-track">${trackHtml}</div>
+    </div>
+    <div class="onb-body">${bodyHtml}</div>
+    <div class="onb-footer">
+      <button class="onb-skip-btn" onclick="onbSkip()" type="button">Omitir configuración</button>
+      <div>${extraBtn}<button class="onb-next-btn" onclick="onbNext(${step})" type="button">${nextLabel}</button></div>
+    </div>`;
+
+  setTimeout(() => content.querySelector("input:not([type=hidden])")?.focus(), 50);
+}
+
+function openOnboardingWizard() {
+  let step = 0;
+  if ((state.settings.monthlyGoal || 0) > 0)                                           step = 1;
+  if ((state.settings.monthlyGoal || 0) > 0 && (state.services || []).length > 0)       step = 2;
+  document.getElementById("onboardingWizard").classList.remove("hidden");
+  renderOnbStep(step);
+}
+
+function onbNext(step) {
+  if (step === 0) {
+    const val = parseFloat(document.getElementById("onbGoalInput")?.value);
+    if (val > 0) { state.settings.monthlyGoal = val; saveState(); }
+    renderOnbStep(1);
+  } else if (step === 1) {
+    renderOnbStep(2);
+  } else {
+    onbSkip();
+  }
+}
+
+function onbAddService() {
+  const inp = document.getElementById("onbServiceInput");
+  const val = (inp?.value || "").trim();
+  if (!val) return;
+  if (!(state.services || []).includes(val)) {
+    state.services = [...(state.services || []), val].sort();
+    saveState();
+  }
+  inp.value = "";
+  const c = document.getElementById("onbTagsContainer");
+  if (c) c.innerHTML = (state.services || []).map(s =>
+    `<span class="onb-tag">${escapeHtml(s)}<button onclick="onbRemoveService('${escapeAttr(s)}')" type="button">×</button></span>`
+  ).join("");
+  inp.focus();
+}
+
+function onbRemoveService(name) {
+  state.services = (state.services || []).filter(s => s !== name);
+  saveState();
+  const c = document.getElementById("onbTagsContainer");
+  if (c) c.innerHTML = (state.services || []).map(s =>
+    `<span class="onb-tag">${escapeHtml(s)}<button onclick="onbRemoveService('${escapeAttr(s)}')" type="button">×</button></span>`
+  ).join("");
+}
+
+function onbSkip() {
+  saveOnboarding({ done: true });
+  document.getElementById("onboardingWizard").classList.add("hidden");
+  render();
+}
+
+function onbCreateLead() {
+  saveOnboarding({ done: true });
+  document.getElementById("onboardingWizard").classList.add("hidden");
+  activeView = "quotes";
+  render();
+  setTimeout(openLeadDialog, 60);
+}
+
+function initOnboarding() {
+  if (getOnboarding().done || onboardingHasData()) return;
+  openOnboardingWizard();
+}
 
 applyTheme(localStorage.getItem(THEME_KEY) || "light");
 setAuthMode("login");
 syncProfileUI();
 setupDialogs();
-if (localStorage.getItem(SESSION_KEY) === "active") {
-  loginScreen.classList.add("hidden");
-  appShell.classList.remove("hidden");
-  render();
-}
+initConfirmDialog();
+refreshNotifBadge();
+initCommandPalette();
+document.getElementById("sidebarCollapseBtn")?.addEventListener("click", toggleSidebar);
+applySidebarState();
+
+// Inicialización con Supabase Auth
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    sbUser = session.user;
+    showSkeleton(activeView);
+    loginScreen.classList.add("hidden");
+    appShell.classList.remove("hidden");
+    await sbLoad();
+    render();
+    hideSkeleton(2000);
+    setTimeout(initOnboarding, 400);
+  } else {
+    hideSkeleton(0);
+  }
+})();

@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Nebumia</title>
     <link rel="stylesheet" href="styles.css">
+    <script>
+      try { document.documentElement.dataset.theme = localStorage.getItem("bandu-panel-theme") || "dark"; } catch {}
+    </script>
   </head>
   <body>
+    <div id="preloader" aria-hidden="true"></div>
     <main id="loginScreen" class="login-shell">
       <section class="login-panel" aria-label="Acceso a Nebumia">
         <div class="login-brand">
@@ -68,37 +72,46 @@
     <div id="appShell" class="app-shell hidden">
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <div class="brand-mark small">N</div>
-          <div>
+          <div class="sidebar-brand-name">
             <strong>Nebumia</strong>
           </div>
+          <span class="sidebar-brand-initial" aria-hidden="true">N</span>
+          <button class="sidebar-toggle-btn" id="sidebarCollapseBtn" type="button" title="Colapsar menú"></button>
         </div>
         <nav id="mainNav" class="main-nav" aria-label="Módulos"></nav>
-        <div class="sidebar-meta">
-          <div class="storage-card">
-            <div class="storage-head"><span>Base local</span><strong>72%</strong></div>
-            <div class="progress"><i style="width:72%"></i></div>
-            <small>Demo MVP · datos en navegador</small>
-          </div>
-        </div>
+        <div id="sidebarSettings" class="sidebar-settings"></div>
       </aside>
 
       <section class="workspace">
+        <div id="contentLoader" class="content-loader hidden" aria-hidden="true">
+          <div class="content-spinner"></div>
+        </div>
         <header class="topbar">
           <div class="topbar-actions">
-            <button id="themeToggleBtn" class="secondary-action theme-toggle" type="button">Modo dark</button>
+            <button id="topbarSearchBtn" class="secondary-action theme-toggle" type="button" aria-label="Abrir búsqueda global" title="Buscar (Ctrl K)">
+              <svg class="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            </button>
+            <div class="notif-wrapper">
+              <button id="notifBtn" class="secondary-action theme-toggle notif-btn" type="button" aria-label="Notificaciones">
+                <svg class="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span id="notifBadge" class="notif-badge hidden">0</span>
+              </button>
+              <div id="notifDropdown" class="notif-dropdown hidden"></div>
+            </div>
             <div class="profile-menu">
               <button id="profileMenuBtn" class="profile-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
                 <span id="profileAvatar" class="profile-avatar">N</span>
-                <span class="profile-copy">
-                  <strong id="profileName">Administrador</strong>
-                  <small id="profileEmail">admin@bandu.pe</small>
-                </span>
-                <svg class="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
               </button>
               <div id="profileDropdown" class="profile-dropdown hidden" role="menu">
+                <div class="profile-dropdown-info">
+                  <strong id="profileName">Administrador</strong>
+                  <small id="profileEmail">admin@bandu.pe</small>
+                </div>
+                <div class="dropdown-divider"></div>
                 <button id="editProfileBtn" type="button" role="menuitem">Editar perfil</button>
-                <button id="changePasswordBtn" type="button" role="menuitem">Cambiar contraseña</button>
+                <button id="themeToggleBtn" type="button" role="menuitem">Cambiar a modo oscuro</button>
+                <button id="helpBtn" type="button" role="menuitem">Ayuda</button>
+                <div class="dropdown-divider"></div>
                 <button id="profileLogoutBtn" class="danger-menu-item" type="button" role="menuitem">Cerrar sesión</button>
               </div>
             </div>
@@ -107,6 +120,20 @@
 
         <div id="viewRoot"></div>
       </section>
+    </div>
+
+    <div id="confirmModal" class="confirm-modal-overlay hidden" aria-modal="true" role="dialog">
+      <div class="confirm-modal-box">
+        <div class="confirm-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+        </div>
+        <h3>¿Eliminar registro?</h3>
+        <p id="confirmMessage">Esta acción no se puede revertir. El elemento será eliminado permanentemente.</p>
+        <div class="confirm-modal-actions">
+          <button id="confirmCancelBtn" class="secondary-action" type="button">Cancelar</button>
+          <button id="confirmDeleteBtn" class="danger-action" type="button">Borrar</button>
+        </div>
+      </div>
     </div>
 
     <dialog id="quoteDialog" class="dialog">
@@ -122,7 +149,7 @@
           <label>Cliente<input name="client" required></label>
           <label>Servicio<input name="service" required></label>
           <label>Categoría<input name="category" value="Marketing" required></label>
-          <label>Comercial<input name="owner" value="Dante Trujillo" required></label>
+          <label>Comercial<input name="owner" required></label>
           <label>Monto sin IGV<input name="subtotal" type="number" min="0" step="0.01" required></label>
           <label>Estado
             <select name="status">
@@ -149,36 +176,33 @@
       </form>
     </dialog>
 
-    <dialog id="passwordDialog" class="dialog small-dialog">
-      <form id="passwordForm" method="dialog">
-        <div class="dialog-head">
-          <div>
-            <p class="eyebrow">Seguridad</p>
-            <h3>Cambiar contraseña</h3>
-          </div>
-          <button class="icon-button" data-close-dialog aria-label="Cerrar" type="button">×</button>
-        </div>
-        <label>Nueva contraseña<input name="newPassword" type="password" minlength="8" required></label>
-        <label>Confirmar<input name="confirmPassword" type="password" minlength="8" required></label>
-        <p id="passwordMessage" class="form-note"></p>
-        <div class="dialog-actions">
-          <button class="secondary-action" data-close-dialog type="button">Cancelar</button>
-          <button class="primary-action" value="default" type="submit">Actualizar</button>
-        </div>
-      </form>
-    </dialog>
-
     <dialog id="profileDialog" class="dialog small-dialog">
       <form id="profileForm" method="dialog">
         <div class="dialog-head">
           <div>
-            <p class="eyebrow">Perfil</p>
+            <p class="eyebrow">Cuenta</p>
             <h3>Editar perfil</h3>
           </div>
           <button class="icon-button" data-close-dialog aria-label="Cerrar" type="button">×</button>
         </div>
+        <div class="profile-photo-row">
+          <div class="profile-photo-circle" id="profilePhotoPreview">
+            <span id="profilePhotoInitial">N</span>
+            <img id="profilePhotoImg" src="" alt="" style="display:none">
+          </div>
+          <div class="profile-photo-actions">
+            <label class="secondary-action profile-photo-upload-btn">
+              Subir foto
+              <input id="profilePhotoInput" type="file" name="profilePhoto" accept="image/*" style="display:none">
+            </label>
+            <button type="button" id="removeProfilePhoto" class="secondary-action">Quitar foto</button>
+          </div>
+        </div>
         <label>Nombre<input name="profileName" type="text" required></label>
         <label>Correo<input name="profileEmail" type="email" required></label>
+        <p class="profile-section-label">Cambiar contraseña</p>
+        <label>Nueva contraseña<input name="newPassword" type="password" minlength="8" placeholder="Dejar vacío para no cambiar"></label>
+        <label>Confirmar contraseña<input name="confirmPassword" type="password" minlength="8"></label>
         <p id="profileMessage" class="form-note"></p>
         <div class="dialog-actions">
           <button class="secondary-action" data-close-dialog type="button">Cancelar</button>
@@ -187,6 +211,51 @@
       </form>
     </dialog>
 
+    <dialog id="helpDialog" class="dialog small-dialog">
+      <form id="helpForm">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Soporte</p>
+            <h3>Ayuda</h3>
+          </div>
+          <button class="icon-button" data-close-dialog aria-label="Cerrar" type="button">×</button>
+        </div>
+        <p class="form-note">Cuéntanos en qué podemos ayudarte. Te responderemos a tu correo registrado.</p>
+        <label>Asunto<input name="helpSubject" type="text" required placeholder="Ej: No puedo exportar datos"></label>
+        <label>Mensaje<textarea name="helpMessage" rows="4" required placeholder="Describe tu consulta o problema..."></textarea></label>
+        <p id="helpFeedback" class="form-note"></p>
+        <div class="dialog-actions">
+          <button class="secondary-action" data-close-dialog type="button">Cancelar</button>
+          <button class="primary-action" type="submit">Enviar mensaje</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Command Palette -->
+    <div id="commandPalette" class="cp-overlay hidden" role="dialog" aria-label="Búsqueda global" aria-modal="true">
+      <div class="cp-modal">
+        <div class="cp-search-row">
+          <svg class="cp-search-icon app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input id="cpInput" class="cp-input" type="text" placeholder="Buscar clientes, cotizaciones, módulos…" autocomplete="off" spellcheck="false">
+          <kbd class="cp-kbd">Esc</kbd>
+        </div>
+        <div id="cpResults" class="cp-results"></div>
+        <div class="cp-footer">
+          <span class="cp-hint"><kbd>↑↓</kbd> navegar</span>
+          <span class="cp-hint"><kbd>↵</kbd> abrir</span>
+          <span class="cp-hint"><kbd>Esc</kbd> cerrar</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onboarding Wizard -->
+    <div id="onboardingWizard" class="onb-overlay hidden" role="dialog" aria-modal="true" aria-label="Configuración inicial">
+      <div class="onb-modal">
+        <div id="onbWizardContent"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
   </body>
 </html>
