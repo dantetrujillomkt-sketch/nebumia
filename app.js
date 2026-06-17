@@ -1100,26 +1100,26 @@ function buildCajaRows() {
     const base  = { date: c.paidDate || c.dueDate, currency: c.currency || "PEN",
                     status: "Confirmado", source: "Cobro", sourceId: c.id,
                     invoice: c.invoice || "", repo: c.repo || c.quote?.repo || "" };
+    const defaultIngreso = det > 0 && mode !== "bandu" ? c.amount - det : c.amount;
+    const ingresoAmt = dm.montoReal != null ? dm.montoReal : defaultIngreso;
     if (det > 0 && mode === "bandu") {
-      // Cliente depositó el 100% → ingreso completo; Bandu paga detracción como egreso
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: c.amount, bankAccount: c.bankAccount || "" });
+        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
         concept: `Detracción pagada · ${label}`, category: "Detracción",
         amount: det, bankAccount: dm.cuenta || c.bankAccount || "" });
     } else if (det > 0) {
-      // Cliente pagó detracción → ingreso neto a cuenta; detracción entra a cuenta detracciones
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: c.amount - det, bankAccount: c.bankAccount || "" });
+        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
         concept: `Detracción · ${label}`, category: "Detracción",
         amount: det, bankAccount: detAccount });
     } else {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: c.amount, bankAccount: c.bankAccount || "" });
+        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
     }
   });
 
@@ -4159,9 +4159,12 @@ function openCollectionDialog(row) {
             <option value="cliente" ${mode === "cliente" ? "selected" : ""}>Cliente (depositó el neto a tu cuenta)</option>
             <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
           </select></label>
-          <label>Monto real de detracción (${sym})<input name="detActual" type="text" inputmode="decimal"
+          <label>Monto real de detracción (S/)<input name="detActual" type="text" inputmode="decimal"
             value="${dm.detActual != null ? dm.detActual : Math.round(calc.detraction).toFixed(2)}"
             placeholder="${Math.round(calc.detraction).toFixed(2)}"></label>
+          <label class="full">Monto real recibido en cuenta (${sym})<input name="montoReal" type="text" inputmode="decimal"
+            value="${dm.montoReal != null ? dm.montoReal : ""}"
+            placeholder="${mode === "bandu" ? calc.total.toFixed(2) : (calc.total - Math.round(calc.detraction)).toFixed(2)}"></label>
           <label id="detCuentaLabel" ${mode !== "bandu" ? 'style="display:none"' : ""}>¿Desde qué cuenta sale la detracción?<select name="detraccionCuenta">
             <option value="">— Cuenta —</option>${bankOpts}
           </select></label>`;
@@ -4674,7 +4677,8 @@ function saveCollection(data) {
     modes[editingId] = {
       mode:      data.detraccionMode,
       cuenta:    data.detraccionCuenta || "",
-      detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null
+      detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null,
+      montoReal: data.montoReal ? (parseFloat(cleanNumericImport(data.montoReal)) || null) : null
     };
     state.settings.collectionDetModes = modes;
   }
