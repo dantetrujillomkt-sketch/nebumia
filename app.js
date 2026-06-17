@@ -1244,6 +1244,11 @@ function displayCode(code) {
   return String(code || "").replace(/^PPTO\s*/i, "");
 }
 
+// Ordena registros por fecha descendente (más reciente primero). Las fechas ISO (YYYY-MM-DD) se comparan como texto.
+function sortByDateDesc(arr, getDate = r => r.date) {
+  return [...arr].sort((a, b) => String(getDate(b) || "").localeCompare(String(getDate(a) || "")));
+}
+
 const tablePages = {};
 function getTablePage(key) {
   if (!tablePages[key]) tablePages[key] = { page: 1, pageSize: 10 };
@@ -1597,11 +1602,11 @@ const views = {
         action: "quote",
         metricsToggle: true
       })}
-      <div id="quotesTable">${quotesTable(quotes)}</div>
+      <div id="quotesTable">${quotesTable(sortByDateDesc(quotes))}</div>
     `;
   },
   clients() {
-    const allClients = state.clients;
+    const allClients = sortByDateDesc(state.clients);
     const tipos = [...new Set(allClients.map(c => c.clientType).filter(Boolean))].sort();
     const paises = [...new Set(allClients.map(c => c.country).filter(Boolean))].sort();
     const rows = allClients.map(client => [
@@ -1635,7 +1640,7 @@ const views = {
 
   },
   sales() {
-    const sales = wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date));
+    const sales = sortByDateDesc(wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date)), s => s.wonDate || s.date);
     const salesPEN = sales.filter(s => (s.currency || "PEN") === "PEN");
     const salesUSD = sales.filter(s => s.currency === "USD");
     const totalPEN = salesPEN.reduce((sum, s) => sum + calcQuote(s).total, 0);
@@ -1672,7 +1677,7 @@ const views = {
 
   },
   collections() {
-    const collections = collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate));
+    const collections = sortByDateDesc(collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate)), r => r.wonDate || r.dueDate);
     const paid = collections.filter(row => row.status === "Pagado");
     const pending = collections.filter(row => row.status !== "Pagado");
     const overdue = collections.filter(row => row.status === "Vencido");
@@ -1774,12 +1779,12 @@ const views = {
     const fuentes = [...new Set(all.map(r => r.source).filter(Boolean))].sort();
     const cats    = [...new Set(all.map(r => r.category).filter(Boolean))].sort();
 
-    const ingresosFiltered = ingresos.filter(r =>
+    const ingresosFiltered = sortByDateDesc(ingresos.filter(r =>
       (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
-    );
-    const egresosFiltered = egresos.filter(r =>
+    ));
+    const egresosFiltered = sortByDateDesc(egresos.filter(r =>
       (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
-    );
+    ));
 
     const sumPEN = rows => rows.filter(r => r.currency === "PEN").reduce((s, r) => s + r.amount, 0);
     const sumUSD = rows => rows.filter(r => r.currency === "USD").reduce((s, r) => s + r.amount, 0);
@@ -1894,7 +1899,7 @@ const views = {
   },
   taxes() { activeView = "comprobantes"; render(); return ""; },
   team() {
-    const team = state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month)));
+    const team = sortByDateDesc(state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month))), t => t.dueDate || monthDate(t.month));
     const paidTeam = team.filter(item => item.status === "Pagado");
     return `
       <section class="metric-grid">
@@ -1925,9 +1930,9 @@ const views = {
       }), "team")}`;
   },
   comprobantes() {
-    const purchases = (state.purchases || []);
-    const invoicedSales = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status));
-    const taxPayments = (state.taxPayments || []);
+    const purchases = sortByDateDesc(state.purchases || []);
+    const invoicedSales = sortByDateDesc(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status)), r => r.paidDate || r.dueDate);
+    const taxPayments = sortByDateDesc(state.taxPayments || []);
     const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
     const totalSales = invoicedSales.reduce((sum, s) => sum + s.amount, 0);
     const won = wonQuotes().filter(item => dateInRange(item.wonDate || item.date));
