@@ -160,6 +160,8 @@ async function sbLoad() {
   }
   state.quotes.forEach(q => syncQuoteSideEffects(state, q));
   syncClientsFromActivity(state);
+  const bankChanged = applyBankAccountDefaults(state);
+  if (bankChanged) sbSync().catch(e => console.error("bank-autofill sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -657,6 +659,7 @@ function migrateState(input) {
   };
   migrated.quotes.forEach(q => syncQuoteSideEffects(migrated, q));
   syncClientsFromActivity(migrated);
+  applyBankAccountDefaults(migrated);
   return migrated;
 }
 
@@ -1428,20 +1431,18 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
-            const totalQuotedPEN = s.wonPEN.length + openPEN.length + s.lostPEN.length;
             return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelinePEN)}</div>
-            <div class="kpi-sub">${s.wonPEN.length} ganados de ${totalQuotedPEN} cotizaciones</div>`;
+            <div class="kpi-sub">${openPEN.length} ${openPEN.length===1?"cotización abierta":"cotizaciones abiertas"}</div>`;
           })()}
         </div>
         <div class="kpi-card">
           ${(() => {
-            const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
-            const totalQuotedPEN = s.wonPEN.length + openPEN.length + s.lostPEN.length;
-            const conv = totalQuotedPEN > 0 ? Math.round(s.wonPEN.length / totalQuotedPEN * 100) : 0;
+            const closedPEN = s.wonPEN.length + s.lostPEN.length;
+            const conv = closedPEN > 0 ? Math.round(s.wonPEN.length / closedPEN * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${conv}%</div>
-            <div class="kpi-sub">${s.wonPEN.length} ganadas de ${totalQuotedPEN} cotizaciones</div>
+            <div class="kpi-sub">${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>
             <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${conv}%;background:var(--mint)"></div></div>`;
           })()}
         </div>
@@ -1659,7 +1660,7 @@ const views = {
         ${metric("Comisiones", fmtAmt(totalComisiones, "PEN"), "Base comercial", "", "", "coral")}
       </section>
       ${moduleToolbar({ search: "Buscar venta, cliente o servicio", filters: `<select data-table-filter><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select><select data-table-filter><option value="">Todos los tipos de pago</option><option>1 pago</option><option>2 pagos</option><option>3 pagos</option></select>`, action: "sale", metricsToggle: true })}
-      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Factura", "Subtotal", "IGV", "Detracción", "Comisión", "Cuenta", "Tipo de pago", "Estado", "Acciones"], sales.map(s => {
+      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Subtotal", "IGV", "Detracción", "Comisión", "Cuenta", "Tipo de pago", "Estado", "Acciones"], sales.map(s => {
         const cur = s.currency || "PEN";
         const cuotas = Number(s.cuotas) || 1;
         const tipoPago = cuotas === 3 ? "3 pagos" : cuotas === 2 ? "2 pagos" : "1 pago";
@@ -1667,7 +1668,6 @@ const views = {
           displayCode(s.code), fmtDate(s.wonDate || s.date),
           `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
           escapeHtml(s.client),
-          escapeHtml(s.invoice || "—"),
           fmt(s.subtotal, cur), fmt(s.igv, cur),
           fmt(s.detraction, cur), fmt(s.commission, cur),
           escapeHtml(s.bankAccount || "—"),
@@ -3758,6 +3758,7 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
         </div>
       </div>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
+      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${item.bankAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}</select></label>
       <input name="leadId" type="hidden" value="${escapeAttr(item.leadId || "")}">
       <input name="cuotas" type="hidden" value="${item.cuotas || 2}">
       <label class="full">Repositorio (Drive)<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
@@ -3766,6 +3767,7 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
   `);
   bindDialogAutofills();
   bindQuoteCalcPreview();
+  bindBankAccountAutofill("quoteHasIgv", "quoteCurrency");
 }
 
 function openClientDialog(client = null) {
@@ -3835,6 +3837,7 @@ function openSaleDialog(quote = null) {
   `);
   bindDialogAutofills();
   bindSaleCalcPreview();
+  bindBankAccountAutofill("saleHasIgv", "saleCurrency");
 }
 
 function saveSale(data) {
@@ -3872,6 +3875,7 @@ function openCollectionDialog(row) {
   const sym = currency === "USD" ? "$" : "S/";
   const calc = quote ? calcQuote(quote, state) : { igv: 0, total: 0, detraction: 0 };
   const subtotal = quote?.subtotal || 0;
+  const effectiveBankAccount = row.bankAccount || (quote ? resolveDefaultBankAccount(quote.hasIgv, currency) : "");
   dialogShell("collection", "Editar cobranza", `
     <div class="coll-info-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="coll-info-item"><span class="coll-info-label">PPTO</span><span class="coll-info-value">${escapeHtml(code)}</span></div>
@@ -3889,7 +3893,7 @@ function openCollectionDialog(row) {
       <label>Nro Pago<input name="nroPago" value="${escapeAttr(nroPago)}" readonly style="background:var(--surface);color:var(--muted);cursor:default"></label>
       <label>Estado<select name="status">${options(paymentStatuses, row.status)}</select></label>
       <label>Factura<input name="invoice" value="${escapeAttr(row.invoice || "")}" placeholder="F001-00001"></label>
-      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${row.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${effectiveBankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
       <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate || ""}"></label>
       <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
       <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(row.repo || "")}" placeholder="https://..."></label>
@@ -3928,7 +3932,7 @@ function openInvoiceDialog(collectionId) {
     <div class="form-grid" style="margin-top:16px">
       <label>Número de factura<input name="invoice" value="${escapeAttr(raw.invoice || "")}" placeholder="F001-00001" required></label>
       <label>Fecha de emisión<input name="invoiceDate" type="date" value="${raw.invoiceDate || today()}" required></label>
-      <label class="full">Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${raw.bankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
+      <label class="full">Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${(raw.bankAccount || (quote ? resolveDefaultBankAccount(quote.hasIgv, currency) : "")) === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
       <label class="full">Observaciones<textarea name="invoiceNotes" rows="2" placeholder="Notas adicionales...">${escapeHtml(raw.invoiceNotes || "")}</textarea></label>
     </div>
   `, "Emitir factura");
@@ -4163,6 +4167,45 @@ function saveCashEntry(data) {
   else if (banks.length) activeCajaTab = banks[0];
   saveState();
   activeView = "finance";
+}
+
+function resolveDefaultBankAccount(hasIgv, currency) {
+  const isUSD = currency === "USD";
+  if (hasIgv) return isUSD ? "CC Interbank $" : "CC Interbank S/";
+  return isUSD ? "CP Interbank $" : "CP Interbank S/";
+}
+
+function applyBankAccountDefaults(st) {
+  let changed = false;
+  (st.quotes || []).forEach(q => {
+    if (!q.bankAccount) {
+      q.bankAccount = resolveDefaultBankAccount(q.hasIgv, q.currency || "PEN");
+      changed = true;
+    }
+  });
+  (st.collections || []).forEach(c => {
+    if (!c.bankAccount) {
+      const q = (st.quotes || []).find(r => r.id === c.quoteId);
+      if (q) {
+        c.bankAccount = resolveDefaultBankAccount(q.hasIgv, c.currency || q.currency || "PEN");
+        changed = true;
+      }
+    }
+  });
+  return changed;
+}
+
+function bindBankAccountAutofill(igvId, currencyId) {
+  const igvEl  = document.getElementById(igvId);
+  const curEl  = document.getElementById(currencyId);
+  const bankEl = quoteDialog.querySelector("[name='bankAccount']");
+  if (!bankEl) return;
+  const autoOpts = ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"];
+  const resolve = () => resolveDefaultBankAccount(igvEl?.checked || false, curEl?.value || "PEN");
+  const update  = () => { if (!bankEl.value || autoOpts.includes(bankEl.value)) bankEl.value = resolve(); };
+  if (!bankEl.value) bankEl.value = resolve();
+  igvEl?.addEventListener("change", update);
+  curEl?.addEventListener("change", update);
 }
 
 function bindQuoteCalcPreview() {
