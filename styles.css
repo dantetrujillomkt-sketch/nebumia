@@ -277,11 +277,11 @@ button { cursor: pointer; }
   left: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
   margin: 0;
   color: var(--ink);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 .brand-mark {
   width: 48px;
