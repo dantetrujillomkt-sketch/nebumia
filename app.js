@@ -3432,15 +3432,19 @@ function exportState() {
   const headers = Object.values(cols);
   const data = schema.getData();
   const isTemplate = !data?.length;
-  const dataRows = isTemplate ? [keys.map(k => schema.example?.[k] ?? "")] : data.map(r => keys.map(k => r[k] ?? ""));
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+  const allKeys    = schema.stateKey ? ["id", ...keys] : keys;
+  const allHeaders = schema.stateKey ? ["ID",  ...headers] : headers;
+  const dataRows = isTemplate
+    ? [allKeys.map(k => k === "id" ? "" : (schema.example?.[k] ?? ""))]
+    : data.map(r => allKeys.map(k => r[k] ?? ""));
+  const ws = XLSX.utils.aoa_to_sheet([allHeaders, ...dataRows]);
   const hStyle = { font:{ bold:true, color:{ rgb:"FFFFFF" } }, fill:{ fgColor:{ rgb:"4F46E5" } }, alignment:{ horizontal:"center" } };
-  headers.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:0,c:i}); if (ws[c]) ws[c].s = hStyle; });
+  allHeaders.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:0,c:i}); if (ws[c]) ws[c].s = hStyle; });
   if (isTemplate) {
     const eStyle = { font:{ italic:true, color:{ rgb:"94A3B8" } } };
-    keys.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:1,c:i}); if (ws[c]) ws[c].s = eStyle; });
+    allKeys.forEach((_, i) => { const c = XLSX.utils.encode_cell({r:1,c:i}); if (ws[c]) ws[c].s = eStyle; });
   }
-  ws["!cols"] = headers.map(h => ({ wch: Math.max(h.length + 4, 16) }));
+  ws["!cols"] = allHeaders.map((h, i) => ({ wch: i === 0 && h === "ID" ? 8 : Math.max(h.length + 4, 16) }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, schema.label);
   XLSX.writeFile(wb, isTemplate ? `plantilla-${schema.label.toLowerCase().replace(/ /g,"-")}.xlsx` : `nebumia-${schema.label.toLowerCase().replace(/ /g,"-")}-${today()}.xlsx`);
@@ -3478,9 +3482,11 @@ function importState() {
         // Validate and map rows
         const errors = [];
         const imported = rawRows.map((row, ri) => {
-          const obj = { id: crypto.randomUUID() };
+          const rowId = String(row["ID"] || "").trim();
+          const obj = { id: rowId || crypto.randomUUID() };
           let hasData = false;
           for (const [label, val] of Object.entries(row)) {
+            if (label === "ID") continue;
             const key = labelToKey[label];
             if (key) { obj[key] = val === undefined ? "" : String(val).trim(); hasData = true; }
             else if (label && String(val).trim()) errors.push(`Fila ${ri+2}: columna desconocida "${label}"`);
@@ -3559,15 +3565,26 @@ async function runImport(schema, imported) {
   const bar = overlay.querySelector("#importProgressBar");
   const sub = overlay.querySelector("#importProgressSub");
 
-  // Add records in chunks so the progress bar animates
+  // Upsert in chunks: update existing records by id, insert new ones
   const CHUNK = 20;
   let done = 0;
   state[schema.stateKey] = state[schema.stateKey] || [];
+  const existingMap = new Map(state[schema.stateKey].map(r => [r.id, r]));
+  let updated = 0, inserted = 0;
   for (let i = 0; i < imported.length; i += CHUNK) {
-    state[schema.stateKey].push(...imported.slice(i, i + CHUNK));
+    for (const rec of imported.slice(i, i + CHUNK)) {
+      if (existingMap.has(rec.id)) {
+        const idx = state[schema.stateKey].findIndex(r => r.id === rec.id);
+        state[schema.stateKey][idx] = { ...state[schema.stateKey][idx], ...rec };
+        updated++;
+      } else {
+        state[schema.stateKey].push(rec);
+        existingMap.set(rec.id, rec);
+        inserted++;
+      }
+    }
     done = Math.min(i + CHUNK, imported.length);
-    const pct = Math.round((done / imported.length) * 100);
-    bar.style.width = pct + "%";
+    bar.style.width = Math.round((done / imported.length) * 100) + "%";
     sub.textContent = `${done} de ${imported.length}`;
     await new Promise(r => setTimeout(r, 60));
   }
@@ -3581,7 +3598,7 @@ async function runImport(schema, imported) {
 
   overlay.remove();
   render();
-  showToast(`✓ ${imported.length} registros importados en ${schema.label}`);
+  showToast(`✓ ${schema.label}: ${inserted} nuevos, ${updated} actualizados`);
 }
 
 function importStateJson(file) {
