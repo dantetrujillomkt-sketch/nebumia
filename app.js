@@ -1256,6 +1256,15 @@ function normalizeImportDate(val) {
   return s;
 }
 
+function cleanNumericImport(val) {
+  if (val === undefined || val === null || val === "") return "";
+  const s = String(val).trim();
+  // Strip currency symbols, spaces and thousands separators, keep decimal point
+  const cleaned = s.replace(/[S\/\$USDusd\s]/g, "").replace(/,/g, "");
+  const n = parseFloat(cleaned);
+  return isNaN(n) ? s : String(n);
+}
+
 function displayCode(code) {
   return String(code || "").replace(/^PPTO\s*/i, "");
 }
@@ -3425,15 +3434,15 @@ function bindModuleToolbar() {
 }
 
 const EXCEL_SCHEMAS = {
-  clients:     { label:"Clientes",          stateKey:"clients",       viewKey:"clients",     dateFields:["date"],                       cols:{name:"Cliente",ruc:"RUC/DNI",clientType:"Tipo",contact:"Contacto",email:"Correo",phone:"Teléfono",owner:"Comercial",source:"Fuente",country:"País",date:"Fecha",notes:"Notas"}, example:{name:"Empresa SAC",ruc:"20123456789",clientType:"Empresa",contact:"Juan Pérez",email:"juan@empresa.com",phone:"999888777",owner:"María López",source:"Referido",country:"Perú",date:"2024-01-15",notes:"Cliente VIP"}, getData:()=>state.clients },
-  leads:       { label:"Leads",             stateKey:"leads",         viewKey:"leads",       dateFields:["date"],                       cols:{name:"Nombre",client:"Empresa",service:"Servicio",source:"Fuente",channel:"Canal",owner:"Comercial",status:"Estado",estimatedValue:"Valor estimado",date:"Fecha",notes:"Notas"}, example:{name:"Ana Torres",client:"Torres Corp",service:"Diseño web",source:"LinkedIn",channel:"Redes sociales",owner:"María López",status:"Nuevo",estimatedValue:"3500",date:"2024-01-15",notes:"Interesado en paquete completo"}, getData:()=>state.leads },
-  quotes:      { label:"Cotizaciones",      stateKey:"quotes",        viewKey:"quotes",      dateFields:["date","wonDate"],             cols:{code:"Código",client:"Cliente",service:"Servicio",category:"Categoría",owner:"Comercial",subtotal:"Subtotal",status:"Estado",paymentType:"Tipo pago",currency:"Moneda",date:"Fecha",wonDate:"Fecha ganado",comments:"Comentarios"}, example:{code:"COT-001",client:"Empresa SAC",service:"Diseño de marca",category:"Marketing",owner:"María López",subtotal:"5000",status:"Ganado",paymentType:"split",currency:"PEN",date:"2024-01-10",wonDate:"2024-01-20",comments:"Incluye manual de marca"}, getData:()=>state.quotes },
-  collections: { label:"Cobranzas",         stateKey:"collections",   viewKey:"collections", dateFields:["dueDate","paidDate"],         cols:{quoteId:"Cotización",label:"Cuota",dueDate:"Vencimiento",amount:"Monto",currency:"Moneda",status:"Estado",paidDate:"Fecha pago",invoice:"Factura",declared:"Declarado"}, example:{quoteId:"COT-001",label:"Cuota 1 de 2",dueDate:"2024-02-01",amount:"2950",currency:"PEN",status:"Pagado",paidDate:"2024-02-03",invoice:"F001-00123",declared:"Declarado"}, getData:()=>collectionRows() },
-  expenses:    { label:"Gastos",            stateKey:"expenses",      viewKey:"expenses",    dateFields:["date"],                       cols:{date:"Fecha",concept:"Concepto",type:"Tipo",amount:"Monto",currency:"Moneda",vendor:"Proveedor",ruc:"RUC",invoice:"Comprobante",category:"Categoría"}, example:{date:"2024-01-05",concept:"Adobe Creative Cloud",type:"Gasto fijo",amount:"180",currency:"PEN",vendor:"Adobe Inc",ruc:"20999888777",invoice:"F001-00456",category:"Software"}, getData:()=>state.expenses },
-  team:        { label:"Pagos equipo",      stateKey:"team",          viewKey:"team",        dateFields:["dueDate"],                    cols:{month:"Mes",name:"Nombre",role:"Rol",amount:"Monto",currency:"Moneda",status:"Estado",dueDate:"Fecha",ruc:"RUC"}, example:{month:"2024-01",name:"Carlos Ruiz",role:"Diseñador",amount:"3500",currency:"PEN",status:"Pagado",dueDate:"2024-01-31",ruc:"10456789012"}, getData:()=>state.team },
-  purchases:   { label:"Compras",           stateKey:"purchases",     viewKey:"comprobantes",dateFields:["date","paidDate"],            cols:{date:"Fecha",vendor:"Proveedor",ruc:"RUC",invoiceType:"Tipo comprobante",invoiceNum:"N° comprobante",concept:"Concepto",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-08",vendor:"Proveedor SAC",ruc:"20111222333",invoiceType:"Factura",invoiceNum:"F002-00789",concept:"Equipos de cómputo",subtotal:"2542.37",igv:"457.63",total:"3000",currency:"PEN"}, getData:()=>state.purchases },
-  sales:       { label:"Ventas facturadas", stateKey:"invoicedSales", viewKey:"sales",       dateFields:["date"],                       cols:{date:"Fecha",client:"Cliente",ruc:"RUC",invoiceType:"Tipo",invoiceNum:"N° comprobante",service:"Servicio",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-20",client:"Empresa SAC",ruc:"20123456789",invoiceType:"Factura",invoiceNum:"F001-00123",service:"Diseño de marca",subtotal:"5000",igv:"900",total:"5900",currency:"PEN"}, getData:()=>state.invoicedSales },
-  finance:     { label:"Caja",              stateKey:null,            viewKey:"finance",     dateFields:["date"],                       cols:{date:"Fecha",type:"Tipo",concept:"Concepto",category:"Categoría",amount:"Monto",currency:"Moneda",status:"Estado",bankAccount:"Cuenta"}, example:{date:"2024-01-15",type:"ingreso",concept:"Pago cuota 1 - Empresa SAC",category:"Cobranza",amount:"2950",currency:"PEN",status:"Confirmado",bankAccount:"BCP Soles"}, getData:()=>buildCajaRows() },
+  clients:     { label:"Clientes",          stateKey:"clients",       viewKey:"clients",     dateFields:["date"],                       numericFields:[],                                      cols:{name:"Cliente",ruc:"RUC/DNI",clientType:"Tipo",contact:"Contacto",email:"Correo",phone:"Teléfono",owner:"Comercial",source:"Fuente",country:"País",date:"Fecha",notes:"Notas"}, example:{name:"Empresa SAC",ruc:"20123456789",clientType:"Empresa",contact:"Juan Pérez",email:"juan@empresa.com",phone:"999888777",owner:"María López",source:"Referido",country:"Perú",date:"2024-01-15",notes:"Cliente VIP"}, getData:()=>state.clients },
+  leads:       { label:"Leads",             stateKey:"leads",         viewKey:"leads",       dateFields:["date"],                       numericFields:["estimatedValue"],                      cols:{name:"Nombre",client:"Empresa",service:"Servicio",source:"Fuente",channel:"Canal",owner:"Comercial",status:"Estado",estimatedValue:"Valor estimado",date:"Fecha",notes:"Notas"}, example:{name:"Ana Torres",client:"Torres Corp",service:"Diseño web",source:"LinkedIn",channel:"Redes sociales",owner:"María López",status:"Nuevo",estimatedValue:"3500",date:"2024-01-15",notes:"Interesado en paquete completo"}, getData:()=>state.leads },
+  quotes:      { label:"Cotizaciones",      stateKey:"quotes",        viewKey:"quotes",      dateFields:["date","wonDate"],             numericFields:["subtotal"],                            cols:{code:"Código",client:"Cliente",service:"Servicio",category:"Categoría",owner:"Comercial",subtotal:"Subtotal",status:"Estado",paymentType:"Tipo pago",currency:"Moneda",date:"Fecha",wonDate:"Fecha ganado",comments:"Comentarios"}, example:{code:"COT-001",client:"Empresa SAC",service:"Diseño de marca",category:"Marketing",owner:"María López",subtotal:"5000",status:"Ganado",paymentType:"split",currency:"PEN",date:"2024-01-10",wonDate:"2024-01-20",comments:"Incluye manual de marca"}, getData:()=>state.quotes },
+  collections: { label:"Cobranzas",         stateKey:"collections",   viewKey:"collections", dateFields:["dueDate","paidDate"],         numericFields:["amount"],                              cols:{quoteId:"Cotización",label:"Cuota",dueDate:"Vencimiento",amount:"Monto",currency:"Moneda",status:"Estado",paidDate:"Fecha pago",invoice:"Factura",declared:"Declarado"}, example:{quoteId:"COT-001",label:"Cuota 1 de 2",dueDate:"2024-02-01",amount:"2950",currency:"PEN",status:"Pagado",paidDate:"2024-02-03",invoice:"F001-00123",declared:"Declarado"}, getData:()=>collectionRows() },
+  expenses:    { label:"Gastos",            stateKey:"expenses",      viewKey:"expenses",    dateFields:["date"],                       numericFields:["amount"],                              cols:{date:"Fecha",concept:"Concepto",type:"Tipo",amount:"Monto",currency:"Moneda",vendor:"Proveedor",ruc:"RUC",invoice:"Comprobante",category:"Categoría"}, example:{date:"2024-01-05",concept:"Adobe Creative Cloud",type:"Gasto fijo",amount:"180",currency:"PEN",vendor:"Adobe Inc",ruc:"20999888777",invoice:"F001-00456",category:"Software"}, getData:()=>state.expenses },
+  team:        { label:"Pagos equipo",      stateKey:"team",          viewKey:"team",        dateFields:["dueDate"],                    numericFields:["amount"],                              cols:{month:"Mes",name:"Nombre",role:"Rol",amount:"Monto",currency:"Moneda",status:"Estado",dueDate:"Fecha",ruc:"RUC"}, example:{month:"2024-01",name:"Carlos Ruiz",role:"Diseñador",amount:"3500",currency:"PEN",status:"Pagado",dueDate:"2024-01-31",ruc:"10456789012"}, getData:()=>state.team },
+  purchases:   { label:"Compras",           stateKey:"purchases",     viewKey:"comprobantes",dateFields:["date","paidDate"],            numericFields:["subtotal","igv","total"],               cols:{date:"Fecha",vendor:"Proveedor",ruc:"RUC",invoiceType:"Tipo comprobante",invoiceNum:"N° comprobante",concept:"Concepto",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-08",vendor:"Proveedor SAC",ruc:"20111222333",invoiceType:"Factura",invoiceNum:"F002-00789",concept:"Equipos de cómputo",subtotal:"2542.37",igv:"457.63",total:"3000",currency:"PEN"}, getData:()=>state.purchases },
+  sales:       { label:"Ventas facturadas", stateKey:"invoicedSales", viewKey:"sales",       dateFields:["date"],                       numericFields:["subtotal","igv","total"],               cols:{date:"Fecha",client:"Cliente",ruc:"RUC",invoiceType:"Tipo",invoiceNum:"N° comprobante",service:"Servicio",subtotal:"Subtotal",igv:"IGV",total:"Total",currency:"Moneda"}, example:{date:"2024-01-20",client:"Empresa SAC",ruc:"20123456789",invoiceType:"Factura",invoiceNum:"F001-00123",service:"Diseño de marca",subtotal:"5000",igv:"900",total:"5900",currency:"PEN"}, getData:()=>state.invoicedSales },
+  finance:     { label:"Caja",              stateKey:null,            viewKey:"finance",     dateFields:["date"],                       numericFields:["amount"],                              cols:{date:"Fecha",type:"Tipo",concept:"Concepto",category:"Categoría",amount:"Monto",currency:"Moneda",status:"Estado",bankAccount:"Cuenta"}, example:{date:"2024-01-15",type:"ingreso",concept:"Pago cuota 1 - Empresa SAC",category:"Cobranza",amount:"2950",currency:"PEN",status:"Confirmado",bankAccount:"BCP Soles"}, getData:()=>buildCajaRows() },
 };
 
 function getSchemaForView() {
@@ -3496,7 +3505,8 @@ function importState() {
         const labelToKey = Object.fromEntries(Object.entries(schema.cols).map(([k,v]) => [v,k]));
 
         // Validate and map rows
-        const dateFieldSet = new Set(schema.dateFields || []);
+        const dateFieldSet    = new Set(schema.dateFields    || []);
+        const numericFieldSet = new Set(schema.numericFields || []);
         const errors = [];
         const imported = rawRows.map((row, ri) => {
           const rowId = String(row["ID"] || "").trim();
@@ -3507,7 +3517,13 @@ function importState() {
             const key = labelToKey[label];
             if (key) {
               const strVal = val === undefined ? "" : String(val).trim();
-              obj[key] = dateFieldSet.has(key) ? normalizeImportDate(strVal) : strVal;
+              if (dateFieldSet.has(key)) {
+                obj[key] = normalizeImportDate(strVal);
+              } else if (numericFieldSet.has(key)) {
+                obj[key] = cleanNumericImport(strVal);
+              } else {
+                obj[key] = strVal;
+              }
               hasData = true;
             } else if (label && String(val).trim()) errors.push(`Fila ${ri+2}: columna desconocida "${label}"`);
           }
