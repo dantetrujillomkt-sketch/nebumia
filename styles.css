@@ -709,9 +709,12 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   width: 38px;
   height: 38px;
   padding: 0;
-  border-color: rgba(79,124,255,.32);
+  border: none;
+  background: transparent;
+  box-shadow: none;
   color: var(--brand-strong);
 }
+.theme-toggle:hover { background: var(--hover); }
 .theme-toggle .app-icon { width: 18px; height: 18px; }
 
 /* Notification bell */
@@ -831,19 +834,20 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 .profile-trigger {
   display: flex;
   align-items: center;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
   color: var(--ink);
-  background: var(--panel);
-  box-shadow: var(--shadow);
+  background: transparent;
+  box-shadow: none;
 }
 .profile-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 50%;
+  overflow: hidden;
   color: white;
   background: var(--brand);
   font-weight: 650;
