@@ -353,7 +353,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shad
 .auth-submit { min-height: 54px; margin-top: 4px; border-radius: 14px; }
 .auth-links {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 14px;
   color: var(--muted);
   font-size: 12px;

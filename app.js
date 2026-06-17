@@ -734,7 +734,7 @@ function setAuthMode(mode) {
   if (mode === "login") {
     authTitle.textContent = "Bienvenido de vuelta";
     authSubtitle.textContent = "Ingresa tus datos para acceder a Nebumia.";
-    authSubmitBtn.innerHTML = "Ingresar al sistema";
+    authSubmitBtn.innerHTML = "Ingresar";
     authHint.textContent = "";
   }
   if (mode === "forgot") {
