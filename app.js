@@ -137,6 +137,7 @@ async function sbLoad() {
     }
   }
   const base = seedState();
+  const localSnap = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY))?.settings || {}; } catch { return {}; } })();
   state.clients       = (clients       || []).map(r => newClient(toCamel(r)));
   state.leads         = (leads         || []).map(r => newLead(toCamel(r)));
   state.quotes        = (quotes        || []).map(r => newQuote(toCamel(r)));
@@ -149,7 +150,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [], detractionAccount: settings.detraction_account || "Detracciones", collectionDetModes: settings.collection_det_modes || {} };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {} };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -1255,23 +1256,20 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       });
     }
 
-    if (saldo !== 0) {
-      const signedAmt = saldo >= 0 ? saldo : -saldo;
-      rows.push({
-        id: `saldo-${firstDay}`,
-        date: firstDay,
-        type: saldo >= 0 ? "ingreso" : "egreso",
-        concept: "Saldo anterior" + (override ? " ✎" : ""),
-        category: "Saldo anterior",
-        source: "Saldo anterior",
-        amount: signedAmt,
-        currency: "PEN",
-        sourceType: "saldoAnterior",
-        bankAccount: tab !== "general" ? tab : "",
-        _monthKey: monthKey,
-        _signedAmount: saldo
-      });
-    }
+    rows.push({
+      id: `saldo-${firstDay}`,
+      date: firstDay,
+      type: saldo >= 0 ? "ingreso" : "egreso",
+      concept: "Saldo anterior" + (override ? " ✎" : ""),
+      category: "Saldo anterior",
+      source: "Saldo anterior",
+      amount: Math.abs(saldo),
+      currency: "PEN",
+      sourceType: "saldoAnterior",
+      bankAccount: tab !== "general" ? tab : "",
+      _monthKey: monthKey,
+      _signedAmount: saldo
+    });
     cursor.setMonth(cursor.getMonth() + 1);
   }
   return rows;
