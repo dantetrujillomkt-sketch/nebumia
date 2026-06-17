@@ -3664,14 +3664,17 @@ function ownerSelect(selected) {
 
 function serviceSelect(selected) {
   const services = state.services || [];
-  const opts = services.map(s => `<option value="${escapeAttr(s)}" ${s === selected ? "selected" : ""}>${escapeHtml(s)}</option>`).join("");
-  return `<select name="service" required><option value="">— Seleccionar servicio —</option>${opts}</select>`;
+  const opts = services.map(s => `<option value="${escapeAttr(s)}"></option>`).join("");
+  return `<input name="service" list="serviceDatalist" autocomplete="off" required
+    placeholder="Selecciona o escribe un servicio nuevo" value="${escapeAttr(selected || "")}">
+    <datalist id="serviceDatalist">${opts}</datalist>`;
 }
 
 function saveServiceIfNew(serviceName) {
-  if (!serviceName) return;
-  if (!(state.services || []).includes(serviceName)) {
-    state.services = [...(state.services || []), serviceName].sort();
+  const name = (serviceName || "").trim();
+  if (!name) return;
+  if (!(state.services || []).includes(name)) {
+    state.services = [...(state.services || []), name].sort();
   }
 }
 
@@ -4225,6 +4228,7 @@ function handleEntitySubmit(event) {
 }
 
 function saveLead(data) {
+  data.service = (data.service || "").trim();
   saveServiceIfNew(data.service);
   const item = newLead(data);
   if (editingId) state.leads = state.leads.map(l => l.id === editingId ? { ...l, ...item, id: editingId, quoteId: l.quoteId } : l);
@@ -4234,6 +4238,7 @@ function saveLead(data) {
 }
 
 function saveQuote(data) {
+  data.service = (data.service || "").trim();
   saveServiceIfNew(data.service);
   const existing = editingId ? state.quotes.find(q => q.id === editingId) : null;
   const item = newQuote({ ...data, subtotal: Number(data.subtotal), hasIgv: data.hasIgv === "on", wonDate: existing?.wonDate || "" });
