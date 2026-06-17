@@ -160,8 +160,9 @@ async function sbLoad() {
   }
   state.quotes.forEach(q => syncQuoteSideEffects(state, q));
   syncClientsFromActivity(state);
+  const codeChanged = applyCodePadding(state);
   const bankChanged = applyBankAccountDefaults(state);
-  if (bankChanged) sbSync().catch(e => console.error("bank-autofill sync:", e));
+  if (codeChanged || bankChanged) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -659,6 +660,7 @@ function migrateState(input) {
   };
   migrated.quotes.forEach(q => syncQuoteSideEffects(migrated, q));
   syncClientsFromActivity(migrated);
+  applyCodePadding(migrated);
   applyBankAccountDefaults(migrated);
   return migrated;
 }
@@ -1229,9 +1231,27 @@ function normalizeStatus(status) {
   return String(status || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-");
 }
 
+function padQuoteCode(code) {
+  const s = String(code || "").trim();
+  if (!s || s.startsWith("0")) return s;       // already padded or empty
+  if (!/^\d/.test(s)) return s;                // starts with letter/symbol, leave as-is
+  const num = parseInt(s.match(/^\d+/)[0], 10);
+  return num < 1000 ? "0" + s : s;             // <1000 → prepend "0"; ≥1000 → no change
+}
+
 function nextQuoteCode() {
   const nums = state?.quotes?.map(q => Number(String(q.code).match(/\d+/)?.[0] || 0)).filter(Boolean) || [285];
-  return String(Math.max(...nums, 285) + 1).padStart(4, "0");
+  const next = Math.max(...nums, 285) + 1;
+  return next < 1000 ? String(next).padStart(4, "0") : String(next);
+}
+
+function applyCodePadding(st) {
+  let changed = false;
+  (st.quotes || []).forEach(q => {
+    const padded = padQuoteCode(q.code);
+    if (padded !== q.code) { q.code = padded; changed = true; }
+  });
+  return changed;
 }
 
 function fmtDate(str) {
@@ -1269,7 +1289,7 @@ function cleanBooleanImport(val) {
 }
 
 function displayCode(code) {
-  return String(code || "").replace(/^PPTO\s*/i, "");
+  return padQuoteCode(String(code || "").replace(/^PPTO\s*/i, ""));
 }
 
 // Ordena registros por fecha descendente (más reciente primero). Las fechas ISO (YYYY-MM-DD) se comparan como texto.
