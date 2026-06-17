@@ -1200,6 +1200,7 @@ function getAccountBalance(accountName) {
 
 function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
   const fixedAssigned = assignFixedExpenses();
+  const tabCurrency = tab !== "general" && /\$|USD/i.test(tab) ? "USD" : "PEN";
 
   function genFixedRows(fromMonth, toMonth) {
     const result = [];
@@ -1242,14 +1243,14 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       saldo = override.amount;
       const postFixed = genFixedRows(override.date, monthKey);
       [...allCajaRows, ...postFixed].forEach(r => {
-        if (!r.date || r.currency !== "PEN" || r.bankAccount !== tab) return;
+        if (!r.date || r.currency !== tabCurrency || r.bankAccount !== tab) return;
         const rm = r.date.substring(0, 7);
         if (rm < override.date || rm >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
       });
     } else {
       baseRows.forEach(r => {
-        if (!r.date || r.currency !== "PEN") return;
+        if (!r.date || r.currency !== tabCurrency) return;
         if (tab !== "general" && r.bankAccount !== tab) return;
         if (r.date.substring(0, 7) >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
@@ -1264,7 +1265,7 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       category: "Saldo anterior",
       source: "Saldo anterior",
       amount: Math.abs(saldo),
-      currency: "PEN",
+      currency: tabCurrency,
       sourceType: "saldoAnterior",
       bankAccount: tab !== "general" ? tab : "",
       _monthKey: monthKey,
@@ -4450,13 +4451,15 @@ function openSaldoInicialDialog(monthKey, bankAccount, currentSigned) {
   const [yr, mo] = monthKey.split("-");
   const monthName = new Date(Number(yr), Number(mo) - 1, 1)
     .toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  const isUSD = /\$|USD/i.test(bankAccount);
+  const sym   = isUSD ? "USD $" : "S/";
   dialogShell("saldoInicial", "Saldo al inicio de " + monthName, `
     <div class="form-grid">
       <input type="hidden" name="month" value="${escapeAttr(monthKey)}">
       <input type="hidden" name="bankAccount" value="${escapeAttr(bankAccount)}">
       <label class="full" style="font-size:.85rem;color:var(--text-2)">Cuenta: ${escapeHtml(bankAccount)}</label>
-      <label class="full">Monto (S/)
-        <input name="amount" type="text" inputmode="decimal" value="${currentSigned !== 0 ? Math.abs(currentSigned) : ""}" placeholder="Ej: 12,373.65" autofocus>
+      <label class="full">Monto (${sym})
+        <input name="amount" type="text" inputmode="decimal" value="${currentSigned !== 0 ? Math.abs(currentSigned) : ""}" placeholder="${isUSD ? "Ej: 885.00" : "Ej: 12,373.65"}" autofocus>
       </label>
       <p class="full" style="font-size:.8rem;color:var(--text-2);margin:0">Deja en 0 o vacío para volver al cálculo automático.</p>
     </div>
