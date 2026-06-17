@@ -1644,8 +1644,8 @@ const views = {
     const totalPEN = salesPEN.reduce((sum, s) => sum + calcQuote(s).total, 0);
     const totalUSD = salesUSD.reduce((sum, s) => sum + calcQuote(s).total, 0);
     const fmtAmt = (v, cur) => `${cur === "USD" ? "$" : "S/"} ${v.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-    const penDetail = salesPEN.length ? salesPEN.map(s => fmtAmt(calcQuote(s).total, "PEN")).join("  ·  ") : "Sin ventas en soles";
-    const usdDetail = salesUSD.length ? salesUSD.map(s => fmtAmt(calcQuote(s).total, "USD")).join("  ·  ") : "Sin ventas en dólares";
+    const penDetail = salesPEN.length ? `${salesPEN.length} ${salesPEN.length === 1 ? "venta" : "ventas"} en soles` : "Sin ventas en soles";
+    const usdDetail = salesUSD.length ? `${salesUSD.length} ${salesUSD.length === 1 ? "venta" : "ventas"} en dólares` : "Sin ventas en dólares";
     const totalComisiones = sales.reduce((sum, s) => sum + calcQuote(s).commission, 0);
     return `
       <section class="metric-grid">
