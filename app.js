@@ -1169,6 +1169,59 @@ function getAccountBalance(accountName) {
   return ingresos - egresos;
 }
 
+function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
+  const fixedAssigned = assignFixedExpenses();
+  const priorFixed = [];
+  if (fixedAssigned.length) {
+    const rs = new Date(rangeStart + "T00:00:00");
+    const fStart = new Date(rs.getFullYear(), rs.getMonth() - 36, 1);
+    const fEnd   = new Date(rs.getFullYear(), rs.getMonth() - 1,  1);
+    let fc = new Date(fStart);
+    while (fc <= fEnd) {
+      const d = isoDate(fc);
+      fixedAssigned.forEach(f => priorFixed.push({
+        date: d, type: "egreso", amount: f.amount, currency: f.currency,
+        bankAccount: f.assignedAccount || ""
+      }));
+      fc.setMonth(fc.getMonth() + 1);
+    }
+  }
+
+  const baseRows = [...allCajaRows, ...priorFixed];
+  const rows = [];
+  const startDate = new Date(rangeStart + "T00:00:00");
+  const endDate   = new Date(rangeEnd   + "T00:00:00");
+  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+
+  while (cursor <= endDate) {
+    const firstDay = isoDate(cursor);
+    const monthKey = firstDay.substring(0, 7);
+    let saldo = 0;
+    baseRows.forEach(r => {
+      if (!r.date || r.currency !== "PEN") return;
+      if (tab !== "general" && r.bankAccount !== tab) return;
+      if (r.date.substring(0, 7) >= monthKey) return;
+      saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
+    });
+    if (saldo !== 0) {
+      rows.push({
+        id: `saldo-${firstDay}`,
+        date: firstDay,
+        type: saldo >= 0 ? "ingreso" : "egreso",
+        concept: "Saldo anterior",
+        category: "Saldo anterior",
+        source: "Saldo anterior",
+        amount: Math.abs(saldo),
+        currency: "PEN",
+        sourceType: "saldoAnterior",
+        bankAccount: tab !== "general" ? tab : ""
+      });
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return rows;
+}
+
 function assignFixedExpenses() {
   const banks = state.settings.bankAccounts || [];
   const fixed = state.settings.fixedExpenses || [];
@@ -1808,10 +1861,14 @@ const views = {
       }
     }
 
-    let all = [...buildCajaRows(), ...fixedRows].filter(r =>
-      r.sourceType === "collection"
-        ? (r.date || "") >= dashboardRange.start
-        : dateInRange(r.date)
+    const allCajaRows = buildCajaRows();
+    const saldoRows = buildSaldoAnteriorRows(allCajaRows, tab, dashboardRange.start, dashboardRange.end);
+    let all = [...allCajaRows, ...fixedRows, ...saldoRows].filter(r =>
+      r.sourceType === "saldoAnterior" || (
+        r.sourceType === "collection"
+          ? (r.date || "") >= dashboardRange.start
+          : dateInRange(r.date)
+      )
     );
 
     // Bank tab filter
@@ -1827,14 +1884,16 @@ const views = {
     const ingresos = all.filter(r => r.type === "ingreso");
     const egresos  = all.filter(r => r.type === "egreso");
 
-    const fuentes = [...new Set(all.map(r => r.source).filter(Boolean))].sort();
-    const cats    = [...new Set(all.map(r => r.category).filter(Boolean))].sort();
+    const fuentes = [...new Set(all.filter(r => r.sourceType !== "saldoAnterior").map(r => r.source).filter(Boolean))].sort();
+    const cats    = [...new Set(all.filter(r => r.sourceType !== "saldoAnterior").map(r => r.category).filter(Boolean))].sort();
 
     const ingresosFiltered = sortByDateDesc(ingresos.filter(r =>
-      (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
+      r.sourceType === "saldoAnterior" ||
+      ((!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat))
     ));
     const egresosFiltered = sortByDateDesc(egresos.filter(r =>
-      (!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat)
+      r.sourceType === "saldoAnterior" ||
+      ((!q || matchesCaja(r, q)) && (!fuente || r.source === fuente) && (!cat || r.category === cat))
     ));
 
     const sumPEN = rows => rows.filter(r => r.currency === "PEN").reduce((s, r) => s + r.amount, 0);
@@ -1852,6 +1911,7 @@ const views = {
       if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
       if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
+      if (row.sourceType === "saldoAnterior") return "";
       return "—";
     };
 
