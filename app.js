@@ -1102,20 +1102,21 @@ function buildCajaRows() {
                     invoice: c.invoice || "", repo: c.repo || c.quote?.repo || "" };
     const defaultIngreso = det > 0 && mode !== "bandu" ? c.amount - det : c.amount;
     const ingresoAmt = dm.montoReal != null ? dm.montoReal : defaultIngreso;
+    const detStatus = dm.detStatus || "Completado";
     if (det > 0 && mode === "bandu") {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
         category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
         concept: `Detracción pagada · ${label}`, category: "Detracción",
-        amount: det, bankAccount: dm.cuenta || c.bankAccount || "" });
+        amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: detStatus });
     } else if (det > 0) {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
         category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
         concept: `Detracción · ${label}`, category: "Detracción",
-        amount: det, bankAccount: detAccount });
+        amount: det, bankAccount: detAccount, status: detStatus });
     } else {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
@@ -1970,6 +1971,7 @@ const views = {
       if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
       if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
       if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}<span>Editar saldo</span></button></div>`;
       return "—";
@@ -4167,6 +4169,10 @@ function openCollectionDialog(row) {
             <option value="cliente" ${mode === "cliente" ? "selected" : ""}>Cliente (depositó el neto a tu cuenta)</option>
             <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
           </select></label>
+          <label>Estado detracción<select name="detStatus">
+            <option value="Completado" ${(dm.detStatus || "Completado") === "Completado" ? "selected" : ""}>Completado (ya pagado)</option>
+            <option value="Pendiente"  ${dm.detStatus === "Pendiente" ? "selected" : ""}>Pendiente (aún no pagado)</option>
+          </select></label>
           <label>Monto real de detracción (S/)<input name="detActual" type="text" inputmode="decimal"
             value="${dm.detActual != null ? dm.detActual : Math.round(calc.detraction).toFixed(2)}"
             placeholder="${Math.round(calc.detraction).toFixed(2)}"></label>
@@ -4686,7 +4692,8 @@ function saveCollection(data) {
       mode:      data.detraccionMode,
       cuenta:    data.detraccionCuenta || "",
       detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null,
-      montoReal: data.montoReal ? (parseFloat(cleanNumericImport(data.montoReal)) || null) : null
+      montoReal: data.montoReal ? (parseFloat(cleanNumericImport(data.montoReal)) || null) : null,
+      detStatus: data.detStatus || "Completado"
     };
     state.settings.collectionDetModes = modes;
   }
