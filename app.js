@@ -2620,6 +2620,8 @@ let _filterPopoverDocListenerAdded = false;
 
 function bindFilterPopovers() {
   document.querySelectorAll("[data-filter-toggle]").forEach(btn => {
+    if (btn.dataset.bound) return;   // evita listeners duplicados en re-render parcial
+    btn.dataset.bound = "1";
     btn.addEventListener("click", e => {
       e.stopPropagation();
       const popover = document.getElementById(btn.dataset.filterToggle);
@@ -2685,6 +2687,8 @@ function applyMetricsVisibility() {
 
 function bindMetricsToggle() {
   document.querySelectorAll("[data-metrics-toggle]").forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
     btn.addEventListener("click", () => {
       const next = !isMetricVisible(activeView);
       setMetricVis(activeView, next);
@@ -3301,21 +3305,41 @@ function bindActions(selector, handler) {
   document.querySelectorAll(selector).forEach(btn => btn.addEventListener("click", () => handler(btn.getAttribute(selector.slice(1, -1)))));
 }
 
+// Re-enlaza solo las acciones de fila de la tabla de cotizaciones/leads tras un re-render parcial,
+// sin volver a enlazar la barra (evita listeners duplicados en filtros/popovers).
+function bindQuoteTableActions() {
+  bindActions("[data-edit-lead]", id => openLeadDialog(state.leads.find(x => x.id === id)));
+  bindActions("[data-quote-lead]", id => quoteLead(id));
+  bindActions("[data-close-lead]", id => updateLeadStatus(id, "Cerrado perdido"));
+  bindActions("[data-edit-quote]", id => openQuoteDialog(state.quotes.find(x => x.id === id)));
+  bindActions("[data-copy-quote]", id => duplicateQuote(id));
+  bindActions("[data-delete-quote]", id => {
+    confirmDelete("Esta cotización y sus cobranzas asociadas serán eliminadas permanentemente.", () => {
+      state.collections = state.collections.filter(c => c.quoteId !== id);
+      state.quotes = state.quotes.filter(q => q.id !== id);
+      saveState(); render();
+    });
+  });
+  bindActions("[data-win]", id => updateQuoteStatus(id, "Ganado"));
+  bindActions("[data-lose]", id => updateQuoteStatus(id, "Perdido"));
+}
+
 function bindFilters() {
   const quoteSearch = activeView === "quotes" ? document.querySelector("#moduleSearch") : null;
   const quoteStatus = document.querySelector("#quoteStatus");
   const quoteYear = document.querySelector("#quoteYear");
-  if (quoteSearch && quoteStatus) {
+  if (quoteSearch && quoteStatus && !quoteStatus.dataset.bound) {
+    quoteStatus.dataset.bound = "1";
     const filter = () => {
       const term = quoteSearch.value.toLowerCase();
       const yr = quoteYear?.value || "";
-      const rows = state.quotes.filter(q =>
+      const rows = sortByDateDesc(state.quotes.filter(q =>
         (yr ? q.date.startsWith(yr) : dateInRange(q.date)) &&
         (!quoteStatus.value || q.status === quoteStatus.value) &&
         [q.code, q.client, q.service].join(" ").toLowerCase().includes(term)
-      );
+      ));
       document.querySelector("#quotesTable").innerHTML = quotesTable(rows);
-      bindViewEvents();
+      bindQuoteTableActions();
     };
     quoteSearch.addEventListener("input", filter);
     quoteStatus.addEventListener("change", filter);
@@ -3323,12 +3347,13 @@ function bindFilters() {
   }
   const leadSearch = activeView === "leads" ? document.querySelector("#moduleSearch") : null;
   const leadStatus = document.querySelector("#leadStatus");
-  if (leadSearch && leadStatus) {
+  if (leadSearch && leadStatus && !leadStatus.dataset.bound) {
+    leadStatus.dataset.bound = "1";
     const filter = () => {
       const term = leadSearch.value.toLowerCase();
-      const rows = state.leads.filter(l => dateInRange(l.date) && (leadStatus.value === "Todos" || l.status === leadStatus.value) && [l.client, l.source, l.service].join(" ").toLowerCase().includes(term));
+      const rows = sortByDateDesc(state.leads.filter(l => dateInRange(l.date) && (leadStatus.value === "Todos" || l.status === leadStatus.value) && [l.client, l.source, l.service].join(" ").toLowerCase().includes(term)));
       document.querySelector("#leadsTable").innerHTML = leadsTable(rows);
-      bindViewEvents();
+      bindQuoteTableActions();
     };
     leadSearch.addEventListener("input", filter);
     leadStatus.addEventListener("change", filter);
@@ -3347,7 +3372,8 @@ function bindModuleToolbar() {
     });
   };
 
-  if (search && !["leads", "quotes"].includes(activeView)) {
+  if (search && !["leads", "quotes"].includes(activeView) && !search.dataset.bound) {
+    search.dataset.bound = "1";
     search.addEventListener("input", () => {
       if (activeView !== "dashboard") return filterTableRows();
       const term = search.value.trim().toLowerCase();
@@ -3356,9 +3382,11 @@ function bindModuleToolbar() {
       });
     });
   }
-  tableFilters.forEach(f => f.addEventListener("change", filterTableRows));
+  tableFilters.forEach(f => { if (f.dataset.bound) return; f.dataset.bound = "1"; f.addEventListener("change", filterTableRows); });
 
   document.querySelectorAll("[data-module-action]").forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
     btn.addEventListener("click", () => {
       const action = btn.dataset.moduleAction;
       if (action === "lead") openLeadDialog();
@@ -3375,8 +3403,10 @@ function bindModuleToolbar() {
     });
   });
 
-  document.querySelector("[data-export-state]")?.addEventListener("click", exportState);
-  document.querySelector("[data-import-state]")?.addEventListener("click", importState);
+  const exportBtn = document.querySelector("[data-export-state]");
+  if (exportBtn && !exportBtn.dataset.bound) { exportBtn.dataset.bound = "1"; exportBtn.addEventListener("click", exportState); }
+  const importBtn = document.querySelector("[data-import-state]");
+  if (importBtn && !importBtn.dataset.bound) { importBtn.dataset.bound = "1"; importBtn.addEventListener("click", importState); }
 }
 
 const EXCEL_SCHEMAS = {
