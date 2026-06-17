@@ -1800,7 +1800,8 @@ const views = {
       if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
       if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "cashEntry") return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "collection")  return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       return "—";
     };
 
