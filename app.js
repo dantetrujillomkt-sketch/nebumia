@@ -1244,6 +1244,7 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       const postFixed = genFixedRows(override.date, monthKey);
       [...allCajaRows, ...postFixed].forEach(r => {
         if (!r.date || r.currency !== tabCurrency || r.bankAccount !== tab) return;
+        if (r.status === "Pendiente") return;
         const rm = r.date.substring(0, 7);
         if (rm < override.date || rm >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
@@ -1252,6 +1253,7 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       baseRows.forEach(r => {
         if (!r.date || r.currency !== tabCurrency) return;
         if (tab !== "general" && r.bankAccount !== tab) return;
+        if (r.status === "Pendiente") return;
         if (r.date.substring(0, 7) >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
       });
@@ -1955,7 +1957,9 @@ const views = {
     const sumPEN = rows => rows.filter(r => r.currency === "PEN").reduce((s, r) => s + r.amount, 0);
     const sumUSD = rows => rows.filter(r => r.currency === "USD").reduce((s, r) => s + r.amount, 0);
     const totalIn  = sumPEN(ingresos);
-    const totalOut = sumPEN(egresos);
+    const completedEgresos = egresos.filter(r => r.status !== "Pendiente");
+    const pendingEgresos   = egresos.filter(r => r.status === "Pendiente");
+    const totalOut = sumPEN(completedEgresos);
     const pendingCobros = collectionRows().filter(c => c.status !== "Pagado");
     const pending = pendingCobros.reduce((s, c) => s + c.amount, 0);
 
@@ -1982,11 +1986,15 @@ const views = {
           ["Fecha", "Concepto", "Categoría", "Fuente", "Factura", "Monto", "Acciones"],
           rows.map(r => [
             fmtDate(r.date),
-            escapeHtml(r.concept),
+            r.status === "Pendiente"
+              ? `${escapeHtml(r.concept)} <span style="display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:var(--amber,#f59e0b22);color:var(--amber,#b45309);border:1px solid currentColor;margin-left:4px;vertical-align:middle">Pendiente</span>`
+              : escapeHtml(r.concept),
             escapeHtml(r.category),
             `<span class="source-tag">${r.source}</span>`,
             escapeHtml(r.invoice || "—"),
-            `<strong>${fmt(r.amount, r.currency)}</strong>`,
+            r.status === "Pendiente"
+              ? `<strong style="opacity:0.45">${fmt(r.amount, r.currency)}</strong>`
+              : `<strong>${fmt(r.amount, r.currency)}</strong>`,
             editBtn(r)
           ]),
           tableKey
@@ -1999,7 +2007,7 @@ const views = {
     return `
       <section class="metric-grid">
         ${metric("Ingresos", fmt(totalIn), `${ingresos.length} movimientos en PEN`, "up", "", "mint")}
-        ${metric("Egresos", fmt(totalOut), `${egresos.length} movimientos en PEN`, "down", "", "coral")}
+        ${metric("Egresos", fmt(totalOut), `${completedEgresos.filter(r=>r.currency==="PEN").length} completados${pendingEgresos.length > 0 ? ` · ${pendingEgresos.length} pendientes` : ""}`, "down", "", "coral")}
         ${metric("Balance neto", fmt(totalIn - totalOut), "Ingresos – Egresos (S/)", totalIn >= totalOut ? "up" : "down")}
         ${metric("Por cobrar", fmt(pending), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
       </section>
