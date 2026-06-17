@@ -3177,8 +3177,17 @@ function bindViewEvents() {
       const li = btn.closest("li");
       const newName = li.querySelector(".bank-account-edit-input").value.trim();
       if (!newName) return;
+      const oldName = state.settings.bankAccounts[i];
       state.settings.bankAccounts[i] = newName;
-      saveState(); render();
+      // Cascade rename across all records that reference the old account name
+      if (oldName && oldName !== newName) {
+        const rename = arr => arr.forEach(r => { if (r.bankAccount === oldName) r.bankAccount = newName; });
+        rename(state.quotes      || []);
+        rename(state.collections || []);
+        rename(state.purchases   || []);
+        rename(state.cashEntries || []);
+      }
+      saveState(); sbSync().catch(() => {}); render();
       showToast("Cuenta bancaria actualizada");
     });
   });
