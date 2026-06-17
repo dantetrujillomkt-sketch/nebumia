@@ -328,6 +328,17 @@ label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weig
   box-shadow: none;
 }
 .input-shell input:focus { border: 0; box-shadow: none; }
+/* Neutraliza el fondo blanco del autocompletado del navegador */
+.input-shell input:-webkit-autofill,
+.input-shell input:-webkit-autofill:hover,
+.input-shell input:-webkit-autofill:focus,
+.input-shell input:-webkit-autofill:active {
+  -webkit-text-fill-color: var(--ink);
+  -webkit-box-shadow: 0 0 0 1000px var(--input) inset;
+  box-shadow: 0 0 0 1000px var(--input) inset;
+  caret-color: var(--ink);
+  transition: background-color 9999s ease-in-out 0s;
+}
 input, select, textarea {
   width: 100%;
   border: 1px solid var(--line);
