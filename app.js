@@ -3841,6 +3841,8 @@ function saveSale(data) {
     subtotal: Number(data.subtotal),
     hasIgv: data.hasIgv === "on",
     status: "Ganado",
+    // Preserva la fecha de cotización original; para ventas nuevas usa la fecha de venta
+    date: existing?.date || data.wonDate || today(),
     wonDate: data.wonDate || existing?.wonDate || today()
   });
   if (editingId) state.quotes = state.quotes.map(q => q.id === editingId ? { ...q, ...item, id: editingId } : q);
