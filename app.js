@@ -68,7 +68,7 @@ async function sbSyncSettings() {
     sources: state.sources || [], profiles: state.profiles || [],
     updated_at: new Date().toISOString()
   };
-  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [] }, { onConflict: "user_id" });
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones" }, { onConflict: "user_id" });
   if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
@@ -149,7 +149,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [] };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [], detractionAccount: settings.detraction_account || "Detracciones" };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -482,7 +482,8 @@ function seedState() {
       bankAccounts: ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"],
       fixedExpenses: [],
       teamMembers: [],
-      saldosIniciales: []
+      saldosIniciales: [],
+      detractionAccount: "Detracciones"
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -625,7 +626,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [] },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones" },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -1087,14 +1088,26 @@ function collectionRows() {
 function buildCajaRows() {
   const rows = [];
 
+  const detAccount = state.settings.detractionAccount || "Detracciones";
   collectionRows().filter(c => c.status === "Pagado").forEach(c => {
+    const det = c.detraction ? Math.round(c.detraction) : 0;
+    const netAmount = det > 0 ? c.amount - det : c.amount;
     rows.push({
       id: `col-${c.id}`, date: c.paidDate || c.dueDate, type: "ingreso",
       concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-      category: "Cobro de venta", amount: c.amount, currency: c.currency || "PEN",
+      category: "Cobro de venta", amount: netAmount, currency: c.currency || "PEN",
       status: "Confirmado", source: "Cobro", sourceType: "collection", sourceId: c.id,
       bankAccount: c.bankAccount || "", repo: c.repo || c.quote?.repo || "", invoice: c.invoice || ""
     });
+    if (det > 0) {
+      rows.push({
+        id: `col-det-${c.id}`, date: c.paidDate || c.dueDate, type: "ingreso",
+        concept: `Detracción · ${[c.code, c.client].filter(Boolean).join(" · ")}`,
+        category: "Detracción", amount: det, currency: c.currency || "PEN",
+        status: "Confirmado", source: "Cobro", sourceType: "collectionDet", sourceId: c.id,
+        bankAccount: detAccount, invoice: c.invoice || ""
+      });
+    }
   });
 
   state.expenses.forEach(e => {
@@ -1862,6 +1875,8 @@ const views = {
     const fuente = document.querySelector("[data-caja-fuente]")?.value || "";
     const cat    = document.querySelector("[data-caja-cat]")?.value || "";
 
+    const detAccount = state.settings.detractionAccount || "Detracciones";
+
     // Generate virtual fixed expense rows for each month in the selected range
     const assignedFixed = assignFixedExpenses();
     const fixedRows = [];
@@ -2007,6 +2022,7 @@ const views = {
 
       <div class="caja-bank-tabs">
         ${banks.map(b => tabBtn(b, b)).join("")}
+        ${allCajaRows.some(r => r.sourceType === "collectionDet") ? tabBtn(detAccount, detAccount + " 🏦") : ""}
       </div>
 
       <div class="caja-section">
