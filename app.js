@@ -1813,16 +1813,14 @@ const views = {
     };
     const cajaTable = (rows, emptyMsg, tableKey) => rows.length
       ? table(
-          ["Fecha", "Concepto", "Categoría", "Fuente", "Factura", "Repositorio", "Monto", "Estado", "Acciones"],
+          ["Fecha", "Concepto", "Categoría", "Fuente", "Factura", "Monto", "Acciones"],
           rows.map(r => [
             fmtDate(r.date),
             escapeHtml(r.concept),
             escapeHtml(r.category),
             `<span class="source-tag">${r.source}</span>`,
             escapeHtml(r.invoice || "—"),
-            cajaRepoIcon(r),
             `<strong>${fmt(r.amount, r.currency)}</strong>`,
-            badge(r.status),
             editBtn(r)
           ]),
           tableKey
