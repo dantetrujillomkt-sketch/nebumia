@@ -968,12 +968,9 @@ function dashboardSnapshot() {
   const openLeads = state.leads.filter(l => !["Ganado","Cerrado perdido"].includes(l.status));
   const openQuotes = state.quotes.filter(q => ["Por cotizar","Cotizado"].includes(q.status));
   const pipelineValue = openLeads.reduce((s,l) => s + (l.estimatedValue||0), 0) + openQuotes.reduce((s,q) => s + calcQuote(q).total, 0);
-  // conversion: cotizaciones ganadas / total de cotizaciones en el periodo
+  // conversión: se calcula en la tarjeta (soles, mismo denominador que Pipeline activo)
   const totalLeads = leads.length;
   const wonLeads = leads.filter(l => l.status === "Ganado").length;
-  const wonQuotesCount = won.length;
-  const totalQuotesCount = quotes.length;
-  const convRate = totalQuotesCount > 0 ? Math.round(wonQuotesCount / totalQuotesCount * 100) : 0;
   // goal progress for current month
   const now = new Date();
   const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
@@ -1001,7 +998,7 @@ function dashboardSnapshot() {
   const overdueCollections = allCollections.filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < today());
   const pendingSunat = (state.taxPayments||[]).filter(t => t.status === "Pendiente");
   const pendingTeam = state.team.filter(t => t.status === "Pendiente");
-  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, convRate, totalLeads, wonLeads, wonQuotesCount, totalQuotesCount, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD };
+  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD };
 }
 
 function currentMonthName() {
@@ -1438,10 +1435,15 @@ const views = {
           })()}
         </div>
         <div class="kpi-card">
-          <div class="kpi-top"><span class="kpi-label">Conversión</span></div>
-          <div class="kpi-value kpi-value--mint">${s.convRate}%</div>
-          <div class="kpi-sub">${s.wonQuotesCount} ganadas de ${s.totalQuotesCount} cotizaciones</div>
-          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.convRate}%;background:var(--mint)"></div></div>
+          ${(() => {
+            const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
+            const totalQuotedPEN = s.wonPEN.length + openPEN.length + s.lostPEN.length;
+            const conv = totalQuotedPEN > 0 ? Math.round(s.wonPEN.length / totalQuotedPEN * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
+            <div class="kpi-value kpi-value--mint">${conv}%</div>
+            <div class="kpi-sub">${s.wonPEN.length} ganadas de ${totalQuotedPEN} cotizaciones</div>
+            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${conv}%;background:var(--mint)"></div></div>`;
+          })()}
         </div>
       </div>
 
