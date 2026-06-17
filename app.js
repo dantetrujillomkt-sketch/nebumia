@@ -4408,7 +4408,7 @@ function openSaldoInicialDialog(monthKey, bankAccount, currentSigned) {
       <input type="hidden" name="bankAccount" value="${escapeAttr(bankAccount)}">
       <label class="full" style="font-size:.85rem;color:var(--text-2)">Cuenta: ${escapeHtml(bankAccount)}</label>
       <label class="full">Monto (S/)
-        <input name="amount" type="number" step="0.01" value="${currentSigned !== 0 ? Math.abs(currentSigned) : ""}" placeholder="Ej: 5000.00" autofocus>
+        <input name="amount" type="text" inputmode="decimal" value="${currentSigned !== 0 ? Math.abs(currentSigned) : ""}" placeholder="Ej: 12,373.65" autofocus>
       </label>
       <p class="full" style="font-size:.8rem;color:var(--text-2);margin:0">Deja en 0 o vacío para volver al cálculo automático.</p>
     </div>
@@ -4417,7 +4417,7 @@ function openSaldoInicialDialog(monthKey, bankAccount, currentSigned) {
 
 function saveSaldoInicial(data) {
   const { month, bankAccount, amount } = data;
-  const amt = parseFloat(amount) || 0;
+  const amt = parseFloat(cleanNumericImport(amount)) || 0;
   const sl = state.settings.saldosIniciales || [];
   const idx = sl.findIndex(s => s.bankAccount === bankAccount && s.date === month);
   if (amt === 0) {
