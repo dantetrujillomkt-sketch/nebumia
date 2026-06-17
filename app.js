@@ -58,7 +58,7 @@ async function sbSyncTable(table, records) {
 async function sbSyncSettings() {
   if (!sbUser) return;
   const s = state.settings;
-  await sb.from("settings").upsert({
+  const base = {
     user_id: sbUser.id,
     igv_rate: s.igvRate, detraction_rate: s.detractionRate,
     detraction_threshold: s.detractionThreshold, commission_rate: s.commissionRate,
@@ -67,7 +67,9 @@ async function sbSyncSettings() {
     services: state.services || [], categories: state.categories || [],
     sources: state.sources || [], profiles: state.profiles || [],
     updated_at: new Date().toISOString()
-  }, { onConflict: "user_id" });
+  };
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [] }, { onConflict: "user_id" });
+  if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
 async function sbSyncSalesTargets() {
@@ -147,7 +149,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [] };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [] };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -479,7 +481,8 @@ function seedState() {
       detractionThreshold: DETRACTION_THRESHOLD,
       bankAccounts: ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"],
       fixedExpenses: [],
-      teamMembers: []
+      teamMembers: [],
+      saldosIniciales: []
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -622,7 +625,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [] },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [] },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -1171,50 +1174,77 @@ function getAccountBalance(accountName) {
 
 function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
   const fixedAssigned = assignFixedExpenses();
-  const priorFixed = [];
-  if (fixedAssigned.length) {
-    const rs = new Date(rangeStart + "T00:00:00");
-    const fStart = new Date(rs.getFullYear(), rs.getMonth() - 36, 1);
-    const fEnd   = new Date(rs.getFullYear(), rs.getMonth() - 1,  1);
-    let fc = new Date(fStart);
-    while (fc <= fEnd) {
+
+  function genFixedRows(fromMonth, toMonth) {
+    const result = [];
+    if (!fixedAssigned.length) return result;
+    let fc = new Date(fromMonth + "-01T00:00:00");
+    const fe = new Date(toMonth  + "-01T00:00:00");
+    while (fc < fe) {
       const d = isoDate(fc);
-      fixedAssigned.forEach(f => priorFixed.push({
+      fixedAssigned.forEach(f => result.push({
         date: d, type: "egreso", amount: f.amount, currency: f.currency,
         bankAccount: f.assignedAccount || ""
       }));
       fc.setMonth(fc.getMonth() + 1);
     }
+    return result;
   }
 
-  const baseRows = [...allCajaRows, ...priorFixed];
+  const rs = new Date(rangeStart + "T00:00:00");
+  const priorStart = new Date(rs.getFullYear(), rs.getMonth() - 36, 1).toISOString().substring(0, 7);
+  const priorFixed = genFixedRows(priorStart, rangeStart.substring(0, 7));
+  const baseRows   = [...allCajaRows, ...priorFixed];
+
+  const saldosIniciales = state.settings.saldosIniciales || [];
+
   const rows = [];
-  const startDate = new Date(rangeStart + "T00:00:00");
-  const endDate   = new Date(rangeEnd   + "T00:00:00");
-  let cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+  let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
+  const endDate = new Date(rangeEnd + "T00:00:00");
 
   while (cursor <= endDate) {
     const firstDay = isoDate(cursor);
     const monthKey = firstDay.substring(0, 7);
     let saldo = 0;
-    baseRows.forEach(r => {
-      if (!r.date || r.currency !== "PEN") return;
-      if (tab !== "general" && r.bankAccount !== tab) return;
-      if (r.date.substring(0, 7) >= monthKey) return;
-      saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
-    });
+
+    const override = tab !== "general"
+      ? saldosIniciales.filter(s => s.bankAccount === tab && s.date <= monthKey)
+                       .sort((a, b) => b.date.localeCompare(a.date))[0]
+      : null;
+
+    if (override) {
+      saldo = override.amount;
+      const postFixed = genFixedRows(override.date, monthKey);
+      [...allCajaRows, ...postFixed].forEach(r => {
+        if (!r.date || r.currency !== "PEN" || r.bankAccount !== tab) return;
+        const rm = r.date.substring(0, 7);
+        if (rm < override.date || rm >= monthKey) return;
+        saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
+      });
+    } else {
+      baseRows.forEach(r => {
+        if (!r.date || r.currency !== "PEN") return;
+        if (tab !== "general" && r.bankAccount !== tab) return;
+        if (r.date.substring(0, 7) >= monthKey) return;
+        saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
+      });
+    }
+
     if (saldo !== 0) {
+      const signedAmt = saldo >= 0 ? saldo : -saldo;
       rows.push({
         id: `saldo-${firstDay}`,
         date: firstDay,
         type: saldo >= 0 ? "ingreso" : "egreso",
-        concept: "Saldo anterior",
+        concept: "Saldo anterior" + (override ? " ✎" : ""),
         category: "Saldo anterior",
         source: "Saldo anterior",
-        amount: Math.abs(saldo),
+        amount: signedAmt,
         currency: "PEN",
         sourceType: "saldoAnterior",
-        bankAccount: tab !== "general" ? tab : ""
+        bankAccount: tab !== "general" ? tab : "",
+        _monthKey: monthKey,
+        _signedAmount: saldo
       });
     }
     cursor.setMonth(cursor.getMonth() + 1);
@@ -1911,7 +1941,7 @@ const views = {
       if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
       if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
-      if (row.sourceType === "saldoAnterior") return "";
+      if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}<span>Editar saldo</span></button></div>`;
       return "—";
     };
 
@@ -2917,6 +2947,10 @@ function bindViewEvents() {
   bindActions("[data-edit-invoicedsale]", id => openInvoicedSaleDialog((state.invoicedSales || []).find(x => x.id === id)));
   bindActions("[data-edit-cash-entry]", id => openCashEntryDialog("egreso", (state.cashEntries || []).find(x => x.id === id)));
   bindActions("[data-edit-fixed-expense]", id => openFixedExpenseBankDialog(id));
+  bindActions("[data-edit-saldo]", val => {
+    const [month, account, amountStr] = val.split("||");
+    openSaldoInicialDialog(month, account, parseFloat(amountStr) || 0);
+  });
   bindActions("[data-delete-cash-entry]", id => {
     confirmDelete("Este movimiento será eliminado permanentemente y no se podrá restablecer.", () => {
       state.cashEntries = (state.cashEntries || []).filter(e => e.id !== id);
@@ -4364,6 +4398,38 @@ function openFixedExpenseBankDialog(id) {
   `);
 }
 
+function openSaldoInicialDialog(monthKey, bankAccount, currentSigned) {
+  const [yr, mo] = monthKey.split("-");
+  const monthName = new Date(Number(yr), Number(mo) - 1, 1)
+    .toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+  dialogShell("saldoInicial", "Saldo al inicio de " + monthName, `
+    <div class="form-grid">
+      <input type="hidden" name="month" value="${escapeAttr(monthKey)}">
+      <input type="hidden" name="bankAccount" value="${escapeAttr(bankAccount)}">
+      <label class="full" style="font-size:.85rem;color:var(--text-2)">Cuenta: ${escapeHtml(bankAccount)}</label>
+      <label class="full">Monto (S/)
+        <input name="amount" type="number" step="0.01" value="${currentSigned !== 0 ? Math.abs(currentSigned) : ""}" placeholder="Ej: 5000.00" autofocus>
+      </label>
+      <p class="full" style="font-size:.8rem;color:var(--text-2);margin:0">Deja en 0 o vacío para volver al cálculo automático.</p>
+    </div>
+  `);
+}
+
+function saveSaldoInicial(data) {
+  const { month, bankAccount, amount } = data;
+  const amt = parseFloat(amount) || 0;
+  const sl = state.settings.saldosIniciales || [];
+  const idx = sl.findIndex(s => s.bankAccount === bankAccount && s.date === month);
+  if (amt === 0) {
+    state.settings.saldosIniciales = sl.filter((_, i) => i !== idx);
+  } else if (idx >= 0) {
+    sl[idx].amount = amt;
+    state.settings.saldosIniciales = [...sl];
+  } else {
+    state.settings.saldosIniciales = [...sl, { bankAccount, date: month, amount: amt }];
+  }
+}
+
 function saveFixedExpenseBank(data) {
   const fe = (state.settings.fixedExpenses || []).find(f => f.id === (data.id || editingId));
   if (fe) fe.assignedAccount = data.bankAccount || "";
@@ -4507,6 +4573,7 @@ function handleEntitySubmit(event) {
     if (editingType === "programarCobros") { saveProgramarCobros(data); saveState(); quoteDialog.close(); render(); showToast(); return; }
     if (editingType === "cashEntry") { saveCashEntry(data); quoteDialog.close(); render(); showToast(); return; }
     if (editingType === "fixedExpenseBank") { saveFixedExpenseBank(data); saveState(); sbSync().catch(() => {}); quoteDialog.close(); render(); showToast("Cuenta actualizada"); return; }
+    if (editingType === "saldoInicial") { saveSaldoInicial(data); saveState(); sbSync().catch(() => {}); quoteDialog.close(); render(); showToast("Saldo inicial actualizado"); return; }
     saveState();
     quoteDialog.close();
     render();
