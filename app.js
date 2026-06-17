@@ -3663,11 +3663,8 @@ function ownerSelect(selected) {
 }
 
 function serviceSelect(selected) {
-  const services = state.services || [];
-  const opts = services.map(s => `<option value="${escapeAttr(s)}"></option>`).join("");
-  return `<input name="service" list="serviceDatalist" autocomplete="off" required
-    placeholder="Selecciona o escribe un servicio nuevo" value="${escapeAttr(selected || "")}">
-    <datalist id="serviceDatalist">${opts}</datalist>`;
+  return `<input name="service" autocomplete="off" required
+    placeholder="Selecciona o escribe un servicio nuevo" value="${escapeAttr(selected || "")}">`;
 }
 
 function saveServiceIfNew(serviceName) {
@@ -4350,7 +4347,7 @@ function initAC(input, getOptions, { label = "opción", onSelect = null, onCreat
   function render(term) {
     const all = getOpts();
     const q = term.trim().toLowerCase();
-    const filtered = all.filter(o => o.toLowerCase().includes(q)).slice(0, 10);
+    const filtered = all.filter(o => o.toLowerCase().includes(q)).slice(0, 50);
     const isNew = q.length > 0 && !all.some(o => o.toLowerCase() === q);
 
     if (!filtered.length && !isNew) { close(); return; }
@@ -4400,7 +4397,7 @@ function initAC(input, getOptions, { label = "opción", onSelect = null, onCreat
     render(t);
   });
 
-  input.addEventListener("focus", () => { if (input.value) render(input.value); });
+  input.addEventListener("focus", () => render(input.value || ""));
   input.addEventListener("blur", () => setTimeout(close, 180));
 
   input.addEventListener("keydown", e => {
@@ -4449,7 +4446,8 @@ function bindDialogAutofills() {
   const getClients    = () => uniq(state.clients.map(c => c.name));
   const getOwners     = () => uniq([...state.leads, ...state.quotes, ...state.team].map(i => i.owner || i.name));
   const getCategories = () => uniq(state.quotes.map(q => q.category));
-  const getServices   = () => uniq(state.quotes.map(q => q.service));
+  const getServices   = () => uniq([...(state.services || []), ...state.quotes.map(q => q.service)]);
+  const createService = name => { saveServiceIfNew(name); saveState(); };
   const getSources    = () => uniq(state.leads.map(l => l.source));
   const getChannels   = () => uniq(state.leads.map(l => l.channel));
   const getExpTypes   = () => uniq(state.expenses.map(e => e.type));
@@ -4501,7 +4499,7 @@ function bindDialogAutofills() {
     { names: isTeam ? ["bankName"] : [],       getOpts: getTeamBanks,  label: "banco" },
     { names: ["owner"],                        getOpts: getOwners,     label: "comercial" },
     { names: ["category"],                     getOpts: getCategories, label: "categoría" },
-    { names: ["service"],                      getOpts: getServices,   label: "servicio" },
+    { names: ["service"],                      getOpts: getServices,   label: "servicio",   onCreate: createService },
     { names: ["source"],                       getOpts: getSources,    label: "fuente" },
     { names: ["channel"],                      getOpts: getChannels,   label: "canal" },
     { names: ["type"],                         getOpts: getExpTypes,   label: "tipo" },
