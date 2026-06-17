@@ -1093,8 +1093,8 @@ function buildCajaRows() {
   const detAccount  = state.settings.detractionAccount  || "Detracciones";
   const detModes    = state.settings.collectionDetModes  || {};
   collectionRows().filter(c => c.status === "Pagado").forEach(c => {
-    const det   = c.detraction ? Math.round(c.detraction) : 0;
     const dm    = detModes[c.id] || {};
+    const det   = dm.detActual != null ? dm.detActual : (c.detraction ? Math.round(c.detraction) : 0);
     const mode  = dm.mode || "cliente";
     const label = [c.code, c.client].filter(Boolean).join(" · ");
     const base  = { date: c.paidDate || c.dueDate, currency: c.currency || "PEN",
@@ -4155,10 +4155,13 @@ function openCollectionDialog(row) {
           `<option value="${escapeAttr(a)}" ${dm.cuenta === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
         return `
           <div class="full" style="border-top:1px solid var(--line);padding-top:12px;margin-top:4px"></div>
-          <label>¿Quién pagó la detracción? (${sym} ${Math.round(calc.detraction).toFixed(2)})<select name="detraccionMode" id="detModeSelect">
+          <label>¿Quién pagó la detracción?<select name="detraccionMode" id="detModeSelect">
             <option value="cliente" ${mode === "cliente" ? "selected" : ""}>Cliente (depositó el neto a tu cuenta)</option>
             <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
           </select></label>
+          <label>Monto real de detracción (${sym})<input name="detActual" type="text" inputmode="decimal"
+            value="${dm.detActual != null ? dm.detActual : Math.round(calc.detraction).toFixed(2)}"
+            placeholder="${Math.round(calc.detraction).toFixed(2)}"></label>
           <label id="detCuentaLabel" ${mode !== "bandu" ? 'style="display:none"' : ""}>¿Desde qué cuenta sale la detracción?<select name="detraccionCuenta">
             <option value="">— Cuenta —</option>${bankOpts}
           </select></label>`;
@@ -4668,7 +4671,11 @@ function saveClient(data) {
 function saveCollection(data) {
   if (data.detraccionMode) {
     const modes = state.settings.collectionDetModes || {};
-    modes[editingId] = { mode: data.detraccionMode, cuenta: data.detraccionCuenta || "" };
+    modes[editingId] = {
+      mode:      data.detraccionMode,
+      cuenta:    data.detraccionCuenta || "",
+      detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null
+    };
     state.settings.collectionDetModes = modes;
   }
   state.collections = state.collections.map(c => {
