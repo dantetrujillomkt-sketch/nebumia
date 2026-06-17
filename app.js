@@ -1187,6 +1187,7 @@ function assignFixedExpenses() {
   banks.forEach(b => { remaining[b] = getAccountBalance(b); });
 
   return fixed.map(f => {
+    if (f.assignedAccount) return f;
     const primary  = find(f.currency, "primary");
     const fallback = find(f.currency, "fallback");
     let assigned;
