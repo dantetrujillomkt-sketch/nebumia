@@ -1957,11 +1957,17 @@ const views = {
 
     const sumPEN = rows => rows.filter(r => r.currency === "PEN").reduce((s, r) => s + r.amount, 0);
     const sumUSD = rows => rows.filter(r => r.currency === "USD").reduce((s, r) => s + r.amount, 0);
-    const totalIn  = sumPEN(ingresos);
+    const tabCurrency = tab !== "general" && /\$|USD/i.test(tab) ? "USD" : "PEN";
+    const sumTab = rows => rows.filter(r => r.currency === tabCurrency).reduce((s, r) => s + r.amount, 0);
+    const totalIn  = sumTab(ingresos);
     const completedEgresos = egresos.filter(r => r.status !== "Pendiente");
     const pendingEgresos   = egresos.filter(r => r.status === "Pendiente");
-    const totalOut = sumPEN(completedEgresos);
-    const pendingCobros = collectionRows().filter(c => c.status !== "Pagado");
+    const totalOut = sumTab(completedEgresos);
+    const pendingCobros = collectionRows().filter(c => {
+      if (c.status === "Pagado") return false;
+      if (tab !== "general") return (c.currency || "PEN") === tabCurrency && (c.bankAccount || "") === tab;
+      return true;
+    });
     const pending = pendingCobros.reduce((s, c) => s + c.amount, 0);
 
     const editBtn = row => {
@@ -2008,10 +2014,10 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Ingresos", fmt(totalIn), `${ingresos.length} movimientos en PEN`, "up", "", "mint")}
-        ${metric("Egresos", fmt(totalOut), `${completedEgresos.filter(r=>r.currency==="PEN").length} completados${pendingEgresos.length > 0 ? ` · ${pendingEgresos.length} pendientes` : ""}`, "down", "", "coral")}
-        ${metric("Balance neto", fmt(totalIn - totalOut), "Ingresos – Egresos (S/)", totalIn >= totalOut ? "up" : "down")}
-        ${metric("Por cobrar", fmt(pending), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
+        ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, "up", "", "mint")}
+        ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, "down", "", "coral")}
+        ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, totalIn >= totalOut ? "up" : "down")}
+        ${metric("Por cobrar", fmt(pending, tabCurrency), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
       </section>
 
       <div class="module-page-header" data-page-header>
