@@ -917,8 +917,6 @@ function dashboardFilterBar() {
       <div class="dashboard-quick-filters">
         <span class="dashboard-filter-label">Filtros rápidos</span>
         <button data-dashboard-preset="all" type="button" class="${activeDashboardFilter === "all" ? "dash-filter-active" : ""}">Vista completa</button>
-        <button data-dashboard-preset="commercial" type="button" class="${activeDashboardFilter === "commercial" ? "dash-filter-active" : ""}">Comercial</button>
-        <button data-dashboard-preset="finance" type="button" class="${activeDashboardFilter === "finance" ? "dash-filter-active" : ""}">Finanzas</button>
         ${dashboardSavedFilters.map(filter => `
           <div class="saved-filter-chip${activeDashboardFilter === filter.id ? " dash-filter-active" : ""}">
             <button class="saved-filter-chip__name" data-saved-dashboard-filter="${filter.id}" type="button">${escapeHtml(filter.name)}</button>
@@ -3191,9 +3189,7 @@ function bindDashboardQuickFilters() {
   if (activeView !== "dashboard") return;
   const allSections = ["metrics", "revenue", "pipeline", "profitability", "salesSource", "salesOwner", "collections", "activity", "annualProjection"];
   const presets = {
-    all: allSections,
-    commercial: ["metrics", "pipeline", "profitability", "salesSource", "salesOwner"],
-    finance: ["metrics", "revenue", "collections", "activity", "annualProjection"]
+    all: allSections
   };
 
   document.querySelectorAll("[data-dashboard-preset]").forEach(btn => {
