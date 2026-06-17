@@ -2167,6 +2167,32 @@ const views = {
         </form>`;
 
     } else if (activeSettingsTab === "cuentas") {
+      // Detect orphaned bank account names (used in records but absent from settings list)
+      const bankSet = new Set(banks);
+      const allUsed = new Set([
+        ...(state.quotes      || []).map(r => r.bankAccount),
+        ...(state.collections || []).map(r => r.bankAccount),
+        ...(state.purchases   || []).map(r => r.bankAccount),
+        ...(state.cashEntries || []).map(r => r.bankAccount),
+      ]);
+      const orphaned = [...allUsed].filter(v => v && !bankSet.has(v));
+      const orphanSection = orphaned.length ? `
+        <section class="panel settings-panel" style="margin-top:16px">
+          <div class="panel-head"><div><h3 style="color:var(--warning,#f59e0b)">Cuentas desactualizadas</h3>
+          <p>${orphaned.length} nombre${orphaned.length>1?"s":""} de cuenta en tus registros no coincide${orphaned.length>1?"n":""} con la lista actual. Reasígnalos para sincronizar todo de golpe.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${orphaned.map(old => `
+              <li class="bank-account-item" style="gap:12px">
+                <span class="bank-account-name" style="color:var(--danger,#ef4444);min-width:160px">${escapeHtml(old)}</span>
+                <span style="opacity:.5">→</span>
+                <select class="orphan-bank-select" data-orphan-old="${escapeAttr(old)}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text)">
+                  <option value="">— Seleccionar cuenta —</option>
+                  ${banks.map(b => `<option value="${escapeAttr(b)}">${escapeHtml(b)}</option>`).join("")}
+                </select>
+                <button class="primary-action" data-apply-orphan="${escapeAttr(old)}" type="button" style="white-space:nowrap">Aplicar</button>
+              </li>`).join("")}
+          </ul>
+        </section>` : "";
       tabContent = `
         <section class="panel settings-panel">
           <div class="panel-head"><div><h3>Cuentas bancarias</h3><p>Cuentas para registrar cobros y movimientos de caja.</p></div></div>
@@ -2190,7 +2216,8 @@ const views = {
             <input name="accountName" placeholder="Ej: CC Interbank S/" required>
             <button class="primary-action" type="submit">${icon("plus")}<span>Agregar cuenta</span></button>
           </form>
-        </section>`;
+        </section>
+        ${orphanSection}`;
 
     } else if (activeSettingsTab === "gastos") {
       tabContent = `
@@ -3179,16 +3206,25 @@ function bindViewEvents() {
       if (!newName) return;
       const oldName = state.settings.bankAccounts[i];
       state.settings.bankAccounts[i] = newName;
-      // Cascade rename across all records that reference the old account name
       if (oldName && oldName !== newName) {
         const rename = arr => arr.forEach(r => { if (r.bankAccount === oldName) r.bankAccount = newName; });
-        rename(state.quotes      || []);
-        rename(state.collections || []);
-        rename(state.purchases   || []);
-        rename(state.cashEntries || []);
+        rename(state.quotes); rename(state.collections); rename(state.purchases); rename(state.cashEntries);
       }
       saveState(); sbSync().catch(() => {}); render();
       showToast("Cuenta bancaria actualizada");
+    });
+  });
+
+  document.querySelectorAll("[data-apply-orphan]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const oldName = btn.dataset.applyOrphan;
+      const li = btn.closest("li");
+      const newName = li.querySelector(".orphan-bank-select").value;
+      if (!newName) { showToast("Selecciona una cuenta destino", "error"); return; }
+      const rename = arr => arr.forEach(r => { if (r.bankAccount === oldName) r.bankAccount = newName; });
+      rename(state.quotes); rename(state.collections); rename(state.purchases); rename(state.cashEntries);
+      saveState(); sbSync().catch(() => {}); render();
+      showToast(`"${oldName}" → "${newName}" aplicado a todos los registros`);
     });
   });
 
