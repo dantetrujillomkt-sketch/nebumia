@@ -735,7 +735,7 @@ function setAuthMode(mode) {
     authTitle.textContent = "Bienvenido de vuelta";
     authSubtitle.textContent = "Ingresa tus datos para acceder a Nebumia.";
     authSubmitBtn.innerHTML = "Ingresar al sistema";
-    authHint.textContent = "Demo: admin@bandu.pe / bandu2026";
+    authHint.textContent = "";
   }
   if (mode === "forgot") {
     authTitle.textContent = "Recupera tu contrasena";
