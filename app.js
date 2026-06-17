@@ -68,7 +68,7 @@ async function sbSyncSettings() {
     sources: state.sources || [], profiles: state.profiles || [],
     updated_at: new Date().toISOString()
   };
-  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones" }, { onConflict: "user_id" });
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {} }, { onConflict: "user_id" });
   if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
@@ -149,7 +149,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [], detractionAccount: settings.detraction_account || "Detracciones" };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || [], detractionAccount: settings.detraction_account || "Detracciones", collectionDetModes: settings.collection_det_modes || {} };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -483,7 +483,8 @@ function seedState() {
       fixedExpenses: [],
       teamMembers: [],
       saldosIniciales: [],
-      detractionAccount: "Detracciones"
+      detractionAccount: "Detracciones",
+      collectionDetModes: {}
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -626,7 +627,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones" },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones", collectionDetModes: inputSettings.collectionDetModes || {} },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -1088,25 +1089,36 @@ function collectionRows() {
 function buildCajaRows() {
   const rows = [];
 
-  const detAccount = state.settings.detractionAccount || "Detracciones";
+  const detAccount  = state.settings.detractionAccount  || "Detracciones";
+  const detModes    = state.settings.collectionDetModes  || {};
   collectionRows().filter(c => c.status === "Pagado").forEach(c => {
-    const det = c.detraction ? Math.round(c.detraction) : 0;
-    const netAmount = det > 0 ? c.amount - det : c.amount;
-    rows.push({
-      id: `col-${c.id}`, date: c.paidDate || c.dueDate, type: "ingreso",
-      concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-      category: "Cobro de venta", amount: netAmount, currency: c.currency || "PEN",
-      status: "Confirmado", source: "Cobro", sourceType: "collection", sourceId: c.id,
-      bankAccount: c.bankAccount || "", repo: c.repo || c.quote?.repo || "", invoice: c.invoice || ""
-    });
-    if (det > 0) {
-      rows.push({
-        id: `col-det-${c.id}`, date: c.paidDate || c.dueDate, type: "ingreso",
-        concept: `Detracción · ${[c.code, c.client].filter(Boolean).join(" · ")}`,
-        category: "Detracción", amount: det, currency: c.currency || "PEN",
-        status: "Confirmado", source: "Cobro", sourceType: "collectionDet", sourceId: c.id,
-        bankAccount: detAccount, invoice: c.invoice || ""
-      });
+    const det   = c.detraction ? Math.round(c.detraction) : 0;
+    const dm    = detModes[c.id] || {};
+    const mode  = dm.mode || "cliente";
+    const label = [c.code, c.client].filter(Boolean).join(" · ");
+    const base  = { date: c.paidDate || c.dueDate, currency: c.currency || "PEN",
+                    status: "Confirmado", source: "Cobro", sourceId: c.id,
+                    invoice: c.invoice || "", repo: c.repo || c.quote?.repo || "" };
+    if (det > 0 && mode === "bandu") {
+      // Cliente depositó el 100% → ingreso completo; Bandu paga detracción como egreso
+      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
+        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
+        category: "Cobro de venta", amount: c.amount, bankAccount: c.bankAccount || "" });
+      rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
+        concept: `Detracción pagada · ${label}`, category: "Detracción",
+        amount: det, bankAccount: dm.cuenta || c.bankAccount || "" });
+    } else if (det > 0) {
+      // Cliente pagó detracción → ingreso neto a cuenta; detracción entra a cuenta detracciones
+      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
+        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
+        category: "Cobro de venta", amount: c.amount - det, bankAccount: c.bankAccount || "" });
+      rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
+        concept: `Detracción · ${label}`, category: "Detracción",
+        amount: det, bankAccount: detAccount });
+    } else {
+      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
+        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
+        category: "Cobro de venta", amount: c.amount, bankAccount: c.bankAccount || "" });
     }
   });
 
@@ -4137,7 +4149,29 @@ function openCollectionDialog(row) {
       <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate || ""}"></label>
       <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
       <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(row.repo || "")}" placeholder="https://..."></label>
+      ${calc.detraction > 0 ? (() => {
+        const dm = (state.settings.collectionDetModes || {})[row.id] || {};
+        const mode = dm.mode || "cliente";
+        const bankOpts = (state.settings.bankAccounts || []).map(a =>
+          `<option value="${escapeAttr(a)}" ${dm.cuenta === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
+        return `
+          <div class="full" style="border-top:1px solid var(--line);padding-top:12px;margin-top:4px"></div>
+          <label>¿Quién pagó la detracción? (${sym} ${Math.round(calc.detraction).toFixed(2)})<select name="detraccionMode" id="detModeSelect">
+            <option value="cliente" ${mode === "cliente" ? "selected" : ""}>Cliente (depositó el neto a tu cuenta)</option>
+            <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
+          </select></label>
+          <label id="detCuentaLabel" ${mode !== "bandu" ? 'style="display:none"' : ""}>¿Desde qué cuenta sale la detracción?<select name="detraccionCuenta">
+            <option value="">— Cuenta —</option>${bankOpts}
+          </select></label>`;
+      })() : ""}
     </div>
+    <script>
+      (function(){
+        const sel = document.getElementById("detModeSelect");
+        const lbl = document.getElementById("detCuentaLabel");
+        if (sel && lbl) sel.addEventListener("change", () => { lbl.style.display = sel.value === "bandu" ? "" : "none"; });
+      })();
+    </script>
   `);
 }
 
@@ -4631,6 +4665,11 @@ function saveClient(data) {
 }
 
 function saveCollection(data) {
+  if (data.detraccionMode) {
+    const modes = state.settings.collectionDetModes || {};
+    modes[editingId] = { mode: data.detraccionMode, cuenta: data.detraccionCuenta || "" };
+    state.settings.collectionDetModes = modes;
+  }
   state.collections = state.collections.map(c => {
     if (c.id !== editingId) return c;
     const paidDate = data.paidDate || (data.status === "Pagado" ? today() : c.paidDate);
