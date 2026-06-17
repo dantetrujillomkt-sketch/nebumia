@@ -1849,7 +1849,8 @@ const views = {
       if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
-      if (row.sourceType === "collection")  return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
       return "—";
     };
 
@@ -2854,6 +2855,7 @@ function bindViewEvents() {
   });
   bindActions("[data-edit-invoicedsale]", id => openInvoicedSaleDialog((state.invoicedSales || []).find(x => x.id === id)));
   bindActions("[data-edit-cash-entry]", id => openCashEntryDialog("egreso", (state.cashEntries || []).find(x => x.id === id)));
+  bindActions("[data-edit-fixed-expense]", id => openFixedExpenseBankDialog(id));
   bindActions("[data-delete-cash-entry]", id => {
     confirmDelete("Este movimiento será eliminado permanentemente y no se podrá restablecer.", () => {
       state.cashEntries = (state.cashEntries || []).filter(e => e.id !== id);
@@ -4284,6 +4286,28 @@ function openCashEntryDialog(type = "egreso", entry = null) {
   bindDialogAutofills();
 }
 
+function openFixedExpenseBankDialog(id) {
+  const fe = (state.settings.fixedExpenses || []).find(f => f.id === id);
+  if (!fe) return;
+  editingId = id;
+  const bankOpts = (state.settings.bankAccounts || []);
+  dialogShell("fixedExpenseBank", "Editar cuenta bancaria", `
+    <div class="form-grid">
+      <input type="hidden" name="id" value="${escapeAttr(id)}">
+      <label class="full">${escapeHtml(fe.concept)}</label>
+      <label class="full">Cuenta bancaria<select name="bankAccount">
+        <option value="">— Sin cuenta —</option>
+        ${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${fe.assignedAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}
+      </select></label>
+    </div>
+  `);
+}
+
+function saveFixedExpenseBank(data) {
+  const fe = (state.settings.fixedExpenses || []).find(f => f.id === (data.id || editingId));
+  if (fe) fe.assignedAccount = data.bankAccount || "";
+}
+
 function saveCashEntry(data) {
   const item = newCashEntry({ ...data, id: editingId || undefined });
   if (!state.cashEntries) state.cashEntries = [];
@@ -4421,6 +4445,7 @@ function handleEntitySubmit(event) {
     if (editingType === "declaracion") saveDeclaracion(data);
     if (editingType === "programarCobros") { saveProgramarCobros(data); saveState(); quoteDialog.close(); render(); showToast(); return; }
     if (editingType === "cashEntry") { saveCashEntry(data); quoteDialog.close(); render(); showToast(); return; }
+    if (editingType === "fixedExpenseBank") { saveFixedExpenseBank(data); saveState(); sbSync().catch(() => {}); quoteDialog.close(); render(); showToast("Cuenta actualizada"); return; }
     saveState();
     quoteDialog.close();
     render();
