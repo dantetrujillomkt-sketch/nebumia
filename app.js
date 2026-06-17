@@ -4339,8 +4339,9 @@ function initAC(input, getOptions, { label = "opción", onSelect = null, onCreat
 
   function positionDropdown() {
     const r = input.getBoundingClientRect();
-    dropdown.style.top = (r.bottom + window.scrollY + 4) + "px";
-    dropdown.style.left = (r.left + window.scrollX) + "px";
+    dropdown.style.position = "fixed";
+    dropdown.style.top = (r.bottom + 4) + "px";
+    dropdown.style.left = r.left + "px";
     dropdown.style.width = r.width + "px";
   }
 
@@ -4355,7 +4356,8 @@ function initAC(input, getOptions, { label = "opción", onSelect = null, onCreat
     if (!dropdown) {
       dropdown = document.createElement("div");
       dropdown.className = "ac-dropdown";
-      document.body.appendChild(dropdown);
+      const host = input.closest("dialog[open]") || document.body;
+      host.appendChild(dropdown);
     }
     positionDropdown();
 
