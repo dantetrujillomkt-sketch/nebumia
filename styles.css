@@ -568,25 +568,46 @@ body[data-theme="dark"] .nav-btn.active { background: var(--hover); color: #dce5
 #appShell.sidebar-collapsed .sidebar-settings { padding-top: 6px; }
 
 /* Tooltip on hover (collapsed only) */
+#appShell.sidebar-collapsed .sidebar { z-index: 300; }
 #appShell.sidebar-collapsed .nav-btn::after {
   content: attr(data-label);
   position: absolute;
-  left: calc(100% + 10px);
+  left: calc(100% + 12px);
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) translateX(-4px);
   background: var(--ink);
   color: var(--panel);
-  padding: 5px 11px;
-  border-radius: 7px;
-  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
   z-index: 9999;
   pointer-events: none;
-  box-shadow: 0 2px 10px rgba(0,0,0,.18);
+  box-shadow: 0 4px 14px rgba(0,0,0,.15);
   opacity: 0;
-  transition: opacity .12s;
+  transition: opacity .15s ease, transform .15s ease;
+  transition-delay: .05s;
 }
-#appShell.sidebar-collapsed .nav-btn:hover::after { opacity: 1; }
+#appShell.sidebar-collapsed .nav-btn::before {
+  content: "";
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--ink);
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  transition-delay: .05s;
+}
+#appShell.sidebar-collapsed .nav-btn:hover::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+#appShell.sidebar-collapsed .nav-btn:hover::before { opacity: 1; }
 
 /* Shift content-loader & skeleton overlay when collapsed */
 body.sidebar-collapsed .content-loader { left: 64px; }
