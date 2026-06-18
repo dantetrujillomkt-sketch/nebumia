@@ -1413,8 +1413,8 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
   color: var(--brand);
 }
 
-/* Collections table — 14 cols */
-.table-collections { min-width: 1500px; }
+/* Collections table — 16 cols */
+.table-collections { min-width: 1600px; }
 .table-collections th:nth-child(1)  { width: 4%; }   /* PPTO */
 .table-collections th:nth-child(2)  { width: 7%; }   /* Fecha venta */
 .table-collections th:nth-child(3)  { width: 7%; }   /* Servicio */
@@ -1422,37 +1422,39 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 .table-collections th:nth-child(5)  { width: 6%; }   /* Factura */
 .table-collections th:nth-child(6)  { width: 6%; }   /* Fecha PP */
 .table-collections th:nth-child(7)  { width: 6%; }   /* Fecha RP */
-.table-collections th:nth-child(8)  { width: 5%; }   /* Total */
-.table-collections th:nth-child(9)  { width: 9%; }   /* Detracción */
-.table-collections th:nth-child(10) { width: 11%; }  /* Monto a recibir */
-.table-collections th:nth-child(11) { width: 7%; }   /* Cuenta */
-.table-collections th:nth-child(12) { width: 6%; }   /* Nro pago */
-.table-collections th:nth-child(13) { width: 8%; }   /* Repositorio */
-.table-collections th:nth-child(14) { width: 6%; }   /* Estado */
-.table-collections th:nth-child(15) { width: 6%; }   /* Acciones */
+.table-collections th:nth-child(8)  { width: 4%; }   /* Moneda */
+.table-collections th:nth-child(9)  { width: 5%; }   /* Total */
+.table-collections th:nth-child(10) { width: 7%; }   /* Detracción */
+.table-collections th:nth-child(11) { width: 9%; }   /* Monto recibir */
+.table-collections th:nth-child(12) { width: 7%; }   /* Cuenta */
+.table-collections th:nth-child(13) { width: 6%; }   /* Nro pago */
+.table-collections th:nth-child(14) { width: 7%; }   /* Repo */
+.table-collections th:nth-child(15) { width: 6%; }   /* Estado */
+.table-collections th:nth-child(16) { width: 7%; }   /* Acciones */
 .table-collections td:nth-child(3)  { white-space: normal; word-break: break-word; line-height: 1.45; }
-.table-collections td:nth-child(15), .table-collections th:nth-child(15) { text-align: right; }
+.table-collections td:nth-child(16), .table-collections th:nth-child(16) { text-align: right; }
 
 /* Invoice action button */
 .action-link--invoice { color: var(--brand); }
 
-/* Sales table — 13 cols */
-.table-sales { min-width: 1200px; }
-.table-sales th:nth-child(1)  { width: 5%; }   /* PPTO */
-.table-sales th:nth-child(2)  { width: 7%; }   /* Fecha venta */
+/* Sales table — 14 cols */
+.table-sales { min-width: 1350px; }
+.table-sales th:nth-child(1)  { width: 4%; }   /* PPTO */
+.table-sales th:nth-child(2)  { width: 6%; }   /* Fecha venta */
 .table-sales th:nth-child(3)  { width: 11%; }  /* Servicio */
 .table-sales th:nth-child(4)  { width: 9%; }   /* Cliente */
-.table-sales th:nth-child(5)  { width: 8%; }   /* Factura */
-.table-sales th:nth-child(6)  { width: 7%; }   /* Subtotal */
-.table-sales th:nth-child(7)  { width: 6%; }   /* IGV */
-.table-sales th:nth-child(8)  { width: 7%; }   /* Detracción */
-.table-sales th:nth-child(9)  { width: 7%; }   /* Comisión */
-.table-sales th:nth-child(10) { width: 9%; }   /* Cuenta */
-.table-sales th:nth-child(11) { width: 7%; }   /* Tipo de pago */
-.table-sales th:nth-child(12) { width: 8%; }   /* Estado */
-.table-sales th:nth-child(13) { width: 9%; }   /* Acciones */
+.table-sales th:nth-child(5)  { width: 4%; }   /* Moneda */
+.table-sales th:nth-child(6)  { width: 7%; }   /* Sin IGV */
+.table-sales th:nth-child(7)  { width: 7%; }   /* Con IGV */
+.table-sales th:nth-child(8)  { width: 6%; }   /* IGV */
+.table-sales th:nth-child(9)  { width: 7%; }   /* Detracción */
+.table-sales th:nth-child(10) { width: 7%; }   /* Comisión */
+.table-sales th:nth-child(11) { width: 8%; }   /* Cuenta */
+.table-sales th:nth-child(12) { width: 7%; }   /* Tipo pago */
+.table-sales th:nth-child(13) { width: 8%; }   /* Estado */
+.table-sales th:nth-child(14) { width: 9%; }   /* Acciones */
 .table-sales td:nth-child(3)  { white-space: normal; word-break: break-word; line-height: 1.45; }
-.table-sales td:nth-child(13), .table-sales th:nth-child(13) { text-align: right; }
+.table-sales td:nth-child(14), .table-sales th:nth-child(14) { text-align: right; }
 
 /* Team table — 11 columns, all fixed so table fills 100% proportionally */
 .table-team { min-width: 1300px; }
