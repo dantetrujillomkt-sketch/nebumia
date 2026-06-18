@@ -4560,9 +4560,15 @@ function saveCashEntry(data) {
 }
 
 function resolveDefaultBankAccount(hasIgv, currency) {
+  const accounts = state.settings.bankAccounts || [];
   const isUSD = currency === "USD";
-  if (hasIgv) return isUSD ? "CC Interbank $" : "CC Interbank S/";
-  return isUSD ? "CP Interbank $" : "CP Interbank S/";
+  const isCur = a => isUSD ? /\$|USD|d[oó]lar/i.test(a) : /S\/|sol|PEN/i.test(a);
+  const isCC  = a => /corriente|CC\b/i.test(a);
+  const isCP  = a => /personal|CP\b|ahorro/i.test(a);
+  const match = hasIgv
+    ? accounts.find(a => isCur(a) && isCC(a))
+    : accounts.find(a => isCur(a) && isCP(a));
+  return match || accounts.find(isCur) || accounts[0] || "";
 }
 
 function applyBankAccountDefaults(st) {
@@ -4590,9 +4596,11 @@ function bindBankAccountAutofill(igvId, currencyId) {
   const curEl  = document.getElementById(currencyId);
   const bankEl = quoteDialog.querySelector("[name='bankAccount']");
   if (!bankEl) return;
-  const autoOpts = ["CC Interbank S/", "CP Interbank S/", "CC Interbank $", "CP Interbank $"];
   const resolve = () => resolveDefaultBankAccount(igvEl?.checked || false, curEl?.value || "PEN");
-  const update  = () => { if (!bankEl.value || autoOpts.includes(bankEl.value)) bankEl.value = resolve(); };
+  const update  = () => {
+    const known = state.settings.bankAccounts || [];
+    if (!bankEl.value || known.includes(bankEl.value)) bankEl.value = resolve();
+  };
   if (!bankEl.value) bankEl.value = resolve();
   igvEl?.addEventListener("change", update);
   curEl?.addEventListener("change", update);
