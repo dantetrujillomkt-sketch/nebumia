@@ -1855,7 +1855,7 @@ const views = {
 
   },
   collections() {
-    const allColls  = sortByDateDesc(collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate)), r => r.wonDate || r.dueDate);
+    const allColls  = sortByDateDesc(collectionRows().filter(row => dateInRange(row.dueDate || row.wonDate)), r => r.dueDate || r.wonDate);
     const paid      = allColls.filter(row => row.status === "Pagado");
     const pending   = allColls.filter(row => row.status !== "Pagado");
     const overdue   = allColls.filter(row => row.status === "Vencido");
