@@ -1492,8 +1492,7 @@ function syncQuoteSideEffects(targetState, q) {
   const next = parts.map((part, index) => {
     const old = existing.find(c => c.part === index + 1) || {};
     const label = totalParts === 1 ? "Pago 100%" : `Pago ${index + 1}/${totalParts}`;
-    const firstDueDate = (existing.find(c => c.part === 1) || {}).dueDate || (q.wonDate || q.date);
-    const dueDate = old.dueDate || (index === 1 ? addBusinessDays(firstDueDate, 10) : (q.wonDate || q.date));
+    const dueDate = old.dueDate || (index === 0 ? (q.wonDate || q.date) : "");
     return {
       id: old.id || uid(),
       quoteId: q.id,
@@ -1765,7 +1764,7 @@ const views = {
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o servicio",
-        filters: `<select id="quoteStatus"><option value="">Todos los estados</option>${options(quoteStatuses)}</select><select id="quoteYear"><option value="">Todos los años</option>${Array.from({length: new Date().getFullYear() - 2021}, (_, i) => 2022 + i).reverse().map(y => `<option value="${y}">${y}</option>`).join("")}</select>`,
+        filters: `<select id="quoteStatus" class="filter-select"><option value="">Todos los estados</option>${options(quoteStatuses)}</select><select id="quoteYear" class="filter-select"><option value="">Todos los años</option>${Array.from({length: new Date().getFullYear() - 2021}, (_, i) => 2022 + i).reverse().map(y => `<option value="${y}">${y}</option>`).join("")}</select><select id="quoteCurrencyFilter" class="filter-select"><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select>`,
         action: "quote",
         metricsToggle: true
       })}
@@ -1807,32 +1806,45 @@ const views = {
 
   },
   sales() {
-    const sales = sortByDateDesc(wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date)), s => s.wonDate || s.date);
-    const salesPEN = sales.filter(s => (s.currency || "PEN") === "PEN");
-    const salesUSD = sales.filter(s => s.currency === "USD");
-    const totalPEN = salesPEN.reduce((sum, s) => sum + calcQuote(s).total, 0);
-    const totalUSD = salesUSD.reduce((sum, s) => sum + calcQuote(s).total, 0);
-    const fmtAmt = (v, cur) => `${cur === "USD" ? "$" : "S/"} ${v.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
-    const penDetail = salesPEN.length ? `${salesPEN.length} ${salesPEN.length === 1 ? "venta" : "ventas"} en soles` : "Sin ventas en soles";
-    const usdDetail = salesUSD.length ? `${salesUSD.length} ${salesUSD.length === 1 ? "venta" : "ventas"} en dólares` : "Sin ventas en dólares";
-    const totalComisiones = sales.reduce((sum, s) => sum + calcQuote(s).commission, 0);
+    const sales    = sortByDateDesc(wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date)), s => s.wonDate || s.date);
+    const pen      = sales.filter(s => (s.currency || "PEN") === "PEN");
+    const usd      = sales.filter(s => s.currency === "USD");
+    const sumFld   = (arr, fld) => arr.reduce((sum, s) => sum + (s[fld] || 0), 0);
+    const penConIGV  = sumFld(pen, "total");
+    const penSinIGV  = sumFld(pen, "subtotal");
+    const usdConIGV  = sumFld(usd, "total");
+    const usdSinIGV  = sumFld(usd, "subtotal");
+    const comPEN   = sumFld(pen, "commission");
+    const comUSD   = sumFld(usd, "commission");
+    const penNote  = `Sin IGV: ${fmt(penSinIGV,"PEN")} · ${pen.length} ${pen.length === 1 ? "venta" : "ventas"}`;
+    const usdNote  = `Sin IGV: ${fmt(usdSinIGV,"USD")} · ${usd.length} ${usd.length === 1 ? "venta" : "ventas"}`;
+    const comNote  = comUSD > 0 ? `Com. $: ${fmt(comUSD,"USD")}` : "Base comercial";
     return `
       <section class="metric-grid">
-        ${metric("Ventas ganadas", sales.length, "Cierres del periodo", "", "", "purple")}
-        ${metric("Ventas en soles", fmtAmt(totalPEN, "PEN"), penDetail, "", "", "amber")}
-        ${metric("Ventas en dólares", fmtAmt(totalUSD, "USD"), usdDetail, "", "", "blue")}
-        ${metric("Comisiones", fmtAmt(totalComisiones, "PEN"), "Base comercial", "", "", "coral")}
+        ${metric("Ventas ganadas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, "", "", "purple")}
+        ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, "", "", "amber")}
+        ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, "", "", "blue")}
+        ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, "", "", "coral")}
       </section>
-      ${moduleToolbar({ search: "Buscar venta, cliente o servicio", filters: `<select data-table-filter><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select><select data-table-filter><option value="">Todos los tipos de pago</option><option>1 pago</option><option>2 pagos</option><option>3 pagos</option></select>`, action: "sale", metricsToggle: true })}
-      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Subtotal", "IGV", "Detracción", "Comisión", "Cuenta", "Tipo de pago", "Estado", "Acciones"], sales.map(s => {
-        const cur = s.currency || "PEN";
-        const cuotas = Number(s.cuotas) || 1;
+      ${moduleToolbar({
+        search: "Buscar venta, cliente o servicio",
+        filters: `
+          <select data-table-filter class="filter-select"><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select>
+          <select data-table-filter class="filter-select"><option value="">Todos los tipos de pago</option><option value="1 pago">1 pago</option><option value="2 pagos">2 pagos</option><option value="3 pagos">3 pagos</option></select>
+        `,
+        action: "sale",
+        metricsToggle: true
+      })}
+      ${table(["PPTO","Fecha venta","Servicio","Cliente","Moneda","Sin IGV","Con IGV","IGV","Detracción","Comisión","Cuenta","Tipo pago","Estado","Acciones"], sales.map(s => {
+        const cur      = s.currency || "PEN";
+        const cuotas   = Number(s.cuotas) || 1;
         const tipoPago = cuotas === 3 ? "3 pagos" : cuotas === 2 ? "2 pagos" : "1 pago";
         return [
           displayCode(s.code), fmtDate(s.wonDate || s.date),
           `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
           escapeHtml(s.client),
-          fmt(s.subtotal, cur), fmt(s.igv, cur),
+          cur,
+          fmt(s.subtotal, cur), fmt(s.total || (s.subtotal + s.igv), cur), fmt(s.igv, cur),
           fmt(s.detraction, cur), fmt(s.commission, cur),
           escapeHtml(s.bankAccount || "—"),
           tipoPago,
@@ -1843,27 +1855,39 @@ const views = {
 
   },
   collections() {
-    const collections = sortByDateDesc(collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate)), r => r.wonDate || r.dueDate);
-    const paid = collections.filter(row => row.status === "Pagado");
-    const pending = collections.filter(row => row.status !== "Pagado");
-    const overdue = collections.filter(row => row.status === "Vencido");
+    const allColls  = sortByDateDesc(collectionRows().filter(row => dateInRange(row.wonDate || row.dueDate)), r => r.wonDate || r.dueDate);
+    const paid      = allColls.filter(row => row.status === "Pagado");
+    const pending   = allColls.filter(row => row.status !== "Pagado");
+    const overdue   = allColls.filter(row => row.status === "Vencido");
+    const sumCur    = (arr, cur) => arr.filter(r => (r.currency || "PEN") === cur).reduce((s, r) => s + r.amount, 0);
+    const cntCur    = (arr, cur) => arr.filter(r => (r.currency || "PEN") === cur).length;
+    const accounts  = [...new Set(allColls.map(r => r.bankAccount).filter(Boolean))].sort();
+    const nroPagos  = [...new Set(allColls.map(r => r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "")))].filter(Boolean).sort();
     return `
       <section class="metric-grid">
-        ${metric("Pendiente de cobro", fmt(pending.reduce((sum, row) => sum + row.amount, 0)), `${pending.length} cobros abiertos`, "", "", "purple")}
-        ${metric("Cobrado", fmt(paid.reduce((sum, row) => sum + row.amount, 0)), `${paid.length} pagos recibidos`, "", "", "mint")}
-        ${metric("Vencido", fmt(overdue.reduce((sum, row) => sum + row.amount, 0)), `${overdue.length} cobros vencidos`, "", "", "coral")}
-        ${metric("Total gestionado", fmt(collections.reduce((sum, row) => sum + row.amount, 0)), `${collections.length} movimientos`, "", "", "amber")}
+        ${metric("Pendiente S/", fmt(sumCur(pending,"PEN")), `${cntCur(pending,"PEN")} abiertos · ${cntCur(overdue.filter(r=>(r.currency||"PEN")==="PEN"),"PEN") || overdue.filter(r=>(r.currency||"PEN")==="PEN").length} vencidos`, "", "", "purple")}
+        ${metric("Pendiente $", fmt(sumCur(pending,"USD"),"USD"), `${cntCur(pending,"USD")} abiertos`, "", "", "blue")}
+        ${metric("Cobrado S/", fmt(sumCur(paid,"PEN")), `${cntCur(paid,"PEN")} recibidos`, "", "", "mint")}
+        ${metric("Cobrado $", fmt(sumCur(paid,"USD"),"USD"), `${cntCur(paid,"USD")} recibidos`, "", "", "amber")}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o cobro",
-        filters: `<select data-table-filter><option value="">Todos los estados</option>${options(paymentStatuses)}</select>`,
+        filters: `
+          <select data-table-filter class="filter-select"><option value="">Todos los estados</option>${options(paymentStatuses)}</select>
+          <select data-table-filter class="filter-select"><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select>
+          <select data-table-filter class="filter-select"><option value="">Todas las cuentas</option>${accounts.map(a => `<option value="${escapeAttr(a)}">${escapeHtml(a)}</option>`).join("")}</select>
+          <select data-table-filter class="filter-select"><option value="">Todos los nros de pago</option>${nroPagos.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join("")}</select>
+          <select data-table-filter class="filter-select"><option value="">Todos los tipos</option><option value="1 pago">1 pago</option><option value="2 pagos">2 pagos</option><option value="3 pagos">3 pagos</option></select>
+        `,
         metricsToggle: true
       })}
-      ${table(["PPTO", "Fecha venta", "Servicio", "Cliente", "Factura", "Fecha PP", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], collections.map(r => {
-        const nroPago = r.label === "Pago 100%" ? "1/1" : r.label.replace("Pago ", "");
-        const netAmount = r.amount - r.detraction;
-        const collRepo = r.repo || r.quote?.repo || "";
-        const repoIcon = collRepo
+      ${table(["PPTO","Fecha venta","Servicio","Cliente","Factura","Fecha PP","Fecha RP","Moneda","Total","Detracción","Monto recibir","Cuenta","Nro pago","Repo","Estado","Acciones"], allColls.map(r => {
+        const nroPago    = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
+        const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
+        const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
+        const netAmount  = r.amount - (r.detraction || 0);
+        const collRepo   = r.repo || r.quote?.repo || "";
+        const repoIcon   = collRepo
           ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
           : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
         return [
@@ -1872,13 +1896,14 @@ const views = {
           `<div class="cell-clamp2">${escapeHtml(r.service)}</div>`,
           escapeHtml(r.client),
           escapeHtml(r.invoice || "—"),
-          fmtDate(r.dueDate),
+          r.dueDate ? fmtDate(r.dueDate) : "—",
           r.paidDate ? fmtDate(r.paidDate) : "—",
+          r.currency || "PEN",
           fmt(r.amount, r.currency),
-          fmt(r.detraction, r.currency),
+          fmt(r.detraction || 0, r.currency),
           fmt(netAmount, r.currency),
           escapeHtml(r.bankAccount || "—"),
-          nroPago,
+          `${nroPago}<span style="display:none"> ${tipoPago}</span>`,
           repoIcon,
           badge(r.status),
           collectionActions(r)
@@ -2054,7 +2079,7 @@ const views = {
 
       <div class="caja-bank-tabs">
         ${banks.map(b => tabBtn(b, b)).join("")}
-        ${allCajaRows.some(r => r.sourceType === "collectionDet") ? tabBtn(detAccount, detAccount + " 🏦") : ""}
+        ${allCajaRows.some(r => r.sourceType === "collectionDet") ? tabBtn(detAccount, detAccount) : ""}
       </div>
 
       <div class="caja-section">
@@ -2099,7 +2124,7 @@ const views = {
       </section>
       ${moduleToolbar({
         search: "Buscar persona, rol o estado",
-        filters: `<select data-table-filter><option value="">Todos los estados</option><option>Pagado</option><option>Pendiente</option></select>`,
+        filters: `<select data-table-filter class="filter-select"><option value="">Todos los estados</option><option>Pagado</option><option>Pendiente</option></select><select data-table-filter class="filter-select"><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select>`,
         action: "payment",
         metricsToggle: true
       })}
@@ -3565,14 +3590,17 @@ function bindFilters() {
   const quoteSearch = activeView === "quotes" ? document.querySelector("#moduleSearch") : null;
   const quoteStatus = document.querySelector("#quoteStatus");
   const quoteYear = document.querySelector("#quoteYear");
+  const quoteCurrencyFilter = document.querySelector("#quoteCurrencyFilter");
   if (quoteSearch && quoteStatus && !quoteStatus.dataset.bound) {
     quoteStatus.dataset.bound = "1";
     const filter = () => {
       const term = quoteSearch.value.toLowerCase();
       const yr = quoteYear?.value || "";
+      const cur = quoteCurrencyFilter?.value || "";
       const rows = sortByDateDesc(state.quotes.filter(q =>
         (yr ? q.date.startsWith(yr) : dateInRange(q.date)) &&
         (!quoteStatus.value || q.status === quoteStatus.value) &&
+        (!cur || (q.currency || "PEN") === cur) &&
         [q.code, q.client, q.service].join(" ").toLowerCase().includes(term)
       ));
       document.querySelector("#quotesTable").innerHTML = quotesTable(rows);
@@ -3581,6 +3609,7 @@ function bindFilters() {
     quoteSearch.addEventListener("input", filter);
     quoteStatus.addEventListener("change", filter);
     quoteYear?.addEventListener("change", filter);
+    quoteCurrencyFilter?.addEventListener("change", filter);
   }
   const leadSearch = activeView === "leads" ? document.querySelector("#moduleSearch") : null;
   const leadStatus = document.querySelector("#leadStatus");
@@ -4004,7 +4033,8 @@ function openLeadDialog(lead = null) {
 }
 
 function openQuoteDialog(q = null, isNewFromLead = false) {
-  const item = q || newQuote();
+  const last = !q && state.quotes[0];
+  const item = q || newQuote(last ? { bankAccount: last.bankAccount, currency: last.currency, hasIgv: last.hasIgv, cuotas: last.cuotas } : {});
   editingId = !isNewFromLead && q && state.quotes.some(existing => existing.id === q.id) ? q.id : "";
   const igvRate = state.settings.igvRate || 0.18;
   const commRate = state.settings.commissionRate || 0.05;
