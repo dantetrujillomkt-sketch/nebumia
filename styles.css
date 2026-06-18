@@ -620,7 +620,7 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   z-index: 500;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   min-height: 72px;
   margin-bottom: 0;
@@ -628,6 +628,22 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   background: var(--glass);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
+}
+.topbar-greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.topbar-hello {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.topbar-company {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.2;
 }
 .topbar-actions {
   display: flex;

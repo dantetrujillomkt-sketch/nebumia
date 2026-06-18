@@ -86,6 +86,10 @@
           <div class="content-spinner"></div>
         </div>
         <header class="topbar">
+          <div class="topbar-greeting">
+            <span id="topbarHello" class="topbar-hello"></span>
+            <span id="topbarCompany" class="topbar-company"></span>
+          </div>
           <div class="topbar-actions">
             <button id="topbarSearchBtn" class="secondary-action theme-toggle" type="button" aria-label="Abrir búsqueda global" title="Buscar (Ctrl K)">
               <svg class="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
@@ -199,6 +203,7 @@
         </div>
         <label>Nombre<input name="profileName" type="text" required></label>
         <label>Correo<input name="profileEmail" type="email" required></label>
+        <label>Empresa<input name="companyName" type="text" placeholder="Ej: Bandu Agency"></label>
         <p class="profile-section-label">Cambiar contraseña</p>
         <label>Nueva contraseña<input name="newPassword" type="password" minlength="8" placeholder="Dejar vacío para no cambiar"></label>
         <label>Confirmar contraseña<input name="confirmPassword" type="password" minlength="8"></label>

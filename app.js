@@ -697,6 +697,11 @@ function saveAuth(next) {
 function syncProfileUI() {
   const current = auth();
   const name = current.name || "Administrador";
+  const firstName = name.split(" ")[0];
+  const hello = document.getElementById("topbarHello");
+  const company = document.getElementById("topbarCompany");
+  if (hello) hello.textContent = `¡Hola, ${firstName}!`;
+  if (company) company.textContent = current.companyName ? `Empresa: ${current.companyName}` : "";
   profileName.textContent = name;
   profileEmail.textContent = current.email || "admin@bandu.pe";
   const photo = localStorage.getItem("nebumia-profile-photo");
@@ -5220,6 +5225,7 @@ editProfileBtn.addEventListener("click", () => {
   const current = auth();
   profileForm.elements.profileName.value = current.name || "Administrador";
   profileForm.elements.profileEmail.value = current.email || "admin@bandu.pe";
+  profileForm.elements.companyName.value = current.companyName || "";
   profileForm.elements.newPassword.value = "";
   profileForm.elements.confirmPassword.value = "";
   document.querySelector("#profileMessage").textContent = "";
@@ -5397,7 +5403,7 @@ profileForm.addEventListener("submit", event => {
     message.textContent = "Las contraseñas no coinciden.";
     return;
   }
-  const updates = { name: form.get("profileName"), email: form.get("profileEmail") };
+  const updates = { name: form.get("profileName"), email: form.get("profileEmail"), companyName: form.get("companyName") || "" };
   if (newPwd) updates.password = newPwd;
   saveAuth(updates);
   // save photo if uploaded
