@@ -1372,6 +1372,8 @@ table { width: 100%; border-collapse: collapse; min-width: 860px; background: va
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 th { color: var(--muted); font-size: 11px; font-weight: 550; text-transform: uppercase; background: var(--hover); }
 tr:last-child td { border-bottom: 0; }
+.table-wrap table th:last-child { width: 90px; }
+.table-wrap table td:last-child { text-align: right; }
 /* Cells that should wrap (service/concept descriptions) */
 td.cell-wrap { white-space: normal; word-break: break-word; }
 .cell-clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; word-break: break-word; line-height: 1.45; }
