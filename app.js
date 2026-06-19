@@ -694,10 +694,26 @@ function saveAuth(next) {
   localStorage.setItem(AUTH_KEY, JSON.stringify({ ...auth(), ...next }));
 }
 
+function compressPhoto(dataUrl, size = 96) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = size; canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const min = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    img.src = dataUrl;
+  });
+}
+
 function syncFromSupabaseMeta(user) {
   const meta = user?.user_metadata || {};
   if (meta.name) saveAuth({ name: meta.name, companyName: meta.companyName || "", email: user.email || auth().email });
   else if (user?.email) saveAuth({ email: user.email });
+  if (meta.photo) localStorage.setItem("nebumia-profile-photo", meta.photo);
 }
 
 function syncProfileUI() {
@@ -5437,7 +5453,7 @@ function refreshNotifBadge() {
 }
 quoteForm.addEventListener("submit", handleEntitySubmit);
 
-profileForm.addEventListener("submit", event => {
+profileForm.addEventListener("submit", async event => {
   if (event.submitter?.value === "cancel") return;
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -5451,16 +5467,21 @@ profileForm.addEventListener("submit", event => {
   const updates = { name: form.get("profileName"), email: form.get("profileEmail"), companyName: form.get("companyName") || "" };
   if (newPwd) updates.password = newPwd;
   saveAuth(updates);
-  // save photo if uploaded
+  // handle photo: compress and sync to Supabase metadata
   const photoInput = document.getElementById("profilePhotoInput");
   const img = document.getElementById("profilePhotoImg");
+  let photoThumb = null;
   if (photoInput?.files[0] && img?.src) {
-    localStorage.setItem("nebumia-profile-photo", img.src);
-  } else if (!img?.src) {
+    photoThumb = await compressPhoto(img.src);
+    localStorage.setItem("nebumia-profile-photo", photoThumb);
+  } else if (img?.src && img.src.startsWith("data:")) {
+    photoThumb = img.src.length < 50000 ? img.src : await compressPhoto(img.src);
+    localStorage.setItem("nebumia-profile-photo", photoThumb);
+  } else if (!img?.src || !img.src.startsWith("data:")) {
     localStorage.removeItem("nebumia-profile-photo");
   }
-  // sync name + company to Supabase user metadata so other devices get it
-  const sbMeta = { name: updates.name, companyName: updates.companyName };
+  // sync everything to Supabase user metadata
+  const sbMeta = { name: updates.name, companyName: updates.companyName, photo: photoThumb };
   if (newPwd) sb.auth.updateUser({ password: newPwd, data: sbMeta }).catch(() => {});
   else sb.auth.updateUser({ data: sbMeta }).catch(() => {});
   syncProfileUI();
@@ -6292,8 +6313,9 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
-    sbUser = session.user;
-    syncFromSupabaseMeta(session.user);
+    const { data: { user: freshUser } } = await sb.auth.getUser();
+    sbUser = freshUser || session.user;
+    syncFromSupabaseMeta(sbUser);
     showSkeleton(activeView);
     loginScreen.classList.add("hidden");
     if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
