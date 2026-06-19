@@ -2208,7 +2208,7 @@ const views = {
   },
   comprobantes() {
     const purchases = sortByDateDesc(state.purchases || []);
-    const invoicedSales = sortByDateDesc(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status)), r => r.paidDate || r.dueDate);
+    const invoicedSales = sortByDateDesc(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && dateInRange(r.dueDate || r.wonDate)), r => r.paidDate || r.dueDate);
     const taxPayments = sortByDateDesc(state.taxPayments || []);
     const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
     const totalSales = invoicedSales.reduce((sum, s) => sum + s.amount, 0);
