@@ -1546,7 +1546,8 @@ function syncQuoteSideEffects(targetState, q) {
   const next = parts.map((part, index) => {
     const old = existing.find(c => c.part === index + 1) || {};
     const label = totalParts === 1 ? "Pago 100%" : `Pago ${index + 1}/${totalParts}`;
-    const dueDate = old.dueDate || (index === 0 ? (q.wonDate || q.date) : "");
+    const isPending = !old.status || old.status === "Pendiente";
+    const dueDate = (!isPending && old.dueDate) ? old.dueDate : (index === 0 ? (q.wonDate || q.date) : (old.dueDate || ""));
     return {
       id: old.id || uid(),
       quoteId: q.id,
