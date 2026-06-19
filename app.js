@@ -2303,7 +2303,7 @@ const views = {
       <div class="comp-section">
         <h2 class="comp-section-title">Pago SUNAT</h2>
         <p class="comp-section-sub">Obligaciones generadas (facturas emitidas)</p>
-        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Acciones"], invoicedSales.map(r => {
+        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"], invoicedSales.map(r => {
           const igvRate = state.settings.igvRate;
           const hasIgv = r.quote?.hasIgv;
           const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
@@ -2311,12 +2311,23 @@ const views = {
           const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
           const invoiceDate = r.dueDate || r.wonDate;
           const period = invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
+          const dm = (state.settings.collectionDetModes || {})[r.id] || {};
+          const mode = dm.mode || "cliente";
+          const detActual = dm.detActual != null ? dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+          const detStatus = dm.detStatus || "Completado";
+          const detCell = detActual > 0 ? fmt(detActual, "PEN") : "—";
+          const detBadge = mode === "bandu"
+            ? badge(detStatus === "Completado" ? "Completado" : "Pendiente")
+            : `<span class="status pagado" style="font-size:10px;padding:1px 6px">Cliente</span>`;
+          const pagarBtn = mode === "bandu" && detActual > 0 && detStatus !== "Completado"
+            ? `<button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${detActual}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button>`
+            : "";
           return [
             fmtDate(invoiceDate), nroPago,
             escapeHtml(r.client), escapeHtml(r.invoice || "—"),
             fmt(subtotal, r.currency), fmt(igv, r.currency),
-            fmt(r.amount, r.currency), r.detraction > 0 ? fmt(r.detraction, "PEN") : "—",
-            `<div class="row-actions"><button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${r.detraction}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button></div>`
+            fmt(r.amount, r.currency), detCell, detBadge,
+            `<div class="row-actions">${pagarBtn}</div>`
           ];
         }), "tax-obligations")}
         <p class="comp-section-sub" style="margin-top:24px">Detracciones pagadas</p>
