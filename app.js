@@ -1685,7 +1685,8 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const wonUSDTotal = s.wonUSD.reduce((a,q)=>a+q.total,0);
-            return `<div class="kpi-top"><span class="kpi-label">Ganadas en $</span></div>
+            const wonPctUSD = s.goalUSD > 0 ? Math.round(wonUSDTotal / s.goalUSD * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Ventas ganadas</span><span class="kpi-pct ${wonPctUSD>=100?"kpi-pct--ok":wonPctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${wonPctUSD}% meta</span></div>
             <div class="kpi-value kpi-value--blue">${fmt(wonUSDTotal, "USD")}</div>
             <div class="kpi-sub">${s.wonUSD.length} ${s.wonUSD.length===1?"venta":"ventas"} · periodo</div>`;
           })()}
@@ -1695,7 +1696,7 @@ const views = {
             const lostUSDTotal = s.lostUSD.reduce((a,q)=>a+calcQuote(q).total,0);
             const totalClosedUSD = s.wonUSD.length + s.lostUSD.length;
             const lossPctUSD = totalClosedUSD > 0 ? Math.round(s.lostUSD.length / totalClosedUSD * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Perdidas en $</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
             <div class="kpi-value kpi-value--coral">${fmt(lostUSDTotal, "USD")}</div>
             <div class="kpi-sub">${s.lostUSD.length} ${s.lostUSD.length===1?"venta perdida":"ventas perdidas"} · periodo</div>`;
           })()}
@@ -1703,20 +1704,18 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openUSD = s.openQuotes.filter(q => q.currency === "USD");
-            const totalQuotedUSD = s.wonUSD.length + openUSD.length + s.lostUSD.length;
-            return `<div class="kpi-top"><span class="kpi-label">Pipeline en $</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelineUSD, "USD")}</div>
-            <div class="kpi-sub">${s.wonUSD.length} ganados de ${totalQuotedUSD} cotizaciones</div>`;
+            <div class="kpi-sub">${openUSD.length} ${openUSD.length===1?"cotización abierta":"cotizaciones abiertas"}</div>`;
           })()}
         </div>
         <div class="kpi-card">
           ${(() => {
-            const openUSD = s.openQuotes.filter(q => q.currency === "USD");
-            const totalUSDQ = s.wonUSD.length + s.lostUSD.length + openUSD.length;
-            const convUSD = totalUSDQ > 0 ? Math.round(s.wonUSD.length / totalUSDQ * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Conversión $</span></div>
+            const closedUSD = s.wonUSD.length + s.lostUSD.length;
+            const convUSD = closedUSD > 0 ? Math.round(s.wonUSD.length / closedUSD * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${convUSD}%</div>
-            <div class="kpi-sub">${s.wonUSD.length} ganados de ${totalUSDQ} cotizaciones en $</div>
+            <div class="kpi-sub">${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>
             <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${convUSD}%;background:var(--mint)"></div></div>`;
           })()}
         </div>
