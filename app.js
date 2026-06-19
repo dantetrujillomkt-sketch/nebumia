@@ -1572,7 +1572,9 @@ const views = {
     const upcoming = collectionRows().filter(r => r.status !== "Pagado").sort((a,b) => (a.dueDate||"").localeCompare(b.dueDate||"")).slice(0, 5);
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", q => q.total);
-    const salesBySource = group(s.leads.filter(l => l.status === "Ganado"), "source", l => l.estimatedValue || 0);
+    const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
+    const wonWithSource = s.won.map(q => ({ ...q, source: clientSourceMap.get(q.client) || "" })).filter(q => q.source);
+    const salesBySource = group(wonWithSource, "source", q => q.total);
     const leadsNew = state.clients.filter(c => dateInRange(c.date)).length;
     const propuestasCount = s.quotes.filter(q => q.status === "Por cotizar").length;
     const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
