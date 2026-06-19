@@ -6301,6 +6301,15 @@ document.getElementById("mobileGateLogout")?.addEventListener("click", async () 
 function closeSidebarDrawer() {
   appShell.classList.remove("sidebar-open");
 }
+function updateMobileMenuBtn() {
+  const btn = document.getElementById("mobileMenuBtn");
+  if (!btn) return;
+  const isMobile = window.innerWidth <= 768;
+  btn.style.display = isMobile ? "flex" : "none";
+  if (!isMobile) closeSidebarDrawer();
+}
+updateMobileMenuBtn();
+window.addEventListener("resize", updateMobileMenuBtn);
 document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
   appShell.classList.toggle("sidebar-open");
 });
