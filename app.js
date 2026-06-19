@@ -2089,7 +2089,7 @@ const views = {
           rows.map(r => [
             fmtDate(r.date),
             r.status === "Pendiente"
-              ? `${escapeHtml(r.concept)} <span style="display:inline-block;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;background:var(--amber,#f59e0b22);color:var(--amber,#b45309);border:1px solid currentColor;margin-left:4px;vertical-align:middle">Pendiente</span>`
+              ? `${escapeHtml(r.concept)} <span class="status pendiente" style="font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle">Pendiente</span>`
               : escapeHtml(r.concept),
             escapeHtml(r.category),
             `<span class="source-tag">${r.source}</span>`,
