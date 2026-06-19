@@ -5141,8 +5141,15 @@ function drawCharts() {
   // Aggregate data per period (filtered by selected account tab)
   const _acct = revenueChartTab;
   const allColl = collectionRows();
+
+  // Build a quoteId → bankAccount map from collections so that won quotes
+  // without a bankAccount assigned can be attributed via their collections.
+  const quoteAcctMap = new Map();
+  allColl.forEach(c => { if (c.quoteId && c.bankAccount) quoteAcctMap.set(c.quoteId, c.bankAccount); });
+  const resolveQuoteAcct = q => q.bankAccount || quoteAcctMap.get(q.id) || "";
+
   const wonValues = periods.map(p => {
-    const qs = state.quotes.filter(q => q.status === "Ganado" && (!_acct || q.bankAccount === _acct));
+    const qs = state.quotes.filter(q => q.status === "Ganado" && (!_acct || resolveQuoteAcct(q) === _acct));
     if (p.type === "week")
       return qs.filter(q => (q.wonDate||q.date||"") >= p.key && (q.wonDate||q.date||"") <= p.keyEnd).reduce((s,q) => s+calcQuote(q).total, 0);
     return qs.filter(q => (q.wonDate||q.date||"").startsWith(p.key)).reduce((s,q) => s+calcQuote(q).total, 0);
