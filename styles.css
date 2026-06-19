@@ -2251,11 +2251,28 @@ label.profile-photo-upload-btn {
   .date-filter-popover { width: min(650px, calc(100vw - 80px)); }
 }
 @media (max-width: 760px) {
-  /* Login */
+  /* Login — logo centrado arriba, layout compacto */
   .login-shell { grid-template-columns: 1fr; }
-  .login-panel { min-height: 100vh; width: min(430px, calc(100vw - 36px)); padding: 34px 0 28px; }
-  .login-brand { position: static; margin-bottom: 42px; }
   .login-visual { display: none; }
+  .login-panel {
+    min-height: 100dvh;
+    width: 100%;
+    padding: 0 28px 40px;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+  .login-brand {
+    position: static;
+    justify-content: center;
+    margin: 48px 0 0;
+    font-size: 24px;
+  }
+  .auth-copy { margin-top: 36px; }
+  .auth-copy h1 { font-size: 22px; margin-top: 6px; }
+  .auth-copy p:not(.eyebrow) { font-size: 13px; }
+  .login-form { gap: 12px; margin-top: 24px; }
+  .auth-submit { margin-top: 4px; }
+  .auth-links { font-size: 13px; }
 
   /* General */
   .desktop-only { display: none; }
