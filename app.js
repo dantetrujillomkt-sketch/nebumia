@@ -1168,14 +1168,14 @@ function buildCajaRows() {
         category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
         concept: `Detracción pagada · ${label}`, category: "Detracción",
-        amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: detStatus });
+        amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: detStatus, currency: "PEN" });
     } else if (det > 0) {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
         category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
       rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
         concept: `Detracción · ${label}`, category: "Detracción",
-        amount: det, bankAccount: detAccount, status: detStatus });
+        amount: det, bankAccount: detAccount, status: detStatus, currency: "PEN" });
     } else {
       rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
         concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
