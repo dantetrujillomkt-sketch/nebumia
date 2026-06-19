@@ -2101,7 +2101,7 @@ label.profile-photo-upload-btn {
   vertical-align: middle;
 }
 .targets-row-current td { background: rgba(79,124,255,.04); }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .annual-proj-tables { flex-direction: column; }
 }
 
@@ -2187,7 +2187,7 @@ label.profile-photo-upload-btn {
 .stage-card span { color: var(--muted); font-size: 12px; font-weight: 550; }
 .stage-card strong { display: block; margin: 8px 0 12px; font-size: 24px; font-weight: 650; }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   /* Sidebar becomes a fixed slide-out drawer */
   .app-shell,
   #appShell.sidebar-collapsed { grid-template-columns: 1fr; }
