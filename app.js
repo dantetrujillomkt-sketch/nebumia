@@ -1162,24 +1162,19 @@ function buildCajaRows() {
     const defaultIngreso = det > 0 && mode !== "bandu" ? c.amount - det : c.amount;
     const ingresoAmt = dm.montoReal != null ? dm.montoReal : defaultIngreso;
     const detStatus = dm.detStatus || "Completado";
-    if (det > 0 && mode === "bandu") {
-      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
-        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
-      rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
-        concept: `Detracción pagada · ${label}`, category: "Detracción",
-        amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: detStatus, currency: "PEN" });
-    } else if (det > 0) {
-      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
-        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
-      rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
-        concept: `Detracción · ${label}`, category: "Detracción",
-        amount: det, bankAccount: detAccount, status: detStatus, currency: "PEN" });
-    } else {
-      rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
-        concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
-        category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
+    rows.push({ ...base, id: `col-${c.id}`, type: "ingreso", sourceType: "collection",
+      concept: [c.code, c.service, c.client].filter(Boolean).join(" · "),
+      category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
+    if (det > 0 && detStatus === "Completado") {
+      if (mode === "bandu") {
+        rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
+          concept: `Detracción pagada · ${label}`, category: "Detracción",
+          amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: "Completado", currency: "PEN" });
+      } else {
+        rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
+          concept: `Detracción · ${label}`, category: "Detracción",
+          amount: det, bankAccount: detAccount, status: "Completado", currency: "PEN" });
+      }
     }
   });
 
@@ -1603,6 +1598,16 @@ const views = {
   dashboard() {
     const s = dashboardSnapshot();
     const upcoming = collectionRows().filter(r => r.status !== "Pagado").sort((a,b) => (a.dueDate||"").localeCompare(b.dueDate||"")).slice(0, 5);
+    const _detModes = state.settings.collectionDetModes || {};
+    const pendingDets = collectionRows().filter(c => {
+      if (c.status !== "Pagado") return false;
+      const dm = _detModes[c.id] || {};
+      const det = dm.detActual != null ? dm.detActual : (c.detraction > 0 ? Math.round(c.detraction) : 0);
+      return det > 0 && (dm.detStatus || "Completado") === "Pendiente";
+    }).map(c => {
+      const dm = _detModes[c.id] || {};
+      return { ...c, detActual: dm.detActual != null ? dm.detActual : Math.round(c.detraction), mode: dm.mode || "cliente" };
+    });
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", q => q.total);
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
@@ -1787,6 +1792,17 @@ const views = {
               </div>`;
             }).join("") : `<div class="empty-state">Sin cobros pendientes.</div>`}
           </div>
+          ${pendingDets.length ? `
+            <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+              <p style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;margin-bottom:8px">DETRACCIONES PENDIENTES</p>
+              <div class="timeline">
+                ${pendingDets.map(r => `
+                  <div class="timeline-item timeline-item--overdue">
+                    <div class="timeline-row"><strong>${escapeHtml(r.client)}</strong><span class="status pendiente">Pendiente</span></div>
+                    <div class="timeline-row"><span>${r.mode === "bandu" ? "Nosotros pagamos" : "Cobrar al cliente"} · ${fmt(r.detActual, "PEN")}</span><small>${fmtDate(r.dueDate || r.paidDate)}</small></div>
+                  </div>`).join("")}
+              </div>
+            </div>` : ""}
         </div>
         <div class="panel" data-dash-section="activity">
           <div class="panel-head"><div><h3>Actividad reciente</h3><p>Últimos movimientos registrados</p></div></div>
@@ -2320,7 +2336,7 @@ const views = {
           const detCell = detActual > 0 ? fmt(detActual, "PEN") : "—";
           const detBadge = mode === "bandu"
             ? badge(detStatus === "Completado" ? "Completado" : "Pendiente")
-            : `<span class="status pagado" style="font-size:10px;padding:1px 6px">Cliente</span>`;
+            : `<span class="status pagado">Cliente</span>`;
           const pagarBtn = mode === "bandu" && detActual > 0 && detStatus !== "Completado"
             ? `<button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${detActual}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button>`
             : "";
