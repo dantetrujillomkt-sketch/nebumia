@@ -1573,7 +1573,7 @@ const views = {
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", q => q.total);
     const salesBySource = group(s.leads.filter(l => l.status === "Ganado"), "source", l => l.estimatedValue || 0);
-    const leadsNew = s.leads.length;
+    const leadsNew = state.clients.filter(c => dateInRange(c.date)).length;
     const propuestasCount = s.quotes.filter(q => q.status === "Por cotizar").length;
     const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
     const funnelMax = Math.max(leadsNew + propuestasCount + quotedCount + s.won.length + s.lost.length, 1);
