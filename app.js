@@ -4789,7 +4789,8 @@ function saveQuote(data) {
   data.service = (data.service || "").trim();
   saveServiceIfNew(data.service);
   const existing = editingId ? state.quotes.find(q => q.id === editingId) : null;
-  const item = newQuote({ ...data, subtotal: Number(data.subtotal), hasIgv: data.hasIgv === "on", wonDate: existing?.wonDate || "" });
+  const existingWasGanado = existing?.status === "Ganado";
+  const item = newQuote({ ...data, subtotal: Number(data.subtotal), hasIgv: data.hasIgv === "on", wonDate: existingWasGanado ? (existing?.wonDate || "") : "" });
   if (item.status === "Ganado" && !item.wonDate) item.wonDate = today();
   if (editingId) state.quotes = state.quotes.map(q => q.id === editingId ? { ...q, ...item, id: editingId } : q);
   else state.quotes.unshift(item);
