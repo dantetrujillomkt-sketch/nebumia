@@ -6247,9 +6247,9 @@ initCommandPalette();
 document.getElementById("sidebarCollapseBtn")?.addEventListener("click", toggleSidebar);
 applySidebarState();
 
-// Mobile gate
+// Mobile gate (phones only — tablets get responsive layout)
 function isMobileDevice() {
-  return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  return window.innerWidth < 640;
 }
 function showMobileGate() {
   document.getElementById("mobileGate")?.classList.remove("hidden");
@@ -6263,6 +6263,18 @@ document.getElementById("mobileGateLogout")?.addEventListener("click", async () 
   await sb.auth.signOut();
   document.getElementById("mobileGate")?.classList.add("hidden");
   loginScreen.classList.remove("hidden");
+});
+
+// Tablet/mobile sidebar drawer
+function closeSidebarDrawer() {
+  appShell.classList.remove("sidebar-open");
+}
+document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
+  appShell.classList.toggle("sidebar-open");
+});
+document.getElementById("sidebarOverlay")?.addEventListener("click", closeSidebarDrawer);
+document.getElementById("mainNav")?.addEventListener("click", e => {
+  if (e.target.closest(".nav-btn") && window.innerWidth <= 1099) closeSidebarDrawer();
 });
 
 // Inicialización con Supabase Auth

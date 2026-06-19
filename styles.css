@@ -630,6 +630,17 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   padding: 10px 12px;
   font-weight: 500;
 }
+/* Mobile/tablet nav drawer */
+.mobile-menu-btn { display: none; }
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 850;
+}
+#appShell.sidebar-open .sidebar-overlay { display: block; }
+
 .workspace {
   position: relative;
   min-width: 0;
@@ -2176,6 +2187,52 @@ label.profile-photo-upload-btn {
 .stage-card span { color: var(--muted); font-size: 12px; font-weight: 550; }
 .stage-card strong { display: block; margin: 8px 0 12px; font-size: 24px; font-weight: 650; }
 
+@media (max-width: 1099px) {
+  /* Sidebar becomes a fixed slide-out drawer */
+  .app-shell,
+  #appShell.sidebar-collapsed { grid-template-columns: 1fr; }
+
+  .sidebar,
+  #appShell.sidebar-collapsed .sidebar {
+    position: fixed;
+    left: 0; top: 0;
+    height: 100vh;
+    width: 244px;
+    padding: 14px;
+    z-index: 900;
+    overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    box-shadow: 4px 0 24px rgba(0,0,0,.15);
+  }
+  /* Open state */
+  #appShell.sidebar-open .sidebar,
+  #appShell.sidebar-collapsed.sidebar-open .sidebar { transform: translateX(0); }
+
+  /* Reset icon-only collapsed styles — show full nav labels inside drawer */
+  #appShell.sidebar-collapsed .sidebar-brand-name { display: block; }
+  #appShell.sidebar-collapsed .sidebar-brand-initial { display: none; }
+  #appShell.sidebar-collapsed .sidebar-brand { justify-content: flex-start; position: static; }
+  #appShell.sidebar-collapsed .sidebar-toggle-btn { display: none; }
+  #appShell.sidebar-collapsed .main-nav { gap: 5px; }
+  #appShell.sidebar-collapsed .nav-btn { justify-content: flex-start; padding: 10px 12px; }
+  #appShell.sidebar-collapsed .nav-label { display: block; }
+  #appShell.sidebar-collapsed .sidebar-settings { padding-top: 8px; }
+  #appShell.sidebar-collapsed .nav-btn::after,
+  #appShell.sidebar-collapsed .nav-btn::before { display: none; }
+  body.sidebar-collapsed .content-loader,
+  body.sidebar-collapsed #navSkeletonOverlay { left: 0; }
+
+  /* Hamburger visible, desktop sidebar-toggle hidden */
+  .mobile-menu-btn { display: flex; }
+  .sidebar-toggle-btn { display: none; }
+
+  /* Topbar compact */
+  .topbar { padding: 10px 20px; }
+  #viewRoot { padding: 16px 18px 28px; }
+  .content-loader { left: 0; }
+}
+
 @media (max-width: 1050px) {
   .metric-grid, .integration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .content-grid, .dashboard-grid, .settings-layout, .settings-two-col, .comprobantes-grid, .taxes-split { grid-template-columns: 1fr; }
@@ -2192,17 +2249,8 @@ label.profile-photo-upload-btn {
 @media (max-width: 760px) {
   .login-shell { grid-template-columns: 1fr; }
   .login-panel { min-height: 100vh; width: min(430px, calc(100vw - 36px)); padding: 34px 0 28px; }
-  .login-brand {
-    position: static;
-    margin-bottom: 42px;
-  }
+  .login-brand { position: static; margin-bottom: 42px; }
   .login-visual { display: none; }
-  .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
-  .content-loader { left: 0; }
-  .workspace { padding: 16px; }
-  .topbar { align-items: flex-start; flex-direction: column; }
-  .topbar-actions { width: 100%; justify-content: flex-end; }
   .module-action-bar { align-items: stretch; flex-direction: column; }
   .module-toolbar-actions { width: 100%; justify-content: flex-end; }
   .module-primary-action .create-action { width: 100%; }
@@ -2216,7 +2264,7 @@ label.profile-photo-upload-btn {
   .date-filter-trigger { width: 100%; justify-content: center; }
   .date-filter-popover {
     position: fixed;
-    inset: 72px 12px 12px;
+    inset: 60px 12px 12px;
     width: auto;
     min-height: 0;
     grid-template-columns: 1fr;
@@ -2230,6 +2278,10 @@ label.profile-photo-upload-btn {
   .date-custom { min-height: 300px; }
   .date-inputs { grid-template-columns: 1fr; margin-top: 24px; }
   .date-inputs > span { display: none; }
+  .dialog { width: calc(100vw - 16px); max-height: 85vh; overflow-y: auto; }
+  #viewRoot { padding: 12px 12px 24px; }
+  .dash-main-grid, .dash-mid-grid, .dash-bottom-grid { flex-direction: column; }
+  .dash-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
 /* ── Mobile gate ── */
@@ -2261,7 +2313,7 @@ label.profile-photo-upload-btn {
 .mobile-gate-logo {
   font-size: 22px;
   font-weight: 750;
-  color: var(--brand);
+  color: var(--ink);
   letter-spacing: -.5px;
 }
 .mobile-gate-icon {

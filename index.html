@@ -69,6 +69,7 @@
     </main>
 
     <div id="appShell" class="app-shell hidden">
+      <div id="sidebarOverlay" class="sidebar-overlay"></div>
       <aside class="sidebar">
         <div class="sidebar-brand">
           <div class="sidebar-brand-name">
@@ -86,6 +87,9 @@
           <div class="content-spinner"></div>
         </div>
         <header class="topbar">
+          <button id="mobileMenuBtn" class="mobile-menu-btn secondary-action" type="button" aria-label="Abrir menú">
+            <svg class="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
           <div class="topbar-greeting">
             <span id="topbarHello" class="topbar-hello"></span>
             <span id="topbarCompany" class="topbar-company"></span>
