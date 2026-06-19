@@ -1573,10 +1573,10 @@ const views = {
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", q => q.total);
     const salesBySource = group(s.leads.filter(l => l.status === "Ganado"), "source", l => l.estimatedValue || 0);
-    const leadsNew = s.leads.filter(l => l.status === "Nuevo").length;
-    const leadsProp = s.leads.filter(l => l.status === "Propuesta").length;
+    const leadsNew = s.leads.length;
+    const propuestasCount = s.quotes.filter(q => q.status === "Por cotizar").length;
     const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
-    const funnelMax = Math.max(leadsNew + leadsProp + quotedCount + s.won.length + s.lost.length, 1);
+    const funnelMax = Math.max(leadsNew + propuestasCount + quotedCount + s.won.length + s.lost.length, 1);
     const alertCount = s.overdueCollections.length + s.pendingSunat.length + s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).length;
 
     return `
@@ -1697,7 +1697,7 @@ const views = {
           <div class="funnel-flow">
             ${dashFunnelChart([
               {label:"Nuevos",    count:leadsNew,         color:"var(--brand)"},
-              {label:"Propuesta", count:leadsProp,        color:"#7c3aed"},
+              {label:"Propuesta", count:propuestasCount,   color:"#7c3aed"},
               {label:"Cotizado",  count:quotedCount,      color:"#0891b2"},
               {label:"Ganado",    count:s.won.length,     color:"var(--mint)"},
               {label:"Perdido",   count:s.lost.length,    color:"var(--coral)"},
