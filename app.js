@@ -580,6 +580,7 @@ let viewRanges = (() => { try { return JSON.parse(localStorage.getItem(VIEW_RANG
 function getCurrentRange() { return viewRanges[activeView] || getDashboardPreset("thisMonth"); }
 function setCurrentRange(range) { viewRanges[activeView] = range; localStorage.setItem(VIEW_RANGES_KEY, JSON.stringify(viewRanges)); }
 let dashboardRange = getCurrentRange();
+let revenueChartTab = "";
 let dashboardSections = (() => {
   const always = ["accountsBreakdown", "annualProjection"];
   try {
@@ -1712,6 +1713,10 @@ const views = {
         <div class="panel chart-panel" data-dash-section="revenue">
           <div class="panel-head">
             <div><h3>Ingresos vs Egresos</h3><p id="revenueChartSubtitle">vendido vs cobrado</p></div>
+            <div class="chart-acct-tabs" id="revenueChartTabs">
+              <button class="chart-acct-tab ${revenueChartTab===''?'active':''}" data-acct="">Todas</button>
+              ${(state.settings.bankAccounts||[]).map(a=>`<button class="chart-acct-tab ${revenueChartTab===a?'active':''}" data-acct="${escapeAttr(a)}">${escapeHtml(a)}</button>`).join("")}
+            </div>
           </div>
           <canvas id="revenueChart" class="chart"></canvas>
         </div>
@@ -2990,6 +2995,13 @@ function bindMetricsToggle() {
 }
 
 function bindViewEvents() {
+  document.getElementById("revenueChartTabs")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-acct]");
+    if (!btn) return;
+    revenueChartTab = btn.dataset.acct;
+    document.querySelectorAll(".chart-acct-tab").forEach(b => b.classList.toggle("active", b === btn));
+    drawCharts();
+  });
   bindFilters();
   bindDashboardDateFilter();
   bindDashboardQuickFilters();
@@ -5113,23 +5125,25 @@ function drawCharts() {
     }
   }
 
-  // Aggregate data per period
+  // Aggregate data per period (filtered by selected account tab)
+  const _acct = revenueChartTab;
   const allColl = collectionRows();
   const wonValues = periods.map(p => {
+    const qs = state.quotes.filter(q => q.status === "Ganado" && (!_acct || q.bankAccount === _acct));
     if (p.type === "week")
-      return state.quotes.filter(q => q.status === "Ganado" && (q.wonDate||q.date||"") >= p.key && (q.wonDate||q.date||"") <= p.keyEnd).reduce((s,q) => s+calcQuote(q).total, 0);
-    return state.quotes.filter(q => q.status === "Ganado" && (q.wonDate||q.date||"").startsWith(p.key)).reduce((s,q) => s+calcQuote(q).total, 0);
+      return qs.filter(q => (q.wonDate||q.date||"") >= p.key && (q.wonDate||q.date||"") <= p.keyEnd).reduce((s,q) => s+calcQuote(q).total, 0);
+    return qs.filter(q => (q.wonDate||q.date||"").startsWith(p.key)).reduce((s,q) => s+calcQuote(q).total, 0);
   });
   const cobValues = periods.map(p => {
+    const cs = allColl.filter(c => c.status === "Pagado" && (!_acct || c.bankAccount === _acct));
     if (p.type === "week")
-      return allColl.filter(c => c.status === "Pagado" && (c.paidDate||"") >= p.key && (c.paidDate||"") <= p.keyEnd).reduce((s,c) => s+c.amount, 0);
-    return allColl.filter(c => c.status === "Pagado" && (c.paidDate||"").startsWith(p.key)).reduce((s,c) => s+c.amount, 0);
+      return cs.filter(c => (c.paidDate||"") >= p.key && (c.paidDate||"") <= p.keyEnd).reduce((s,c) => s+c.amount, 0);
+    return cs.filter(c => (c.paidDate||"").startsWith(p.key)).reduce((s,c) => s+c.amount, 0);
   });
+  const allEgrRows = buildCajaRows().filter(r => r.type === "egreso" && r.status !== "Pendiente");
   const egrValues = periods.map(p => {
     const inRange = (d) => p.type === "week" ? d >= p.key && d <= p.keyEnd : d.startsWith(p.key);
-    const expSum  = state.expenses.filter(e => e.status !== "Pendiente" && inRange(e.date||"")).reduce((s,e)=>s+e.amount,0);
-    const teamSum = state.team.filter(t => t.status !== "Pendiente" && inRange(t.dueDate||monthDate(t.month)||"")).reduce((s,t)=>s+t.amount,0);
-    return expSum + teamSum;
+    return allEgrRows.filter(r => inRange(r.date||"") && (!_acct || r.bankAccount === _acct)).reduce((s,r) => s+r.amount, 0);
   });
 
   const goal = state.settings.monthlyGoal || 0;

@@ -2123,6 +2123,10 @@ label.profile-photo-upload-btn {
   gap: 14px;
 }
 .chart-panel { min-height: 368px; }
+.chart-acct-tabs { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.chart-acct-tab { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+.chart-acct-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.chart-acct-tab:hover:not(.active) { background: var(--hover); color: var(--ink); }
 .segmented {
   display: inline-flex;
   gap: 2px;
