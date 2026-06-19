@@ -1,4 +1,4 @@
-// ── SUPABASE ─────────────────────────────────────────────
+﻿// ── SUPABASE ─────────────────────────────────────────────
 const SUPABASE_URL = "https://avjthwvppogqezlljksz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_UhsLakmDIvELDC0Ori-PFg_NHvd-iQs";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1912,7 +1912,7 @@ const views = {
           escapeHtml(s.bankAccount || "—"),
           tipoPago,
           badge(s.status),
-          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.id}" type="button">${icon("edit")}</button></div>`
         ];
       }), "sales")}`;
 
@@ -2064,15 +2064,15 @@ const views = {
     const pending = pendingCobros.reduce((s, c) => s + c.amount, 0);
 
     const editBtn = row => {
-      if (row.sourceType === "expense")   return `<div class="row-actions"><button class="action-link" data-edit-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
-      if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
-      if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
-      if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}<span>Editar saldo</span></button></div>`;
+      if (row.sourceType === "expense")   return `<div class="row-actions"><button class="action-link" data-edit-expense="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}</button></div>`;
       return "—";
     };
 
@@ -2202,7 +2202,7 @@ const views = {
             ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" title="Ver RHE" style="color:var(--brand)">${icon("link")}</a>`
             : `<span style="color:var(--muted)">${icon("link")}</span>`,
           badge(t.status),
-          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
+          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}</button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
         ];
       }), "team")}`;
   },
@@ -2268,7 +2268,7 @@ const views = {
             nroPago,
             sRepoIcon,
             badge(declaredStatus),
-            `<div class="row-actions"><button class="action-link" data-edit-collection="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+            `<div class="row-actions"><button class="action-link" data-edit-collection="${s.id}" type="button">${icon("edit")}</button></div>`
           ];
         }), "invoiced-sales")}
       </div>
@@ -2294,7 +2294,7 @@ const views = {
             "—",
             repoIcon,
             badge(declaredStatus),
-            `<div class="row-actions"><button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-purchase="${p.id}" type="button" title="Eliminar compra">${icon("trash")}</button></div>`
+            `<div class="row-actions"><button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-purchase="${p.id}" type="button" title="Eliminar compra">${icon("trash")}</button></div>`
           ];
         }), "purchases")}
       </div>
@@ -2322,7 +2322,7 @@ const views = {
           taxPayments.filter(t => t.type === "Detracción" || t.type === "Autodetracción").map(t => [
             fmtDate(t.date), t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
             t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
-            `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`
+            `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`
           ]), "tax-payments")}
       </div>
 
@@ -2346,7 +2346,7 @@ const views = {
                 escapeHtml(d.otroConcepto || "—"),
                 `<strong>${fmt(total)}</strong>`,
                 badge(d.status),
-                `<div class="row-actions"><button class="action-link" data-edit-declaracion="${d.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-declaracion="${d.id}" type="button">${icon("trash")}</button></div>`
+                `<div class="row-actions"><button class="action-link" data-edit-declaracion="${d.id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-declaracion="${d.id}" type="button">${icon("trash")}</button></div>`
               ];
             }), "declaraciones");
         })()}
@@ -2742,7 +2742,7 @@ function leadActions(l) {
   const quoteText = l.quoteId ? "Ver cotizacion" : "Cotizar";
   return `
     <div class="row-actions">
-      <button class="action-link" data-edit-lead="${l.id}" type="button">${icon("edit")}<span>Editar</span></button>
+      <button class="action-link" data-edit-lead="${l.id}" type="button">${icon("edit")}</button>
       <button class="action-link" data-quote-lead="${l.id}" type="button">${icon("fileText")}<span>${quoteText}</span></button>
       <button class="action-link danger-link" data-close-lead="${l.id}" type="button">${icon("x")}<span>Cerrar perdido</span></button>
     </div>
@@ -2780,7 +2780,7 @@ function quotesTable(rows) {
 function quoteActions(q) {
   return `
     <div class="row-actions">
-      <button class="action-link" data-edit-quote="${q.id}" type="button">${icon("edit")}<span>Editar</span></button>
+      <button class="action-link" data-edit-quote="${q.id}" type="button">${icon("edit")}</button>
       <button class="action-link" data-copy-quote="${q.id}" type="button" title="Duplicar cotización">${icon("copy")}</button>
       <button class="action-link danger" data-delete-quote="${q.id}" type="button" title="Eliminar cotización">${icon("trash")}</button>
     </div>
@@ -2797,11 +2797,11 @@ function duplicateQuote(id) {
 }
 
 function clientActions(id) {
-  return `<div class="row-actions"><button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-client="${id}" type="button">${icon("trash")}</button></div>`;
+  return `<div class="row-actions"><button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-client="${id}" type="button">${icon("trash")}</button></div>`;
 }
 
 function collectionActions(r) {
-  return `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+  return `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}</button></div>`;
 }
 
 function options(values, selected = "") {
