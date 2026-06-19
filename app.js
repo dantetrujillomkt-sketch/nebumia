@@ -2791,7 +2791,7 @@ function quoteActions(q) {
 function duplicateQuote(id) {
   const original = state.quotes.find(q => q.id === id);
   if (!original) return;
-  const copy = { ...original, id: uid(), code: nextQuoteCode(), status: "Por cotizar", leadId: "" };
+  const copy = { ...original, id: uid(), code: nextQuoteCode(), status: "Por cotizar", leadId: "", date: today(), wonDate: "", month: currentMonthName() };
   state.quotes.unshift(copy);
   saveState();
   openQuoteDialog(copy);
