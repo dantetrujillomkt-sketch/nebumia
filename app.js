@@ -2264,7 +2264,7 @@ const views = {
 
       <div class="comp-section">
         <h2 class="comp-section-title">Registro de ventas</h2>
-        ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.map(s => {
+        ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.filter(s => s.quote?.hasIgv).map(s => {
           const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
           const dm = (state.settings.collectionDetModes || {})[s.id] || {};
           const detActual = dm.detActual != null ? dm.detActual : (s.detraction > 0 ? Math.round(s.detraction) : 0);
