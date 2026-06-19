@@ -1579,16 +1579,22 @@ const views = {
     const propuestasCount = s.quotes.filter(q => q.status === "Por cotizar").length;
     const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
     const funnelMax = Math.max(leadsNew + propuestasCount + quotedCount + s.won.length + s.lost.length, 1);
-    const cajaRowsPeriod = buildCajaRows().filter(r => dateInRange(r.date) && r.status !== "Pendiente");
+    const _allCajaRows = buildCajaRows();
+    const _allColls = collectionRows();
     const accountStats = (state.settings.bankAccounts || []).map(bank => {
       const isUSD = /\$|USD|Dólar/i.test(bank);
       const currency = isUSD ? "USD" : "PEN";
-      const bRows = cajaRowsPeriod.filter(r => r.bankAccount === bank);
-      const cobrado = bRows.filter(r => r.type === "ingreso").reduce((a, r) => a + r.amount, 0);
-      const egresos = bRows.filter(r => r.type === "egreso").reduce((a, r) => a + r.amount, 0);
+      // Cobrado: paid collections assigned to this account in the period
+      const cobrado = _allColls
+        .filter(c => c.bankAccount === bank && c.status === "Pagado" && dateInRange(c.paidDate || c.dueDate))
+        .reduce((a, c) => a + c.amount, 0);
+      // Egresos: caja rows for this account (team, cashEntries, detracciones) — exclude pending
+      const egresos = _allCajaRows
+        .filter(r => r.bankAccount === bank && r.type === "egreso" && r.status !== "Pendiente" && dateInRange(r.date))
+        .reduce((a, r) => a + r.amount, 0);
       const vendido = s.won.filter(q => q.bankAccount === bank).reduce((a, q) => a + q.total, 0);
       return { bank, currency, vendido, cobrado, egresos, balance: cobrado - egresos };
-    }).filter(a => a.vendido > 0 || a.cobrado > 0 || a.egresos > 0);
+    });
     const alertCount = s.overdueCollections.length + s.pendingSunat.length + s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).length;
 
     return `
@@ -1718,7 +1724,25 @@ const views = {
         </div>
       </div>
 
-      <!-- Fila 3: Por categoría + Por fuente + Comerciales -->
+      <!-- Fila 3: Por cuenta bancaria -->
+      ${accountStats.some(a => a.cobrado > 0 || a.egresos > 0 || a.vendido > 0) ? `
+      <div class="panel" data-dash-section="accountsBreakdown" style="margin-bottom:14px">
+        <div class="panel-head"><div><h3>Por cuenta</h3><p>Vendido · cobrado · egresos en el periodo por cuenta bancaria</p></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Cuenta</th><th>Vendido</th><th>Cobrado</th><th>Egresos</th><th>Balance</th></tr></thead>
+          <tbody>
+            ${accountStats.map(a => `<tr>
+              <td><strong>${escapeHtml(a.bank)}</strong></td>
+              <td>${fmt(a.vendido, a.currency)}</td>
+              <td style="color:var(--mint)">${fmt(a.cobrado, a.currency)}</td>
+              <td style="color:var(--coral)">${fmt(a.egresos, a.currency)}</td>
+              <td style="color:${a.balance >= 0 ? "var(--mint)" : "var(--coral)"};font-weight:600">${fmt(a.balance, a.currency)}</td>
+            </tr>`).join("")}
+          </tbody>
+        </table></div>
+      </div>` : ""}
+
+      <!-- Fila 4: Por categoría + Por fuente + Comerciales -->
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
           <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
@@ -1763,24 +1787,6 @@ const views = {
           ${dashRecentActivity()}
         </div>
       </div>
-
-      <!-- Fila 5: Por cuenta bancaria -->
-      ${accountStats.length ? `
-      <div class="panel" data-dash-section="accountsBreakdown" style="margin-bottom:14px">
-        <div class="panel-head"><div><h3>Por cuenta</h3><p>Vendido · cobrado · egresos en el periodo</p></div></div>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Cuenta</th><th>Vendido</th><th>Cobrado</th><th>Egresos</th><th>Balance</th></tr></thead>
-          <tbody>
-            ${accountStats.map(a => `<tr>
-              <td><strong>${escapeHtml(a.bank)}</strong></td>
-              <td>${fmt(a.vendido, a.currency)}</td>
-              <td style="color:var(--mint)">${fmt(a.cobrado, a.currency)}</td>
-              <td style="color:var(--coral)">${fmt(a.egresos, a.currency)}</td>
-              <td style="color:${a.balance >= 0 ? "var(--mint)" : "var(--coral)"};font-weight:600">${fmt(a.balance, a.currency)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table></div>
-      </div>` : ""}
 
       <!-- Fila 6: Proyección anual -->
       <div class="panel" data-dash-section="annualProjection" style="margin-bottom:14px">
