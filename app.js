@@ -5106,8 +5106,8 @@ function drawCharts() {
   });
   const egrValues = periods.map(p => {
     const inRange = (d) => p.type === "week" ? d >= p.key && d <= p.keyEnd : d.startsWith(p.key);
-    const expSum  = state.expenses.filter(e => inRange(e.date||"")).reduce((s,e)=>s+e.amount,0);
-    const teamSum = state.team.filter(t => inRange(t.dueDate||monthDate(t.month)||"")).reduce((s,t)=>s+t.amount,0);
+    const expSum  = state.expenses.filter(e => e.status !== "Pendiente" && inRange(e.date||"")).reduce((s,e)=>s+e.amount,0);
+    const teamSum = state.team.filter(t => t.status !== "Pendiente" && inRange(t.dueDate||monthDate(t.month)||"")).reduce((s,t)=>s+t.amount,0);
     return expSum + teamSum;
   });
 
