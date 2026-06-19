@@ -5268,9 +5268,8 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
 
   sbUser = data.user;
   syncFromSupabaseMeta(data.user);
-  showSkeleton(activeView);
   loginScreen.classList.add("hidden");
-  if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
+  if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
   await sbLoad();
   render();
   hideSkeleton(2000);
@@ -6287,10 +6286,6 @@ function showMobileGate() {
   document.getElementById("mobileGate")?.classList.remove("hidden");
   appShell.classList.add("hidden");
 }
-document.getElementById("mobileGateContinue")?.addEventListener("click", () => {
-  document.getElementById("mobileGate")?.classList.add("hidden");
-  appShell.classList.remove("hidden");
-});
 document.getElementById("mobileGateLogout")?.addEventListener("click", async () => {
   await sb.auth.signOut();
   document.getElementById("mobileGate")?.classList.add("hidden");
@@ -6325,9 +6320,8 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
     const { data: { user: freshUser } } = await sb.auth.getUser();
     sbUser = freshUser || session.user;
     syncFromSupabaseMeta(sbUser);
-    showSkeleton(activeView);
     loginScreen.classList.add("hidden");
-    if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
+    if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
     await sbLoad();
     render();
     hideSkeleton(2000);
