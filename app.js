@@ -2256,7 +2256,7 @@ const views = {
             ? `<a href="${escapeAttr(sRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
             : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
           return [
-            fmtDate(s.wonDate),
+            fmtDate(s.dueDate || s.wonDate),
             `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
             escapeHtml(s.client),
             escapeHtml(s.invoice || "—"),
@@ -2308,9 +2308,10 @@ const views = {
           const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
           const igv = hasIgv ? r.amount - subtotal : 0;
           const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
-          const period = r.wonDate ? new Date(r.wonDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
+          const invoiceDate = r.dueDate || r.wonDate;
+          const period = invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
           return [
-            fmtDate(r.wonDate), nroPago,
+            fmtDate(invoiceDate), nroPago,
             escapeHtml(r.client), escapeHtml(r.invoice || "—"),
             fmt(subtotal, r.currency), fmt(igv, r.currency),
             fmt(r.amount, r.currency), fmt(r.detraction, r.currency),
