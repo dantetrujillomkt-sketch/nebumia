@@ -1729,23 +1729,6 @@ const views = {
         </div>
       </div>
 
-      <!-- Fila 3: Por cuenta bancaria -->
-      ${(state.settings.bankAccounts || []).length ? `
-      <div class="panel" data-dash-section="accountsBreakdown" style="margin-bottom:14px">
-        <div class="panel-head"><div><h3>Por cuenta</h3><p>Cobrado · egresos · balance por cuenta bancaria en el periodo</p></div></div>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Cuenta</th><th>Cobrado</th><th>Egresos</th><th>Balance</th></tr></thead>
-          <tbody>
-            ${accountStats.map(a => `<tr>
-              <td><strong>${escapeHtml(a.bank)}</strong></td>
-              <td style="color:var(--mint)">${fmt(a.cobrado, a.currency)}</td>
-              <td style="color:var(--coral)">${fmt(a.egresos, a.currency)}</td>
-              <td style="color:${a.balance >= 0 ? "var(--mint)" : "var(--coral)"};font-weight:600">${fmt(a.balance, a.currency)}</td>
-            </tr>`).join("")}
-          </tbody>
-        </table></div>
-      </div>` : ""}
-
       <!-- Fila 4: Por categoría + Por fuente + Comerciales -->
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
