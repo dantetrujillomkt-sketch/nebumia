@@ -2315,7 +2315,7 @@ const views = {
             fmtDate(invoiceDate), nroPago,
             escapeHtml(r.client), escapeHtml(r.invoice || "—"),
             fmt(subtotal, r.currency), fmt(igv, r.currency),
-            fmt(r.amount, r.currency), fmt(r.detraction, r.currency),
+            fmt(r.amount, r.currency), r.detraction > 0 ? fmt(r.detraction, "PEN") : "—",
             `<div class="row-actions"><button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${r.detraction}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button></div>`
           ];
         }), "tax-obligations")}
