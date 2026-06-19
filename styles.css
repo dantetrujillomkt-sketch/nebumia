@@ -2231,6 +2231,10 @@ label.profile-photo-upload-btn {
   .topbar { padding: 10px 20px; }
   #viewRoot { padding: 16px 18px 28px; }
   .content-loader { left: 0; }
+  /* Module controls: allow wrapping on tablets */
+  .module-controls-inline { flex-wrap: wrap; }
+  .module-controls-right { flex-wrap: wrap; justify-content: flex-end; }
+  .module-search { width: 100%; max-width: 100%; }
 }
 
 @media (max-width: 1050px) {
@@ -2247,16 +2251,45 @@ label.profile-photo-upload-btn {
   .date-filter-popover { width: min(650px, calc(100vw - 80px)); }
 }
 @media (max-width: 760px) {
+  /* Login */
   .login-shell { grid-template-columns: 1fr; }
   .login-panel { min-height: 100vh; width: min(430px, calc(100vw - 36px)); padding: 34px 0 28px; }
   .login-brand { position: static; margin-bottom: 42px; }
   .login-visual { display: none; }
-  .module-action-bar { align-items: stretch; flex-direction: column; }
-  .module-toolbar-actions { width: 100%; justify-content: flex-end; }
-  .module-primary-action .create-action { width: 100%; }
+
+  /* General */
   .desktop-only { display: none; }
   .metric-grid, .integration-grid, .form-grid { grid-template-columns: 1fr; }
-  .dashboard-quick-filters { align-items: stretch; }
+  .dialog { width: calc(100vw - 16px); max-height: 85vh; overflow-y: auto; }
+  #viewRoot { padding: 12px 12px 24px; }
+
+  /* Module page header: stack title + date filter */
+  .module-page-header { flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+  .module-page-header .date-filter,
+  .module-page-header .date-filter-trigger { width: 100%; justify-content: center; }
+
+  /* Module controls: stack rows */
+  .module-controls-inline { flex-direction: column; align-items: stretch; gap: 8px; }
+  .module-controls-left { flex-wrap: wrap; gap: 8px; }
+  .module-controls-right { flex-wrap: wrap; gap: 6px; justify-content: stretch; }
+  .module-controls-right .secondary-action { flex: 1 1 auto; justify-content: center; }
+  .module-search { width: 100%; max-width: 100%; }
+  .create-action { width: 100%; justify-content: center; }
+
+  /* Filter popover: full screen on mobile */
+  .filter-popover {
+    position: fixed;
+    top: 60px; left: 8px; right: 8px; bottom: 8px;
+    min-width: 0;
+    width: auto;
+    max-height: calc(100vh - 76px);
+    overflow-y: auto;
+    z-index: 800;
+  }
+
+  /* Dashboard filter zone */
+  .dashboard-quick-filters { flex-wrap: wrap; align-items: stretch; gap: 6px; }
+  .dashboard-quick-filters > button { flex: 1 1 auto; }
   .dashboard-filter-label { width: 100%; }
   .dashboard-date-side, .dashboard-date-side .date-filter { width: 100%; }
   .dashboard-filter-bar { align-items: flex-start; flex-direction: column; }
@@ -2264,23 +2297,22 @@ label.profile-photo-upload-btn {
   .date-filter-trigger { width: 100%; justify-content: center; }
   .date-filter-popover {
     position: fixed;
-    inset: 60px 12px 12px;
+    inset: 60px 8px 8px;
     width: auto;
     min-height: 0;
     grid-template-columns: 1fr;
     overflow: auto;
   }
-  .date-presets {
-    max-height: 190px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
+  .date-presets { max-height: 190px; border-right: 0; border-bottom: 1px solid var(--line); }
   .date-custom { min-height: 300px; }
   .date-inputs { grid-template-columns: 1fr; margin-top: 24px; }
   .date-inputs > span { display: none; }
-  .dialog { width: calc(100vw - 16px); max-height: 85vh; overflow-y: auto; }
-  #viewRoot { padding: 12px 12px 24px; }
+
+  /* Dashboard panels: full width, stacked */
   .dash-main-grid, .dash-mid-grid, .dash-bottom-grid { flex-direction: column; }
+  .dash-main-grid > .panel,
+  .dash-mid-grid > .panel,
+  .dash-bottom-grid > .panel { width: 100%; min-width: 0; flex: none; }
   .dash-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
