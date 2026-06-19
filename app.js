@@ -1053,6 +1053,32 @@ function fmt(amount, currency = "PEN") {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency }).format(amount || 0);
 }
 
+function gaugeKpi(pct, current, goal, currency, label) {
+  const R = 82, SW = 13, cx = 100, cy = 118;
+  const total = Math.PI * R;
+  const filled = (Math.min(Math.max(pct, 0), 100) / 100 * total).toFixed(1);
+  const arcD = `M ${cx - R},${cy} A ${R},${R} 0 0,1 ${cx + R},${cy}`;
+  const color = pct >= 100 ? "var(--mint)" : pct >= 50 ? "var(--brand)" : "var(--coral)";
+  const pctClass = pct >= 100 ? "kpi-pct--ok" : pct >= 50 ? "kpi-pct--warn" : "kpi-pct--low";
+  const sym = currency === "USD" ? "$" : "S/";
+  const fmtS = n => n >= 1000 ? `${sym} ${(n / 1000).toFixed(1)}k` : `${sym} ${Math.round(n)}`;
+  const goalText = goal > 0 ? `de ${fmtS(goal)} · ${currentMonthName()}` : currentMonthName();
+  return `
+    <div class="kpi-top">
+      <span class="kpi-label">${label}</span>
+      ${goal > 0 ? `<span class="kpi-pct ${pctClass}">${pct}%</span>` : ""}
+    </div>
+    <div class="gauge-wrap">
+      <svg viewBox="0 0 200 128" xmlns="http://www.w3.org/2000/svg">
+        <path d="${arcD}" fill="none" stroke="var(--hover)" stroke-width="${SW}" stroke-linecap="round"/>
+        <path d="${arcD}" fill="none" stroke="${color}" stroke-width="${SW}" stroke-linecap="round"
+          stroke-dasharray="${filled} ${total.toFixed(1)}"/>
+        <text x="${cx}" y="90" text-anchor="middle" font-family="inherit" font-size="21" font-weight="600" fill="var(--ink)">${fmtS(current)}</text>
+        <text x="${cx}" y="112" text-anchor="middle" font-family="inherit" font-size="10.5" fill="var(--muted)">${goalText}</text>
+      </svg>
+    </div>`;
+}
+
 function fmtMixed(rows, valueFn, currencyFn = r => r.currency || "PEN") {
   const map = {};
   rows.forEach(r => { const c = currencyFn(r); map[c] = (map[c] || 0) + valueFn(r); });
@@ -1610,13 +1636,7 @@ const views = {
       <!-- KPIs -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          <div class="kpi-top">
-            <span class="kpi-label">Meta mensual</span>
-            <span class="kpi-pct ${s.goalPctPEN >= 100 ? "kpi-pct--ok" : s.goalPctPEN >= 50 ? "kpi-pct--warn" : "kpi-pct--low"}">${s.goalPctPEN}%</span>
-          </div>
-          <div class="kpi-value">${fmt(s.wonThisMonthPEN)}</div>
-          <div class="kpi-sub">de ${fmt(s.goal)} · ${currentMonthName()}</div>
-          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.goalPctPEN}%;background:${s.goalPctPEN>=100?"var(--mint)":s.goalPctPEN>=50?"var(--brand)":"var(--coral)"}"></div></div>
+          ${gaugeKpi(s.goalPctPEN, s.wonThisMonthPEN, s.goal, "PEN", "Meta mensual")}
         </div>
         <div class="kpi-card">
           ${(() => {
@@ -1660,13 +1680,7 @@ const views = {
       <!-- KPIs USD -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          <div class="kpi-top">
-            <span class="kpi-label">Meta mensual $</span>
-            ${s.goalUSD > 0 ? `<span class="kpi-pct ${s.goalPctUSD >= 100 ? "kpi-pct--ok" : s.goalPctUSD >= 50 ? "kpi-pct--warn" : "kpi-pct--low"}">${s.goalPctUSD}%</span>` : ""}
-          </div>
-          <div class="kpi-value">${fmt(s.wonThisMonthUSD, "USD")}</div>
-          <div class="kpi-sub">${s.goalUSD > 0 ? `de ${fmt(s.goalUSD, "USD")} · ${currentMonthName()}` : `${currentMonthName()} · en dólares`}</div>
-          <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${s.goalPctUSD}%;background:${s.goalPctUSD>=100?"var(--mint)":s.goalPctUSD>=50?"var(--brand)":"var(--coral)"}"></div></div>
+          ${gaugeKpi(s.goalPctUSD, s.wonThisMonthUSD, s.goalUSD, "USD", "Meta mensual $")}
         </div>
         <div class="kpi-card">
           ${(() => {
