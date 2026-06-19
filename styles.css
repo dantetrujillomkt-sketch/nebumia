@@ -2232,6 +2232,93 @@ label.profile-photo-upload-btn {
   .date-inputs > span { display: none; }
 }
 
+/* ── Mobile gate ── */
+.mobile-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: var(--soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.mobile-gate.hidden { display: none; }
+.mobile-gate-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 36px 28px 28px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,.10);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.mobile-gate-logo {
+  font-size: 22px;
+  font-weight: 750;
+  color: var(--brand);
+  letter-spacing: -.5px;
+}
+.mobile-gate-icon {
+  width: 72px;
+  height: 72px;
+  color: var(--muted);
+  margin: 4px 0;
+}
+.mobile-gate-icon svg { width: 100%; height: 100%; }
+.mobile-gate-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.25;
+}
+.mobile-gate-desc {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+.mobile-gate-url {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 16px;
+  width: 100%;
+  line-height: 1.6;
+}
+.mobile-gate-url strong { color: var(--ink); font-weight: 650; }
+.mobile-gate-continue {
+  width: 100%;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.mobile-gate-continue:hover { background: var(--hover); color: var(--ink); }
+.mobile-gate-logout {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.mobile-gate-logout:hover { text-decoration: underline; }
+
 .bank-accounts-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .bank-account-item { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 8px 12px; background: var(--soft); border-radius: 8px; font-size: 14px; }
 .bank-account-item .action-link.danger { color: var(--danger); }

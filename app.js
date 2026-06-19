@@ -5247,7 +5247,7 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
   sbUser = data.user;
   showSkeleton(activeView);
   loginScreen.classList.add("hidden");
-  appShell.classList.remove("hidden");
+  if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
   await sbLoad();
   render();
   hideSkeleton(2000);
@@ -6247,6 +6247,24 @@ initCommandPalette();
 document.getElementById("sidebarCollapseBtn")?.addEventListener("click", toggleSidebar);
 applySidebarState();
 
+// Mobile gate
+function isMobileDevice() {
+  return window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+function showMobileGate() {
+  document.getElementById("mobileGate")?.classList.remove("hidden");
+  appShell.classList.add("hidden");
+}
+document.getElementById("mobileGateContinue")?.addEventListener("click", () => {
+  document.getElementById("mobileGate")?.classList.add("hidden");
+  appShell.classList.remove("hidden");
+});
+document.getElementById("mobileGateLogout")?.addEventListener("click", async () => {
+  await sb.auth.signOut();
+  document.getElementById("mobileGate")?.classList.add("hidden");
+  loginScreen.classList.remove("hidden");
+});
+
 // Inicialización con Supabase Auth
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
@@ -6254,7 +6272,7 @@ applySidebarState();
     sbUser = session.user;
     showSkeleton(activeView);
     loginScreen.classList.add("hidden");
-    appShell.classList.remove("hidden");
+    if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
     await sbLoad();
     render();
     hideSkeleton(2000);

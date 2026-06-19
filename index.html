@@ -125,6 +125,26 @@
       </section>
     </div>
 
+    <!-- Mobile gate: shown on phones after login -->
+    <div id="mobileGate" class="mobile-gate hidden">
+      <div class="mobile-gate-card">
+        <div class="mobile-gate-logo">Nebumia</div>
+        <div class="mobile-gate-icon" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="12" width="56" height="36" rx="4" stroke="currentColor" stroke-width="3" fill="none"/>
+            <path d="M20 48h24M32 48v4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            <rect x="44" y="30" width="18" height="28" rx="3" fill="var(--brand)" opacity="0.15" stroke="var(--brand)" stroke-width="2"/>
+            <circle cx="53" cy="55" r="1.5" fill="var(--brand)"/>
+          </svg>
+        </div>
+        <h1 class="mobile-gate-title">Diseñado para escritorio</h1>
+        <p class="mobile-gate-desc">Nebumia es una plataforma operativa compleja con tablas, reportes y formularios que requieren una pantalla más grande para funcionar correctamente.</p>
+        <p class="mobile-gate-url">Ábrelo desde tu computadora en:<br><strong>nebumia.vercel.app</strong></p>
+        <button id="mobileGateContinue" class="mobile-gate-continue" type="button">Continuar de todas formas</button>
+        <button id="mobileGateLogout" class="mobile-gate-logout" type="button">Cerrar sesión</button>
+      </div>
+    </div>
+
     <div id="confirmModal" class="confirm-modal-overlay hidden" aria-modal="true" role="dialog">
       <div class="confirm-modal-box">
         <div class="confirm-icon">
