@@ -1658,8 +1658,9 @@ label.profile-photo-upload-btn {
 .row-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 8px;
+  width: 100%;
 }
 .muted { color: var(--muted); font-size: 12px; }
 .currency-badge {
