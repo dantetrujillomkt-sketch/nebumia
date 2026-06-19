@@ -2250,7 +2250,9 @@ const views = {
         <h2 class="comp-section-title">Registro de ventas</h2>
         ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.map(s => {
           const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
-          const netAmount = s.amount - s.detraction;
+          const dm = (state.settings.collectionDetModes || {})[s.id] || {};
+          const detActual = dm.detActual != null ? dm.detActual : (s.detraction > 0 ? Math.round(s.detraction) : 0);
+          const netAmount = dm.montoReal != null ? dm.montoReal : (s.currency === "PEN" ? s.amount - detActual : s.amount);
           const declaredStatus = s.declared || "Sin declarar";
           const sRepo = s.repo || s.quote?.repo || "";
           const sRepoIcon = sRepo
@@ -2263,7 +2265,7 @@ const views = {
             escapeHtml(s.invoice || "—"),
             s.paidDate ? fmtDate(s.paidDate) : "—",
             `<strong>${fmt(s.amount, s.currency)}</strong>`,
-            fmt(s.detraction, s.currency),
+            detActual > 0 ? fmt(detActual, "PEN") : "—",
             fmt(netAmount, s.currency),
             escapeHtml(s.bankAccount || "—"),
             nroPago,
