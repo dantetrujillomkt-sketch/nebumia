@@ -2303,7 +2303,7 @@ const views = {
       <div class="comp-section">
         <h2 class="comp-section-title">Pago SUNAT</h2>
         <p class="comp-section-sub">Obligaciones generadas (facturas emitidas)</p>
-        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"], invoicedSales.map(r => {
+        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"], invoicedSales.filter(r => r.quote?.hasIgv).map(r => {
           const igvRate = state.settings.igvRate;
           const hasIgv = r.quote?.hasIgv;
           const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
