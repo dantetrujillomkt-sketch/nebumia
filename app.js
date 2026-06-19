@@ -994,8 +994,8 @@ function dashboardFilterBar() {
 function dashboardSnapshot() {
   const leads = state.leads.filter(lead => dateInRange(lead.date));
   const quotes = state.quotes.filter(quote => dateInRange(quote.date));
-  const won = quotes.filter(quote => quote.status === "Ganado").map(quote => ({ ...quote, ...calcQuote(quote) }));
-  const lost = quotes.filter(quote => quote.status === "Perdido");
+  const won = state.quotes.filter(q => q.status === "Ganado" && dateInRange(q.wonDate || q.date)).map(q => ({ ...q, ...calcQuote(q) }));
+  const lost = state.quotes.filter(q => q.status === "Perdido" && dateInRange(q.wonDate || q.date));
   const allCollections = collectionRows();
   const collections = allCollections.filter(row => dateInRange(row.paidDate || row.dueDate));
   const expenses = state.expenses.filter(expense => dateInRange(expense.date || monthDate(expense.month)));
