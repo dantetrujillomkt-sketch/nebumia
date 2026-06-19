@@ -2267,7 +2267,7 @@ label.profile-photo-upload-btn {
     margin: 48px 0 0;
     font-size: 24px;
   }
-  .auth-copy { margin-top: 36px; }
+  .auth-copy { margin-top: 64px; }
   .auth-copy h1 { font-size: 22px; margin-top: 6px; }
   .auth-copy p:not(.eyebrow) { font-size: 13px; }
   .login-form { gap: 12px; margin-top: 24px; }
