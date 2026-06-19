@@ -581,11 +581,16 @@ function getCurrentRange() { return viewRanges[activeView] || getDashboardPreset
 function setCurrentRange(range) { viewRanges[activeView] = range; localStorage.setItem(VIEW_RANGES_KEY, JSON.stringify(viewRanges)); }
 let dashboardRange = getCurrentRange();
 let dashboardSections = (() => {
+  const always = ["accountsBreakdown", "annualProjection"];
   try {
     const stored = JSON.parse(localStorage.getItem(DASH_SECTIONS_KEY));
-    if (Array.isArray(stored)) return new Set(stored);
+    if (Array.isArray(stored)) {
+      const s = new Set(stored);
+      always.forEach(k => s.add(k));
+      return s;
+    }
   } catch {}
-  return new Set(["metrics", "revenue", "pipeline", "profitability", "salesSource", "salesOwner", "collections", "activity"]);
+  return new Set(["metrics", "revenue", "pipeline", "accountsBreakdown", "profitability", "salesSource", "salesOwner", "collections", "activity", "annualProjection"]);
 })();
 let activeDashboardFilter = null;
 let dashboardSavedFilters = JSON.parse(localStorage.getItem(DASHBOARD_FILTERS_KEY) || "[]");
