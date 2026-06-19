@@ -694,6 +694,12 @@ function saveAuth(next) {
   localStorage.setItem(AUTH_KEY, JSON.stringify({ ...auth(), ...next }));
 }
 
+function syncFromSupabaseMeta(user) {
+  const meta = user?.user_metadata || {};
+  if (meta.name) saveAuth({ name: meta.name, companyName: meta.companyName || "", email: user.email || auth().email });
+  else if (user?.email) saveAuth({ email: user.email });
+}
+
 function syncProfileUI() {
   const current = auth();
   const name = current.name || "Administrador";
@@ -5245,6 +5251,7 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
   }
 
   sbUser = data.user;
+  syncFromSupabaseMeta(data.user);
   showSkeleton(activeView);
   loginScreen.classList.add("hidden");
   if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
@@ -5452,6 +5459,10 @@ profileForm.addEventListener("submit", event => {
   } else if (!img?.src) {
     localStorage.removeItem("nebumia-profile-photo");
   }
+  // sync name + company to Supabase user metadata so other devices get it
+  const sbMeta = { name: updates.name, companyName: updates.companyName };
+  if (newPwd) sb.auth.updateUser({ password: newPwd, data: sbMeta }).catch(() => {});
+  else sb.auth.updateUser({ data: sbMeta }).catch(() => {});
   syncProfileUI();
   document.querySelector("#email").value = form.get("profileEmail");
   message.textContent = "";
@@ -6282,6 +6293,7 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
     sbUser = session.user;
+    syncFromSupabaseMeta(session.user);
     showSkeleton(activeView);
     loginScreen.classList.add("hidden");
     if (isMobileDevice()) { showMobileGate(); } else { appShell.classList.remove("hidden"); }
