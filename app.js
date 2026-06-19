@@ -729,7 +729,7 @@ function syncProfileUI() {
   const hello = document.getElementById("topbarHello");
   const company = document.getElementById("topbarCompany");
   if (hello) hello.textContent = `¡Hola, ${firstName}!`;
-  if (company) company.textContent = current.companyName ? `Empresa: ${current.companyName}` : "";
+  if (company) company.textContent = current.companyName || "";
   profileName.textContent = name;
   profileEmail.textContent = current.email || "admin@bandu.pe";
   const photo = localStorage.getItem("nebumia-profile-photo");
