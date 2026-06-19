@@ -172,6 +172,7 @@ async function sbLoad() {
 const IGV_RATE = 0.18;
 const DETRACTION_RATE = 0.12;
 const DETRACTION_THRESHOLD = 700;
+const DETRACTION_THRESHOLD_USD = 189;
 const COMMISSION_RATE = 0.05;
 
 const STORAGE_KEY = "bandu-panel-state-v2";
@@ -1089,8 +1090,9 @@ function fmtMixed(rows, valueFn, currencyFn = r => r.currency || "PEN") {
 function calcQuote(q, sourceState = state) {
   const igv = q.hasIgv ? q.subtotal * sourceState.settings.igvRate : 0;
   const total = q.subtotal + igv;
-  const threshold = sourceState.settings.detractionThreshold ?? DETRACTION_THRESHOLD;
-  const detraction = total > threshold && q.hasIgv ? total * sourceState.settings.detractionRate : 0;
+  const isUSD = q.currency === "USD";
+  const threshold = isUSD ? DETRACTION_THRESHOLD_USD : (sourceState.settings.detractionThreshold ?? DETRACTION_THRESHOLD);
+  const detraction = total >= threshold && q.hasIgv ? total * sourceState.settings.detractionRate : 0;
   const commission = q.subtotal * sourceState.settings.commissionRate;
   return { igv, total, detraction, commission, netCash: total - detraction };
 }
@@ -4290,7 +4292,7 @@ function openCollectionDialog(row) {
       <div class="coll-info-item"><span class="coll-info-label">Subtotal</span><span class="coll-info-value">${sym} ${subtotal.toFixed(2)}</span></div>
       <div class="coll-info-item"><span class="coll-info-label">IGV</span><span class="coll-info-value">${sym} ${calc.igv.toFixed(2)}</span></div>
       <div class="coll-info-item"><span class="coll-info-label">Total</span><span class="coll-info-value">${sym} ${calc.total.toFixed(2)}</span></div>
-      <div class="coll-info-item"><span class="coll-info-label">Detracción</span><span class="coll-info-value">${sym} ${calc.detraction.toFixed(2)}</span></div>
+      <div class="coll-info-item"><span class="coll-info-label">Detracción</span><span class="coll-info-value">${currency === "USD" ? "S/ (ingresar)" : `${sym} ${calc.detraction.toFixed(2)}`}</span></div>
     </div>
     <div class="form-grid" style="margin-top:16px">
       <label>Nro Pago<input name="nroPago" value="${escapeAttr(nroPago)}" readonly style="background:var(--surface);color:var(--muted);cursor:default"></label>
@@ -4316,8 +4318,8 @@ function openCollectionDialog(row) {
             <option value="Pendiente"  ${dm.detStatus === "Pendiente" ? "selected" : ""}>Pendiente (aún no pagado)</option>
           </select></label>
           <label>Monto real de detracción (S/)<input name="detActual" type="text" inputmode="decimal"
-            value="${dm.detActual != null ? dm.detActual : Math.round(calc.detraction).toFixed(2)}"
-            placeholder="${Math.round(calc.detraction).toFixed(2)}"></label>
+            value="${dm.detActual != null ? dm.detActual : (currency === "USD" ? "" : Math.round(calc.detraction).toFixed(2))}"
+            placeholder="${currency === "USD" ? "Ej: 235.00" : Math.round(calc.detraction).toFixed(2)}"></label>
           <label class="full">Monto real recibido en cuenta (${sym})<input name="montoReal" type="text" inputmode="decimal"
             value="${dm.montoReal != null ? dm.montoReal : ""}"
             placeholder="${mode === "bandu" ? calc.total.toFixed(2) : (calc.total - Math.round(calc.detraction)).toFixed(2)}"></label>
