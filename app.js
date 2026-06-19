@@ -6306,7 +6306,7 @@ document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
 });
 document.getElementById("sidebarOverlay")?.addEventListener("click", closeSidebarDrawer);
 document.getElementById("mainNav")?.addEventListener("click", e => {
-  if (e.target.closest(".nav-btn") && window.innerWidth <= 1099) closeSidebarDrawer();
+  if (e.target.closest(".nav-btn") && window.innerWidth <= 900) closeSidebarDrawer();
 });
 
 // Inicialización con Supabase Auth
