@@ -1524,6 +1524,7 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 }
 .status.ganado, .status.completado, .status.pagado { background: #ddfaef; color: var(--ok); }
 .status.cotizado, .status.propuesta, .status.facturado { background: #fff4d7; color: #d09500; }
+.status.cliente { background: #fff0b3; color: #b37700; }
 .status.perdido, .status.vencido, .status.cerrado-perdido { background: #ffe4e8; color: var(--danger); }
 .status.pendiente, .status.por-cotizar, .status.nuevo, .status.contactado, .status.reunion { background: #eaf0ff; color: var(--blue); }
 .status.declarado { background: #ddfaef; color: var(--ok); }

@@ -2361,7 +2361,7 @@ const views = {
           const detCell = detActual > 0 ? fmt(detActual, "PEN") : "—";
           const detBadge = mode === "bandu"
             ? badge(detStatus === "Completado" ? "Completado" : "Pendiente")
-            : `<span class="status pagado">Cliente</span>`;
+            : `<span class="status cliente">Cliente</span>`;
           const pagarBtn = mode === "bandu" && detActual > 0 && detStatus !== "Completado"
             ? `<button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${detActual}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button>`
             : "";
@@ -2386,7 +2386,7 @@ const views = {
             const invoiceDate = r.dueDate || r.wonDate;
             const period = r.paidDate ? new Date(r.paidDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
             return { _date: r.paidDate || invoiceDate, _type: "cliente",
-              row: [fmtDate(r.paidDate || invoiceDate), `<span class="status pagado">Cliente</span>`,
+              row: [fmtDate(r.paidDate || invoiceDate), `<span class="status cliente">Cliente</span>`,
                 escapeHtml(r.client), escapeHtml(r.invoice || "—"), period, fmt(detActual, "PEN"),
                 badge("Completado"), "—", "—", "—"] };
           }).filter(Boolean);
