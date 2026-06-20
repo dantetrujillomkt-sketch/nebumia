@@ -2073,9 +2073,12 @@ const views = {
           if (monthKey <= e.date.substring(0, 7)) return; // skip original month and prior
           const overrideKey = `expense-${e.id}-${monthKey}`;
           const account = overrides[overrideKey] !== undefined ? overrides[overrideKey] : (e.bankAccount || "");
+          const origDay = new Date(e.date + "T00:00:00").getDate();
+          const daysInMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+          const day = String(Math.min(origDay, daysInMonth)).padStart(2, "0");
           fixedRows.push({
             id: `expense-recur-${e.id}-${monthKey}`,
-            date: `${monthKey}-01`,
+            date: `${monthKey}-${day}`,
             type: "egreso",
             concept: e.concept,
             category: "Gasto fijo",
