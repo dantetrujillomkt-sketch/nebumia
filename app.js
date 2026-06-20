@@ -5779,15 +5779,43 @@ function buildNotifAlerts() {
     .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate >= t && c.dueDate <= soonStr)
     .forEach(c => items.push({ type: "amber", section: "Cobros próximos", nav: "collections", title: `Cobro próximo: ${c.ref || c.description || "Sin descripción"}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
 
-  // Pagos de equipo pendientes
+  // Pagos de equipo pendientes — sólo cuando la fecha de pago ya llegó o es en los próximos 7 días
+  const _lastDayOf = monthName => {
+    const idx = months.indexOf(monthName);
+    if (idx < 0) return "";
+    const now2 = new Date();
+    return new Date(now2.getFullYear(), idx + 1, 0).toISOString().substring(0, 10);
+  };
   (state.team || [])
-    .filter(m => m.status === "Pendiente")
-    .forEach(m => items.push({ type: "amber", section: "Pagos equipo", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0)} · ${m.role || ""}`, createdAt: nowLabel }));
+    .filter(m => {
+      if (m.status !== "Pendiente") return false;
+      const d = m.dueDate || _lastDayOf(m.month);
+      return d && d <= soonStr;
+    })
+    .forEach(m => {
+      const d = m.dueDate || _lastDayOf(m.month);
+      const overdue = d < t;
+      items.push({ type: overdue ? "red" : "amber", section: overdue ? "Pagos equipo vencidos" : "Pagos equipo próximos", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0, m.currency)} · ${m.role || ""} · vence ${fmtDate(d)}`, createdAt: nowLabel });
+    });
 
-  // SUNAT pendiente
+  // SUNAT pendiente — sólo cuando el período ya terminó o vence en los próximos 7 días
+  const _periodEnd = tp => {
+    const idx = months.indexOf(tp.period || "");
+    if (idx < 0) return tp.date || "";
+    const yr = tp.date ? parseInt(tp.date.substring(0, 4)) : new Date().getFullYear();
+    return new Date(yr, idx + 1, 0).toISOString().substring(0, 10);
+  };
   (state.taxPayments || [])
-    .filter(tp => tp.status === "Pendiente")
-    .forEach(tp => items.push({ type: "amber", section: "SUNAT", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)}`, createdAt: nowLabel }));
+    .filter(tp => {
+      if (tp.status !== "Pendiente") return false;
+      const d = _periodEnd(tp);
+      return d && d <= soonStr;
+    })
+    .forEach(tp => {
+      const d = _periodEnd(tp);
+      const overdue = d < t;
+      items.push({ type: overdue ? "red" : "amber", section: overdue ? "SUNAT vencido" : "SUNAT próximo", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)} · ${overdue ? "período cerrado" : `cierra ${fmtDate(d)}`}`, createdAt: nowLabel });
+    });
 
   return items;
 }
