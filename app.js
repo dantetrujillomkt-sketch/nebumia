@@ -2375,7 +2375,7 @@ const views = {
         }), "tax-obligations")}
         <p class="comp-section-sub" style="margin-top:24px">Detracciones pagadas</p>
         ${table(["Fecha", "Tipo", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Doc.", "Acciones"],
-          taxPayments.filter(t => t.type === "Detracción" || t.type === "Autodetracción").map(t => [
+          taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado").map(t => [
             fmtDate(t.date), t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
             t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
             `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`
