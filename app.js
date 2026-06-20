@@ -3110,7 +3110,7 @@ function dashFunnelChart(steps) {
     const lx = (mid - wMin / 2 + 10).toFixed(1);
     const rx = (mid + wMin / 2 - 10).toFixed(1);
     return `<text x="${lx}" y="${cy}" dominant-baseline="middle" fill="white" font-size="11.5" font-weight="600" font-family="system-ui,sans-serif">${s.label}</text>` +
-      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.92)" font-size="12.5" font-weight="700" font-family="system-ui,sans-serif">${s.count}</text>`;
+      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.92)" font-size="9.5" font-weight="500" font-family="system-ui,sans-serif">${s.count}</text>`;
   }).join('');
   return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block">${polys}${texts}</svg>`;
 }
