@@ -66,6 +66,7 @@ async function sbSyncSettings() {
     fixed_expenses: s.fixedExpenses || [], team_members: s.teamMembers || [],
     services: state.services || [], categories: state.categories || [],
     sources: state.sources || [], profiles: state.profiles || [],
+    vendors: state.vendors || [],
     updated_at: new Date().toISOString()
   };
   const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {} }, { onConflict: "user_id" });
@@ -155,6 +156,7 @@ async function sbLoad() {
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
     state.profiles   = settings.profiles   || base.profiles;
+    state.vendors    = settings.vendors    || [];
   }
   if (salesTargets?.length) {
     const map = {};
@@ -511,6 +513,7 @@ function seedState() {
     ],
     collections: [],
     taxPayments: [],
+    vendors: [],
     purchases: [],
     invoicedSales: [],
     cashEntries: [],
@@ -1238,6 +1241,16 @@ function buildCajaRows() {
       category: "Impuesto", amount: t.amount, currency: "PEN",
       status: t.status, source: "SUNAT", sourceType: "tax", sourceId: t.id,
       invoice: t.sunatRef || ""
+    });
+  });
+
+  (state.purchases || []).filter(p => p.bankAccount && p.paidDate).forEach(p => {
+    rows.push({
+      id: `pur-${p.id}`, date: p.paidDate, type: "egreso",
+      concept: (p.concept || p.vendor || "Compra") + (p.invoiceNum ? ` · ${p.invoiceNum}` : ""),
+      category: "Compra", amount: p.total, currency: p.currency || "PEN",
+      status: "Confirmado", source: "Compra", sourceType: "purchase", sourceId: p.id,
+      bankAccount: p.bankAccount, invoice: p.invoiceNum || ""
     });
   });
 
@@ -2400,8 +2413,9 @@ const views = {
       { key: "cuentas",    label: "Cuentas bancarias" },
       { key: "gastos",     label: "Gastos fijos" },
       { key: "equipo",     label: "Equipo de ventas" },
-      { key: "servicios",  label: "Servicios" },
-      { key: "categorias", label: "Categorías" },
+      { key: "servicios",   label: "Servicios" },
+      { key: "proveedores", label: "Proveedores" },
+      { key: "categorias",  label: "Categorías" },
       { key: "fuentes",    label: "Fuentes" },
       { key: "perfiles",   label: "Perfiles" },
     ];
@@ -2622,6 +2636,31 @@ const views = {
           <form id="addCategoryForm" class="bank-add-form">
             <input name="categoryName" placeholder="Ej: Branding" required>
             <button class="primary-action" type="submit">${icon("plus")}<span>Agregar categoría</span></button>
+          </form>
+        </section>`;
+
+    } else if (activeSettingsTab === "proveedores") {
+      const vendors = state.vendors || [];
+      tabContent = `
+        <section class="panel settings-panel">
+          <div class="panel-head"><div><h3>Proveedores</h3><p>Lista de proveedores con RUC para autocompletar en compras.</p></div></div>
+          <ul class="bank-accounts-list">
+            ${vendors.map((v, i) => `
+              <li class="bank-account-item" data-vendor-idx="${i}">
+                <div style="flex:1;min-width:0">
+                  <span class="bank-account-name">${escapeHtml(v.name)}</span>
+                  <span style="font-size:12px;color:var(--muted);margin-left:8px">${escapeHtml(v.ruc || "Sin RUC")}</span>
+                </div>
+                <div class="bank-account-actions">
+                  <button class="action-link danger" data-delete-vendor="${i}" type="button">${icon("trash")}</button>
+                </div>
+              </li>`).join("")}
+          </ul>
+          ${!vendors.length ? `<p class="fe-empty">No hay proveedores registrados.</p>` : ""}
+          <form id="addVendorForm" class="bank-add-form" style="grid-template-columns:1fr 1fr auto">
+            <input name="vendorName" placeholder="Razón social / nombre" required>
+            <input name="vendorRuc" placeholder="RUC (opcional)" type="text" inputmode="numeric" maxlength="11">
+            <button class="primary-action" type="submit">${icon("plus")}<span>Agregar</span></button>
           </form>
         </section>`;
 
@@ -3391,6 +3430,26 @@ function bindViewEvents() {
       showToast("Servicio agregado");
     }
   });
+  document.querySelector("#addVendorForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const name = fd.get("vendorName").trim();
+    const ruc  = fd.get("vendorRuc").replace(/\D/g, "").slice(0, 11);
+    if (!name) return;
+    if (!(state.vendors || []).some(v => v.name.toLowerCase() === name.toLowerCase())) {
+      state.vendors = [...(state.vendors || []), { id: uid(), name, ruc }];
+      saveState(); render();
+      showToast("Proveedor agregado");
+    }
+  });
+  document.querySelectorAll("[data-delete-vendor]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.deleteVendor);
+    confirmDelete("Este proveedor será eliminado permanentemente.", () => {
+      state.vendors = (state.vendors || []).filter((_, idx) => idx !== i);
+      saveState(); render();
+    });
+  }));
+
   document.querySelectorAll("[data-edit-service-inline]").forEach(btn => {
     btn.addEventListener("click", () => {
       const li = btn.closest("li");
@@ -4547,6 +4606,22 @@ function openPurchaseDialog(purchase = null) {
       <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(item.repo || "")}" placeholder="https://..."></label>
     </div>
   `);
+  // Auto-calc IGV and Total when subtotal changes
+  (() => {
+    const form = quoteDialog.querySelector("form");
+    const subIn  = form?.querySelector("[name='subtotal']");
+    const igvIn  = form?.querySelector("[name='igv']");
+    const totIn  = form?.querySelector("[name='total']");
+    const rate   = state.settings.igvRate || 0.18;
+    if (subIn && igvIn && totIn) {
+      subIn.addEventListener("input", () => {
+        const sub = parseFloat(subIn.value) || 0;
+        const igv = Math.round(sub * rate * 100) / 100;
+        igvIn.value = igv.toFixed(2);
+        totIn.value = (sub + igv).toFixed(2);
+      });
+    }
+  })();
   bindDialogAutofills();
 }
 
@@ -5050,7 +5125,7 @@ function bindDialogAutofills() {
   const getSources    = () => uniq(state.leads.map(l => l.source));
   const getChannels   = () => uniq(state.leads.map(l => l.channel));
   const getExpTypes   = () => uniq(state.expenses.map(e => e.type));
-  const getVendors    = () => uniq((state.purchases || []).map(p => p.vendor));
+  const getVendors    = () => uniq([...(state.vendors || []).map(v => v.name), ...(state.purchases || []).map(p => p.vendor)]);
 
   const fill = (name, value) => {
     const el = form.querySelector(`[name="${name}"]`);
@@ -5073,9 +5148,10 @@ function bindDialogAutofills() {
   };
 
   const onVendorSelect = name => {
+    const vnd = (state.vendors || []).find(v => v.name.toLowerCase() === name.toLowerCase());
+    if (vnd) { fill("ruc", vnd.ruc); return; }
     const found = (state.purchases || []).find(p => p.vendor.toLowerCase() === name.toLowerCase());
-    if (!found) return;
-    fill("ruc", found.ruc);
+    if (found) fill("ruc", found.ruc);
   };
 
   const createClient = name => {
