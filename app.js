@@ -2060,16 +2060,16 @@ const views = {
       }
     }
 
-    // Generate recurring rows for expenses with type "Gasto fijo" (for months AFTER the original)
-    const recurringExpenses = (state.expenses || []).filter(e => e.type === "Gasto fijo" && e.date);
-    if (recurringExpenses.length) {
+    // Generate recurring rows for cash entries with category "Gasto fijo" (for months AFTER the original)
+    const recurringEntries = (state.cashEntries || []).filter(e => e.type === "egreso" && e.category === "Gasto fijo" && e.date);
+    if (recurringEntries.length) {
       let cur = new Date(dashboardRange.start + "T00:00:00");
       cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
       const rangeEnd2 = new Date(dashboardRange.end + "T00:00:00");
       while (cur <= rangeEnd2) {
         const monthKey = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, "0");
         const overrides = state.settings.fixedExpenseOverrides || {};
-        recurringExpenses.forEach(e => {
+        recurringEntries.forEach(e => {
           if (monthKey <= e.date.substring(0, 7)) return; // skip original month and prior
           const overrideKey = `expense-${e.id}-${monthKey}`;
           const account = overrides[overrideKey] !== undefined ? overrides[overrideKey] : (e.bankAccount || "");
