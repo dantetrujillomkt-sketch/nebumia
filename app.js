@@ -69,7 +69,7 @@ async function sbSyncSettings() {
     vendors: state.vendors || [],
     updated_at: new Date().toISOString()
   };
-  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {} }, { onConflict: "user_id" });
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {}, tax_payment_collections: s.taxPaymentCollections || {} }, { onConflict: "user_id" });
   if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
@@ -151,7 +151,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {} };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {}, taxPaymentCollections: settings.tax_payment_collections || localSnap.taxPaymentCollections || {} };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -489,7 +489,8 @@ function seedState() {
       teamMembers: [],
       saldosIniciales: [],
       detractionAccount: "Detracciones",
-      collectionDetModes: {}
+      collectionDetModes: {},
+      taxPaymentCollections: {}
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -639,7 +640,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones", collectionDetModes: inputSettings.collectionDetModes || {} },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones", collectionDetModes: inputSettings.collectionDetModes || {}, taxPaymentCollections: inputSettings.taxPaymentCollections || {} },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -4965,11 +4966,18 @@ function saveTaxPayment(data) {
   const item = newTaxPayment(data);
   if (editingId) state.taxPayments = (state.taxPayments || []).map(t => t.id === editingId ? { ...t, ...item, id: editingId } : t);
   else state.taxPayments = [item, ...(state.taxPayments || [])];
+  // Guardar mapping taxPaymentId → collectionId en settings (persiste aunque Supabase no tenga la columna)
+  if (item.collectionId) {
+    const tpc = state.settings.taxPaymentCollections || {};
+    tpc[item.id] = item.collectionId;
+    state.settings.taxPaymentCollections = tpc;
+  }
   // Si es Detracción con collectionId → sincronizar detStatus según estado del pago
-  if ((item.type === "Detracción" || item.type === "Autodetracción") && item.collectionId) {
+  const linkedCollectionId = item.collectionId || (state.settings.taxPaymentCollections || {})[editingId] || "";
+  if ((item.type === "Detracción" || item.type === "Autodetracción") && linkedCollectionId) {
     const modes = state.settings.collectionDetModes || {};
     const newDetStatus = item.status === "Pagado" ? "Completado" : "Pendiente";
-    modes[item.collectionId] = { ...(modes[item.collectionId] || {}), detStatus: newDetStatus };
+    modes[linkedCollectionId] = { ...(modes[linkedCollectionId] || {}), detStatus: newDetStatus };
     state.settings.collectionDetModes = modes;
   }
   activeView = "comprobantes";
