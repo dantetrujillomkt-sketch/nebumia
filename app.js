@@ -6558,9 +6558,7 @@ function getOnboarding() {
 function saveOnboarding(data) { localStorage.setItem(ONBOARDING_KEY, JSON.stringify(data)); }
 
 function onboardingHasData() {
-  return (state.settings.monthlyGoal > 0) &&
-         (state.services || []).length > 0 &&
-         state.leads.length > 0;
+  return state.clients.length > 0 || state.quotes.length > 0 || state.leads.length > 0;
 }
 
 function onboardingBannerHTML() {
