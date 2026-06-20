@@ -69,7 +69,7 @@ async function sbSyncSettings() {
     vendors: state.vendors || [],
     updated_at: new Date().toISOString()
   };
-  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {}, tax_payment_collections: s.taxPaymentCollections || {} }, { onConflict: "user_id" });
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {}, tax_payment_collections: s.taxPaymentCollections || {}, fixed_expense_overrides: s.fixedExpenseOverrides || {} }, { onConflict: "user_id" });
   if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
@@ -151,7 +151,7 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {}, taxPaymentCollections: settings.tax_payment_collections || localSnap.taxPaymentCollections || {} };
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {}, taxPaymentCollections: settings.tax_payment_collections || localSnap.taxPaymentCollections || {}, fixedExpenseOverrides: settings.fixed_expense_overrides || localSnap.fixedExpenseOverrides || {} };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -490,7 +490,8 @@ function seedState() {
       saldosIniciales: [],
       detractionAccount: "Detracciones",
       collectionDetModes: {},
-      taxPaymentCollections: {}
+      taxPaymentCollections: {},
+      fixedExpenseOverrides: {}
     },
     users: [{ name: "Administrador", email: "admin@bandu.pe", role: "Owner" }],
     clients: [
@@ -640,7 +641,7 @@ function migrateState(input) {
   const migrated = {
     ...base,
     ...input,
-    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones", collectionDetModes: inputSettings.collectionDetModes || {}, taxPaymentCollections: inputSettings.taxPaymentCollections || {} },
+    settings: { ...base.settings, ...inputSettings, fixedExpenses: inputSettings.fixedExpenses || [], teamMembers: inputSettings.teamMembers || [], saldosIniciales: inputSettings.saldosIniciales || [], detractionAccount: inputSettings.detractionAccount || "Detracciones", collectionDetModes: inputSettings.collectionDetModes || {}, taxPaymentCollections: inputSettings.taxPaymentCollections || {}, fixedExpenseOverrides: inputSettings.fixedExpenseOverrides || {} },
     clients: (input.clients || base.clients).map(newClient),
     leads: (input.leads || base.leads).map((lead) => newLead({
       ...lead,
@@ -2035,7 +2036,11 @@ const views = {
       const rangeEnd = new Date(dashboardRange.end + "T00:00:00");
       while (cursor <= rangeEnd) {
         const monthStr = isoDate(cursor);
+        const overrides = state.settings.fixedExpenseOverrides || {};
         assignedFixed.forEach(f => {
+          const monthKey = monthStr.substring(0, 7);
+          const overrideKey = `${f.id}-${monthKey}`;
+          const account = overrides[overrideKey] !== undefined ? overrides[overrideKey] : (f.assignedAccount || "");
           fixedRows.push({
             id: `fixed-${f.id}-${monthStr}`,
             date: monthStr,
@@ -2048,7 +2053,7 @@ const views = {
             source: "Fijo",
             sourceType: "fixedExpense",
             sourceId: f.id,
-            bankAccount: f.assignedAccount || ""
+            bankAccount: account
           });
         });
         cursor.setMonth(cursor.getMonth() + 1);
@@ -2113,7 +2118,7 @@ const views = {
       if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
       if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
       if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
+      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" data-edit-fixed-month="${(row.date || "").substring(0, 7)}" type="button">${icon("edit")}<span>Editar cuenta</span></button></div>`;
       if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}<span>Editar saldo</span></button></div>`;
       return "—";
     };
@@ -3206,7 +3211,9 @@ function bindViewEvents() {
   });
   bindActions("[data-edit-invoicedsale]", id => openInvoicedSaleDialog((state.invoicedSales || []).find(x => x.id === id)));
   bindActions("[data-edit-cash-entry]", id => openCashEntryDialog("egreso", (state.cashEntries || []).find(x => x.id === id)));
-  bindActions("[data-edit-fixed-expense]", id => openFixedExpenseBankDialog(id));
+  document.querySelectorAll("[data-edit-fixed-expense]").forEach(btn => {
+    btn.addEventListener("click", () => openFixedExpenseBankDialog(btn.dataset.editFixedExpense, btn.dataset.editFixedMonth || ""));
+  });
   bindActions("[data-edit-saldo]", val => {
     const [month, account, amountStr] = val.split("||");
     openSaldoInicialDialog(month, account, parseFloat(amountStr) || 0);
@@ -4716,18 +4723,27 @@ function openCashEntryDialog(type = "egreso", entry = null) {
   bindDialogAutofills();
 }
 
-function openFixedExpenseBankDialog(id) {
+function openFixedExpenseBankDialog(id, month) {
   const fe = (state.settings.fixedExpenses || []).find(f => f.id === id);
   if (!fe) return;
   editingId = id;
   const bankOpts = (state.settings.bankAccounts || []);
+  const overrides = state.settings.fixedExpenseOverrides || {};
+  const currentOverride = month ? overrides[`${id}-${month}`] : undefined;
+  const currentAccount = currentOverride !== undefined ? currentOverride : (fe.assignedAccount || "");
+  const monthLabel = month ? new Date(month + "-01T00:00:00").toLocaleString("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : "";
   dialogShell("fixedExpenseBank", "Editar cuenta bancaria", `
     <div class="form-grid">
       <input type="hidden" name="id" value="${escapeAttr(id)}">
-      <label class="full">${escapeHtml(fe.concept)}</label>
+      <input type="hidden" name="month" value="${escapeAttr(month || "")}">
+      <label class="full" style="font-weight:600">${escapeHtml(fe.concept)}</label>
       <label class="full">Cuenta bancaria<select name="bankAccount">
         <option value="">— Sin cuenta —</option>
-        ${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${fe.assignedAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}
+        ${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${currentAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}
+      </select></label>
+      <label class="full">Aplicar a<select name="scope">
+        ${month ? `<option value="month">Solo ${monthLabel}</option>` : ""}
+        <option value="always">Siempre (todos los meses)</option>
       </select></label>
     </div>
   `);
@@ -4769,7 +4785,20 @@ function saveSaldoInicial(data) {
 
 function saveFixedExpenseBank(data) {
   const fe = (state.settings.fixedExpenses || []).find(f => f.id === (data.id || editingId));
-  if (fe) fe.assignedAccount = data.bankAccount || "";
+  if (!fe) return;
+  if (data.scope === "month" && data.month) {
+    const overrides = state.settings.fixedExpenseOverrides || {};
+    overrides[`${fe.id}-${data.month}`] = data.bankAccount || "";
+    state.settings.fixedExpenseOverrides = overrides;
+  } else {
+    fe.assignedAccount = data.bankAccount || "";
+    // limpiar overrides anteriores para que usen la nueva cuenta por defecto
+    const overrides = state.settings.fixedExpenseOverrides || {};
+    Object.keys(overrides).forEach(k => {
+      if (k.startsWith(fe.id + "-")) delete overrides[k];
+    });
+    state.settings.fixedExpenseOverrides = overrides;
+  }
 }
 
 function saveCashEntry(data) {
