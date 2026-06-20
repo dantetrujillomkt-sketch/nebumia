@@ -402,7 +402,8 @@ function newTaxPayment(data = {}) {
     amount: Number(data.amount || 0),
     status: data.status || "Pendiente",
     sunatRef: data.sunatRef || "",
-    docLink: data.docLink || ""
+    docLink: data.docLink || "",
+    collectionId: data.collectionId || ""
   };
 }
 
@@ -3143,7 +3144,8 @@ function bindViewEvents() {
       openTaxPaymentDialog(null, {
         type: "Detracción",
         amount: Number(btn.dataset.detAmount || 0),
-        period: btn.dataset.detPeriod || currentMonthName()
+        period: btn.dataset.detPeriod || currentMonthName(),
+        collectionId: btn.dataset.payDetraction || ""
       });
     });
   });
@@ -4518,8 +4520,10 @@ function openTaxPaymentDialog(record = null, prefill = {}) {
   const typeVal = prefill.type || item.type;
   const amountVal = prefill.amount !== undefined ? prefill.amount : item.amount;
   const periodVal = prefill.period || item.period;
+  const collectionId = prefill.collectionId || item.collectionId || "";
   dialogShell("taxPayment", editingId ? "Editar pago a SUNAT" : "Nuevo pago a SUNAT", `
     <div class="form-grid">
+      <input type="hidden" name="collectionId" value="${escapeAttr(collectionId)}">
       <label>Fecha<input name="date" type="date" value="${item.date}" required></label>
       <label>Tipo<select name="type">${options(["IGV 1011", "Renta 3121", "Detracción", "Autodetracción", "Otro"], typeVal)}</select></label>
       <label>Periodo<select name="period">${options(months, periodVal)}</select></label>
@@ -4955,6 +4959,12 @@ function saveTaxPayment(data) {
   const item = newTaxPayment(data);
   if (editingId) state.taxPayments = (state.taxPayments || []).map(t => t.id === editingId ? { ...t, ...item, id: editingId } : t);
   else state.taxPayments = [item, ...(state.taxPayments || [])];
+  // Si es Detracción pagada y tiene collectionId → marcar detStatus = Completado automáticamente
+  if ((item.type === "Detracción" || item.type === "Autodetracción") && item.status === "Pagado" && item.collectionId) {
+    const modes = state.settings.collectionDetModes || {};
+    modes[item.collectionId] = { ...(modes[item.collectionId] || {}), detStatus: "Completado" };
+    state.settings.collectionDetModes = modes;
+  }
   activeView = "comprobantes";
 }
 
