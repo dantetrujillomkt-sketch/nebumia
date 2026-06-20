@@ -1342,7 +1342,7 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
       id: `saldo-${firstDay}`,
       date: firstDay,
       type: saldo >= 0 ? "ingreso" : "egreso",
-      concept: "Saldo anterior" + (override ? " ✎" : ""),
+      concept: "Saldo anterior de caja",
       category: "Saldo anterior",
       source: "Saldo anterior",
       amount: Math.abs(saldo),
