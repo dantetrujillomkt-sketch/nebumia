@@ -4965,10 +4965,11 @@ function saveTaxPayment(data) {
   const item = newTaxPayment(data);
   if (editingId) state.taxPayments = (state.taxPayments || []).map(t => t.id === editingId ? { ...t, ...item, id: editingId } : t);
   else state.taxPayments = [item, ...(state.taxPayments || [])];
-  // Si es Detracción pagada y tiene collectionId → marcar detStatus = Completado automáticamente
-  if ((item.type === "Detracción" || item.type === "Autodetracción") && item.status === "Pagado" && item.collectionId) {
+  // Si es Detracción con collectionId → sincronizar detStatus según estado del pago
+  if ((item.type === "Detracción" || item.type === "Autodetracción") && item.collectionId) {
     const modes = state.settings.collectionDetModes || {};
-    modes[item.collectionId] = { ...(modes[item.collectionId] || {}), detStatus: "Completado" };
+    const newDetStatus = item.status === "Pagado" ? "Completado" : "Pendiente";
+    modes[item.collectionId] = { ...(modes[item.collectionId] || {}), detStatus: newDetStatus };
     state.settings.collectionDetModes = modes;
   }
   activeView = "comprobantes";
