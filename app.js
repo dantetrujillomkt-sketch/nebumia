@@ -1967,7 +1967,9 @@ const views = {
         const nroPago    = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
         const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
         const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
-        const netAmount  = r.amount - (r.detraction || 0);
+        const _dm = (state.settings.collectionDetModes || {})[r.id] || {};
+        const detActual = _dm.detActual != null ? _dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+        const netAmount  = _dm.montoReal != null ? _dm.montoReal : (r.currency === "PEN" ? r.amount - detActual : r.amount);
         const collRepo   = r.repo || r.quote?.repo || "";
         const repoIcon   = collRepo
           ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
@@ -1982,7 +1984,7 @@ const views = {
           r.paidDate ? fmtDate(r.paidDate) : "—",
           r.currency || "PEN",
           fmt(r.amount, r.currency),
-          fmt(r.detraction || 0, r.currency),
+          detActual > 0 ? fmt(detActual, "PEN") : "—",
           fmt(netAmount, r.currency),
           escapeHtml(r.bankAccount || "—"),
           `${nroPago}<span style="display:none"> ${tipoPago}</span>`,
