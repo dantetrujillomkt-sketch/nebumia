@@ -1356,6 +1356,9 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 }
 .trend.up { background: #dffbef; color: #00a889; }
 .trend.down { background: #ffe8ec; color: #ef476f; }
+.trend[data-tooltip] { cursor: help; position: relative; }
+.trend[data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); background: rgba(20,20,30,.88); color: #fff; font-size: 11px; font-style: normal; padding: 5px 10px; border-radius: 7px; white-space: nowrap; pointer-events: none; z-index: 200; }
+.trend[data-tooltip]:hover::before { content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: rgba(20,20,30,.88); pointer-events: none; z-index: 200; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr); gap: 18px; }
 .panel {
   background: var(--panel);

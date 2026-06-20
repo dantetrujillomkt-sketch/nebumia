@@ -2188,11 +2188,33 @@ const views = {
     const tabBtn = (key, label) =>
       `<button class="caja-bank-btn ${tab === key ? "active" : ""}" data-caja-tab="${escapeAttr(key)}">${escapeHtml(label)}</button>`;
 
+    // Periodo anterior para comparación
+    const _curStart = new Date(dashboardRange.start + "T00:00:00");
+    const _curEnd   = new Date(dashboardRange.end   + "T00:00:00");
+    const _days     = Math.round((_curEnd - _curStart) / 86400000) + 1;
+    const _prevEnd   = new Date(_curStart.getTime() - 86400000);
+    const _prevStart = new Date(_prevEnd.getTime()  - (_days - 1) * 86400000);
+    const _ps = _prevStart.toISOString().substring(0, 10);
+    const _pe = _prevEnd.toISOString().substring(0, 10);
+    let _prevAll = [...allCajaRows, ...fixedRows].filter(r => r.date >= _ps && r.date <= _pe);
+    if (tab !== "general") _prevAll = _prevAll.filter(r => r.bankAccount === tab);
+    const _prevIn  = _prevAll.filter(r => r.type === "ingreso" && r.currency === tabCurrency).reduce((s, r) => s + r.amount, 0);
+    const _prevOut = _prevAll.filter(r => r.type === "egreso"  && r.currency === tabCurrency && r.status !== "Pendiente").reduce((s, r) => s + r.amount, 0);
+    const _sym = tabCurrency === "USD" ? "$" : "S/";
+    const _fmtDiff = (diff) => `${diff >= 0 ? "+" : "-"}${_sym} ${Math.abs(diff).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    const _diffIn  = totalIn - _prevIn;
+    const _diffOut = totalOut - _prevOut;
+    const _diffBal = (totalIn - totalOut) - (_prevIn - _prevOut);
+    const _prevLabel = _days <= 31 ? "el mes pasado" : "el periodo anterior";
+    const _ttIn  = `${_fmtDiff(_diffIn)} vs ${_prevLabel}`;
+    const _ttOut = `${_fmtDiff(_diffOut)} en egresos vs ${_prevLabel}`;
+    const _ttBal = `${_fmtDiff(_diffBal)} en balance vs ${_prevLabel}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, "up", "", "mint")}
-        ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, "down", "", "coral")}
-        ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, totalIn >= totalOut ? "up" : "down")}
+        ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, _diffIn >= 0 ? "up" : "down", "", "mint", _ttIn)}
+        ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, _diffOut <= 0 ? "up" : "down", "", "coral", _ttOut)}
+        ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, _diffBal >= 0 ? "up" : "down", "", undefined, _ttBal)}
         ${metric("Por cobrar", fmt(pending, tabCurrency), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
       </section>
 
@@ -2860,9 +2882,10 @@ const views = {
   }
 };
 
-function metric(label, value, note, trend = "", trendValue = "", tone = "blue") {
+function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "") {
   const toneIcon = { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
-  const trendBadge = trend ? `<em class="trend ${trend}">${trend === "up" ? "▲" : "▼"} ${trendValue}</em>` : "";
+  const tooltipAttr = tooltip ? ` data-tooltip="${escapeAttr(tooltip)}"` : "";
+  const trendBadge = trend ? `<em class="trend ${trend}"${tooltipAttr}>${trend === "up" ? "▲" : "▼"}${trendValue ? " " + trendValue : ""}</em>` : "";
   return `<article class="metric metric-${tone}"><div class="metric-top"><span>${label}</span>${trendBadge}</div><span class="metric-icon">${icon(toneIcon)}</span><strong>${value}</strong><small>${note}</small></article>`;
 }
 
