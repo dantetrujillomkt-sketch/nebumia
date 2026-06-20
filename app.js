@@ -2384,25 +2384,27 @@ const views = {
             const detActual = dm.detActual != null ? dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
             if (!detActual) return null;
             const invoiceDate = r.dueDate || r.wonDate;
+            const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
             const period = r.paidDate ? new Date(r.paidDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
             return { _date: r.paidDate || invoiceDate, _type: "cliente",
-              row: [fmtDate(r.paidDate || invoiceDate), `<span class="status cliente">Cliente</span>`,
+              row: [fmtDate(r.paidDate || invoiceDate), nroPago,
                 escapeHtml(r.client), escapeHtml(r.invoice || "—"), period, fmt(detActual, "PEN"),
-                badge("Completado"), "—", "—", "—"] };
+                `<span class="status cliente">Cliente</span>`, "—",
+                "—"] };
           }).filter(Boolean);
           // Detracciones manuales nuestras: taxPayments Pagado
           const manualDets = taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado").map(t => {
             const linkedCid = t.collectionId || (state.settings.taxPaymentCollections || {})[t.id] || "";
             const linked = linkedCid ? invoicedSales.find(r => r.id === linkedCid) : null;
+            const nroPago = linked ? (linked.label === "Pago 100%" ? "1/1" : (linked.label || "").replace("Pago ", "")) : "—";
             return { _date: t.date, _type: "manual",
-              row: [fmtDate(t.date), t.type,
+              row: [fmtDate(t.date), nroPago,
                 linked ? escapeHtml(linked.client) : "—", linked ? escapeHtml(linked.invoice || "—") : "—",
                 t.period, fmt(t.amount, "PEN"), badge(t.status), t.sunatRef || "—",
-                t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
                 `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`] };
           });
           const allDets = [...clienteDets, ...manualDets].sort((a, b) => (b._date || "").localeCompare(a._date || ""));
-          return table(["Fecha", "Tipo", "Cliente", "Factura", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Doc.", "Acciones"],
+          return table(["Fecha", "Nro Pago", "Cliente", "Factura", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Acciones"],
             allDets.map(d => d.row), "tax-payments");
         })()}
       </div>
