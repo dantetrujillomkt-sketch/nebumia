@@ -1173,10 +1173,16 @@ function buildCajaRows() {
       category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
     if (det > 0 && detStatus === "Completado") {
       if (mode === "bandu") {
-        rows.push({ ...base, id: `col-det-${c.id}`, type: "egreso", sourceType: "collectionDet",
+        // Egreso de la cuenta corriente (nosotros transferimos la detracción)
+        rows.push({ ...base, id: `col-det-out-${c.id}`, type: "egreso", sourceType: "collectionDet",
           concept: `Detracción pagada · ${label}`, category: "Detracción",
           amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: "Completado", currency: "PEN" });
+        // Ingreso a la cuenta detracciones (el dinero entra a Detracciones)
+        rows.push({ ...base, id: `col-det-in-${c.id}`, type: "ingreso", sourceType: "collectionDet",
+          concept: `Detracción · ${label}`, category: "Detracción",
+          amount: det, bankAccount: detAccount, status: "Completado", currency: "PEN" });
       } else {
+        // Cliente pagó directamente a la cuenta detracciones
         rows.push({ ...base, id: `col-det-${c.id}`, type: "ingreso", sourceType: "collectionDet",
           concept: `Detracción · ${label}`, category: "Detracción",
           amount: det, bankAccount: detAccount, status: "Completado", currency: "PEN" });
