@@ -1031,23 +1031,17 @@ function dashboardSnapshot() {
   const adSpend = expenses.filter(e => e.isAdSpend).reduce((sum, e) => sum + e.amount, 0);
   const netProfit = paid - outflows - taxesPaid;
   const roas = adSpend > 0 ? paid / adSpend : null;
-  // pipeline: leads open + quotes not won/lost
-  const openLeads = state.leads.filter(l => !["Ganado","Cerrado perdido"].includes(l.status));
-  const openQuotes = state.quotes.filter(q => ["Por cotizar","Cotizado"].includes(q.status));
+  // pipeline: leads + quotes in the filtered period that are still open
+  const openLeads = state.leads.filter(l => !["Ganado","Cerrado perdido"].includes(l.status) && dateInRange(l.date));
+  const openQuotes = state.quotes.filter(q => ["Por cotizar","Cotizado"].includes(q.status) && dateInRange(q.date));
   const pipelineValue = openLeads.reduce((s,l) => s + (l.estimatedValue||0), 0) + openQuotes.reduce((s,q) => s + calcQuote(q).total, 0);
   // conversión: se calcula en la tarjeta (soles, mismo denominador que Pipeline activo)
   const totalLeads = leads.length;
   const wonLeads = leads.filter(l => l.status === "Ganado").length;
-  // goal progress for current month
-  const now = new Date();
-  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
   // PEN-specific stats
   const wonPEN = won.filter(q => (q.currency||"PEN") === "PEN");
   const lostPEN = lost.filter(q => (q.currency||"PEN") === "PEN");
-  const wonThisMonthPEN = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && (q.wonDate||q.date||"").startsWith(thisMonthKey)).reduce((s,q) => s + calcQuote(q).total, 0);
-  const _monthTarget = getMonthTarget(now.getFullYear(), now.getMonth() + 1);
-  const goal = _monthTarget.pen || 0;
-  const goalPctPEN = goal > 0 ? Math.min(100, Math.round(wonThisMonthPEN / goal * 100)) : 0;
+  const wonThisMonthPEN = wonPEN.reduce((s,q) => s + q.total, 0);
   const pipelinePEN = openLeads.filter(l => (l.currency||"PEN") === "PEN").reduce((s,l) => s + (l.estimatedValue||0), 0)
     + openQuotes.filter(q => (q.currency||"PEN") === "PEN").reduce((s,q) => s + calcQuote(q).total, 0);
   // USD-specific stats
@@ -1055,9 +1049,15 @@ function dashboardSnapshot() {
   const lostUSD = lost.filter(q => q.currency === "USD");
   const pipelineUSD = openLeads.filter(l => l.currency === "USD").reduce((s,l) => s + (l.estimatedValue||0), 0)
     + openQuotes.filter(q => q.currency === "USD").reduce((s,q) => s + calcQuote(q).total, 0);
-  const wonThisMonthUSD = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && (q.wonDate||q.date||"").startsWith(thisMonthKey)).reduce((s,q) => s + calcQuote(q).total, 0);
+  const wonThisMonthUSD = wonUSD.reduce((s,q) => s + q.total, 0);
+  // goal based on the filtered period's start month
+  const _rangeDate = new Date(dashboardRange.start + "T00:00:00");
+  const _monthTarget = getMonthTarget(_rangeDate.getFullYear(), _rangeDate.getMonth() + 1);
+  const goal = _monthTarget.pen || 0;
   const goalUSD = _monthTarget.usd || 0;
+  const goalPctPEN = goal > 0 ? Math.min(100, Math.round(wonThisMonthPEN / goal * 100)) : 0;
   const goalPctUSD = goalUSD > 0 ? Math.min(100, Math.round(wonThisMonthUSD / goalUSD * 100)) : 0;
+  const rangePeriodLabel = months[_rangeDate.getMonth()];
   // kept for backwards compat with other dashboard sections
   const wonThisMonth = wonThisMonthPEN + wonThisMonthUSD;
   const goalPct = goalPctPEN;
@@ -1065,7 +1065,7 @@ function dashboardSnapshot() {
   const overdueCollections = allCollections.filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < today());
   const pendingSunat = (state.taxPayments||[]).filter(t => t.status === "Pendiente");
   const pendingTeam = state.team.filter(t => t.status === "Pendiente");
-  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD };
+  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD, rangePeriodLabel };
 }
 
 function currentMonthName() {
@@ -1076,7 +1076,7 @@ function fmt(amount, currency = "PEN") {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency }).format(amount || 0);
 }
 
-function gaugeKpi(pct, current, goal, currency, label) {
+function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMonthName()) {
   const R = 82, SW = 13, cx = 100, cy = 118;
   const total = Math.PI * R;
   const filled = (Math.min(Math.max(pct, 0), 100) / 100 * total).toFixed(1);
@@ -1085,7 +1085,7 @@ function gaugeKpi(pct, current, goal, currency, label) {
   const pctClass = pct >= 100 ? "kpi-pct--ok" : pct >= 50 ? "kpi-pct--warn" : "kpi-pct--low";
   const sym = currency === "USD" ? "$" : "S/";
   const fmtS = n => n >= 1000 ? `${sym} ${(n / 1000).toFixed(1)}k` : `${sym} ${Math.round(n)}`;
-  const goalText = goal > 0 ? `de ${fmtS(goal)} · ${currentMonthName()}` : currentMonthName();
+  const goalText = goal > 0 ? `de ${fmtS(goal)} · ${periodLabel}` : periodLabel;
   return `
     <div class="kpi-top">
       <span class="kpi-label">${label}</span>
@@ -1682,7 +1682,7 @@ const views = {
       <!-- KPIs -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalPctPEN, s.wonThisMonthPEN, s.goal, "PEN", "Meta mensual")}
+          ${gaugeKpi(s.goalPctPEN, s.wonThisMonthPEN, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel)}
         </div>
         <div class="kpi-card">
           ${(() => {
@@ -1726,7 +1726,7 @@ const views = {
       <!-- KPIs USD -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalPctUSD, s.wonThisMonthUSD, s.goalUSD, "USD", "Meta mensual $")}
+          ${gaugeKpi(s.goalPctUSD, s.wonThisMonthUSD, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel)}
         </div>
         <div class="kpi-card">
           ${(() => {
@@ -3092,28 +3092,27 @@ function dashRecentActivity() {
 }
 
 function dashFunnelChart(steps) {
-  const W = 300, segH = 30, gap = 2;
+  const W = 300, segH = 32, gap = 2;
   const totalH = steps.length * (segH + gap);
-  // Fixed widths always decreasing — shape is geometric, counts are labels
   const pcts = [1, 0.80, 0.62, 0.46, 0.32];
   const poly = i => {
     const y = i * (segH + gap);
     const wT = pcts[i] * W, wB = (pcts[i + 1] ?? pcts[i] * 0.76) * W;
     const xT = (W - wT) / 2, xB = (W - wB) / 2;
-    return { pts: `${xT.toFixed(1)},${y} ${(xT+wT).toFixed(1)},${y} ${(xB+wB).toFixed(1)},${y+segH} ${xB.toFixed(1)},${y+segH}`, cy: (y + segH / 2).toFixed(1), minW: Math.min(wT, wB) };
+    return { pts: `${xT.toFixed(1)},${y} ${(xT+wT).toFixed(1)},${y} ${(xB+wB).toFixed(1)},${y+segH} ${xB.toFixed(1)},${y+segH}`, cy: (y + segH / 2).toFixed(1), wMin: Math.min(wT, wB), wMax: Math.max(wT, wB) };
   };
-  const defs = steps.map((_, i) => `<clipPath id="fc${i}"><polygon points="${poly(i).pts}"/></clipPath>`).join('');
-  const segs = steps.map((s, i) => {
-    const { pts, cy, minW } = poly(i);
-    const lx = ((W - minW) / 2 + 10).toFixed(1);
-    const rx = ((W + minW) / 2 - 10).toFixed(1);
-    return `<g clip-path="url(#fc${i})">` +
-      `<polygon points="${pts}" fill="${s.color}"/>` +
-      `<text x="${lx}" y="${cy}" dominant-baseline="middle" fill="white" font-size="12" font-weight="600" font-family="system-ui,sans-serif">${s.label}</text>` +
-      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.85)" font-size="13" font-weight="700" font-family="system-ui,sans-serif">${s.count}</text>` +
-      `</g>`;
+  // Render polygons first, then all text on top (unclipped so count numbers never get cut off)
+  const polys = steps.map((s, i) => `<polygon points="${poly(i).pts}" fill="${s.color}"/>`).join('');
+  const texts = steps.map((s, i) => {
+    const { cy, wMin, wMax } = poly(i);
+    const mid = W / 2;
+    // Use midpoint of the narrowest width for text bounds
+    const lx = (mid - wMin / 2 + 10).toFixed(1);
+    const rx = (mid + wMin / 2 - 10).toFixed(1);
+    return `<text x="${lx}" y="${cy}" dominant-baseline="middle" fill="white" font-size="11.5" font-weight="600" font-family="system-ui,sans-serif">${s.label}</text>` +
+      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.92)" font-size="12.5" font-weight="700" font-family="system-ui,sans-serif">${s.count}</text>`;
   }).join('');
-  return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block"><defs>${defs}</defs>${segs}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block">${polys}${texts}</svg>`;
 }
 
 function dashAlerts(s) {
