@@ -848,6 +848,22 @@ function dateInRange(value, range = dashboardRange) {
   return value >= range.start && value <= range.end;
 }
 
+function prevRange() {
+  const s = new Date(dashboardRange.start + "T00:00:00");
+  const e = new Date(dashboardRange.end   + "T00:00:00");
+  const days = Math.round((e - s) / 86400000) + 1;
+  const pe = new Date(s.getTime() - 86400000);
+  const ps = new Date(pe.getTime() - (days - 1) * 86400000);
+  const fmt2 = d => d.toISOString().substring(0, 10);
+  return { start: fmt2(ps), end: fmt2(pe), label: days <= 31 ? "el mes pasado" : "el periodo anterior" };
+}
+
+function dateInPrevRange(value) {
+  const pr = prevRange();
+  if (!value) return false;
+  return value >= pr.start && value <= pr.end;
+}
+
 function monthDate(month) {
   const index = months.indexOf(month);
   return index >= 0 ? `2026-${String(index + 1).padStart(2, "0")}-01` : "";
@@ -1859,12 +1875,20 @@ const views = {
       totalUSD > 0 ? `$ ${wonUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})} (${convUSD}%)` : ""
     ].filter(Boolean).join("  ·  ") || "S/ 0.00 (0%)";
 
+    const _pr = prevRange();
+    const _prevQ = state.quotes.filter(q => dateInRange(q.date, _pr));
+    const _prevActive = _prevQ.filter(q => q.status === "Por cotizar" || q.status === "Cotizado").length;
+    const _prevPEN = _prevQ.filter(q => (q.currency || "PEN") === "PEN").reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const _prevUSD = _prevQ.filter(q => q.currency === "USD").reduce((sum, q) => sum + calcQuote(q).total, 0);
+    const _prevWon = _prevQ.filter(q => q.status === "Ganado").length;
+    const _fmtN = (n, sym) => `${n >= 0 ? "+" : ""}${sym ? sym + " " : ""}${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits: sym ? 2 : 0, maximumFractionDigits: sym ? 2 : 0})}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Cotizaciones activas", active.length, "Por cotizar y cotizado", "", "", "purple")}
-        ${metric("Monto cotizado S/", `S/ ${totalPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en soles", "", "", "amber")}
-        ${metric("Monto cotizado $", `$ ${totalUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en dólares", "", "", "blue")}
-        ${metric("Ventas generadas", won.length, wonNote, "", "", "mint")}
+        ${metric("Cotizaciones activas", active.length, "Por cotizar y cotizado", active.length >= _prevActive ? "up" : "down", "", "purple", `${_fmtN(active.length - _prevActive)} vs ${_pr.label}`)}
+        ${metric("Monto cotizado S/", `S/ ${totalPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en soles", totalPEN >= _prevPEN ? "up" : "down", "", "amber", `${_fmtN(totalPEN - _prevPEN, "S/")} vs ${_pr.label}`)}
+        ${metric("Monto cotizado $", `$ ${totalUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en dólares", totalUSD >= _prevUSD ? "up" : "down", "", "blue", `${_fmtN(totalUSD - _prevUSD, "$")} vs ${_pr.label}`)}
+        ${metric("Ventas generadas", won.length, wonNote, won.length >= _prevWon ? "up" : "down", "", "mint", `${_fmtN(won.length - _prevWon)} vs ${_pr.label}`)}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o servicio",
@@ -1923,12 +1947,23 @@ const views = {
     const penNote  = `Sin IGV: ${fmt(penSinIGV,"PEN")} · ${pen.length} ${pen.length === 1 ? "venta" : "ventas"}`;
     const usdNote  = `Sin IGV: ${fmt(usdSinIGV,"USD")} · ${usd.length} ${usd.length === 1 ? "venta" : "ventas"}`;
     const comNote  = comUSD > 0 ? `Com. $: ${fmt(comUSD,"USD")}` : "Base comercial";
+
+    const _pr = prevRange();
+    const _prevSales = wonQuotes().filter(s => dateInRange(s.wonDate || s.date, _pr));
+    const _prevPen   = _prevSales.filter(s => (s.currency || "PEN") === "PEN");
+    const _prevUsd   = _prevSales.filter(s => s.currency === "USD");
+    const _prevPenIGV = _prevPen.reduce((sum, s) => sum + (s.total || 0), 0);
+    const _prevUsdIGV = _prevUsd.reduce((sum, s) => sum + (s.total || 0), 0);
+    const _prevComPEN = _prevPen.reduce((sum, s) => sum + (s.commission || 0), 0);
+    const _fmtS = (n, sym) => `${n >= 0 ? "+" : "-"}${sym} ${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    const _fmtN = (n) => `${n >= 0 ? "+" : ""}${n}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Ventas ganadas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, "", "", "purple")}
-        ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, "", "", "amber")}
-        ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, "", "", "blue")}
-        ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, "", "", "coral")}
+        ${metric("Ventas ganadas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, sales.length >= _prevSales.length ? "up" : "down", "", "purple", `${_fmtN(sales.length - _prevSales.length)} vs ${_pr.label}`)}
+        ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, penConIGV >= _prevPenIGV ? "up" : "down", "", "amber", `${_fmtS(penConIGV - _prevPenIGV, "S/")} vs ${_pr.label}`)}
+        ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, usdConIGV >= _prevUsdIGV ? "up" : "down", "", "blue", `${_fmtS(usdConIGV - _prevUsdIGV, "$")} vs ${_pr.label}`)}
+        ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, comPEN >= _prevComPEN ? "up" : "down", "", "coral", `${_fmtS(comPEN - _prevComPEN, "S/")} vs ${_pr.label}`)}
       </section>
       ${moduleToolbar({
         search: "Buscar venta, cliente o servicio",
@@ -1967,12 +2002,23 @@ const views = {
     const cntCur    = (arr, cur) => arr.filter(r => (r.currency || "PEN") === cur).length;
     const accounts  = [...new Set(allColls.map(r => r.bankAccount).filter(Boolean))].sort();
     const nroPagos  = [...new Set(allColls.map(r => r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "")))].filter(Boolean).sort();
+
+    const _pr = prevRange();
+    const _prevColls = collectionRows().filter(row => dateInRange(row.dueDate || row.wonDate, _pr));
+    const _prevPaid  = _prevColls.filter(row => row.status === "Pagado");
+    const _prevPend  = _prevColls.filter(row => row.status !== "Pagado");
+    const _cobPEN = sumCur(paid, "PEN"), _prevCobPEN = sumCur(_prevPaid, "PEN");
+    const _cobUSD = sumCur(paid, "USD"), _prevCobUSD = sumCur(_prevPaid, "USD");
+    const _pendPEN = sumCur(pending, "PEN"), _prevPendPEN = sumCur(_prevPend, "PEN");
+    const _pendUSD = sumCur(pending, "USD"), _prevPendUSD = sumCur(_prevPend, "USD");
+    const _fmtS = (n, sym) => `${n >= 0 ? "+" : "-"}${sym} ${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Pendiente S/", fmt(sumCur(pending,"PEN")), `${cntCur(pending,"PEN")} abiertos · ${cntCur(overdue.filter(r=>(r.currency||"PEN")==="PEN"),"PEN") || overdue.filter(r=>(r.currency||"PEN")==="PEN").length} vencidos`, "", "", "purple")}
-        ${metric("Pendiente $", fmt(sumCur(pending,"USD"),"USD"), `${cntCur(pending,"USD")} abiertos`, "", "", "blue")}
-        ${metric("Cobrado S/", fmt(sumCur(paid,"PEN")), `${cntCur(paid,"PEN")} recibidos`, "", "", "mint")}
-        ${metric("Cobrado $", fmt(sumCur(paid,"USD"),"USD"), `${cntCur(paid,"USD")} recibidos`, "", "", "amber")}
+        ${metric("Pendiente S/", fmt(_pendPEN), `${cntCur(pending,"PEN")} abiertos · ${overdue.filter(r=>(r.currency||"PEN")==="PEN").length} vencidos`, _pendPEN <= _prevPendPEN ? "up" : "down", "", "purple", `${_fmtS(_pendPEN - _prevPendPEN, "S/")} pendiente vs ${_pr.label}`)}
+        ${metric("Pendiente $", fmt(_pendUSD,"USD"), `${cntCur(pending,"USD")} abiertos`, _pendUSD <= _prevPendUSD ? "up" : "down", "", "blue", `${_fmtS(_pendUSD - _prevPendUSD, "$")} pendiente vs ${_pr.label}`)}
+        ${metric("Cobrado S/", fmt(_cobPEN), `${cntCur(paid,"PEN")} recibidos`, _cobPEN >= _prevCobPEN ? "up" : "down", "", "mint", `${_fmtS(_cobPEN - _prevCobPEN, "S/")} vs ${_pr.label}`)}
+        ${metric("Cobrado $", fmt(_cobUSD,"USD"), `${cntCur(paid,"USD")} recibidos`, _cobUSD >= _prevCobUSD ? "up" : "down", "", "amber", `${_fmtS(_cobUSD - _prevCobUSD, "$")} vs ${_pr.label}`)}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o cobro",
@@ -2283,12 +2329,25 @@ const views = {
   team() {
     const team = sortByDateDesc(state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month))), t => t.dueDate || monthDate(t.month));
     const paidTeam = team.filter(item => item.status === "Pagado");
+    const totalPlanilla = team.reduce((sum, item) => sum + item.amount, 0);
+    const totalPagado   = paidTeam.reduce((sum, item) => sum + item.amount, 0);
+    const totalPend     = team.filter(item => item.status !== "Pagado").reduce((sum, item) => sum + item.amount, 0);
+
+    const _pr = prevRange();
+    const _prevTeam = state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month), _pr));
+    const _prevPaid = _prevTeam.filter(item => item.status === "Pagado");
+    const _prevTot  = _prevTeam.reduce((sum, item) => sum + item.amount, 0);
+    const _prevPag  = _prevPaid.reduce((sum, item) => sum + item.amount, 0);
+    const _prevPend = _prevTeam.filter(item => item.status !== "Pagado").reduce((sum, item) => sum + item.amount, 0);
+    const _fmtS = (n) => `${n >= 0 ? "+" : "-"}S/ ${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    const _fmtN = (n) => `${n >= 0 ? "+" : ""}${n}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Pagos registrados", team.length, "Movimientos del periodo", "", "", "purple")}
-        ${metric("Total planilla", fmt(team.reduce((sum, item) => sum + item.amount, 0)), "Internos y especialistas", "", "", "amber")}
-        ${metric("Pagado", fmt(paidTeam.reduce((sum, item) => sum + item.amount, 0)), `${paidTeam.length} pagos completados`, "", "", "mint")}
-        ${metric("Pendiente", fmt(team.filter(item => item.status !== "Pagado").reduce((sum, item) => sum + item.amount, 0)), "Por desembolsar", "", "", "coral")}
+        ${metric("Pagos registrados", team.length, "Movimientos del periodo", team.length >= _prevTeam.length ? "up" : "down", "", "purple", `${_fmtN(team.length - _prevTeam.length)} vs ${_pr.label}`)}
+        ${metric("Total planilla", fmt(totalPlanilla), "Internos y especialistas", totalPlanilla <= _prevTot ? "up" : "down", "", "amber", `${_fmtS(totalPlanilla - _prevTot)} vs ${_pr.label}`)}
+        ${metric("Pagado", fmt(totalPagado), `${paidTeam.length} pagos completados`, totalPagado >= _prevPag ? "up" : "down", "", "mint", `${_fmtS(totalPagado - _prevPag)} vs ${_pr.label}`)}
+        ${metric("Pendiente", fmt(totalPend), "Por desembolsar", totalPend <= _prevPend ? "up" : "down", "", "coral", `${_fmtS(totalPend - _prevPend)} pendiente vs ${_pr.label}`)}
       </section>
       ${moduleToolbar({
         search: "Buscar persona, rol o estado",
@@ -2323,11 +2382,18 @@ const views = {
     const detBilled = collectionRows().filter(r => r.status === "Pagado").reduce((sum, r) => sum + r.detraction, 0);
     const igvPaid = taxPayments.filter(t => t.status === "Pagado").reduce((s, t) => s + t.amount, 0);
 
+    const _pr = prevRange();
+    const _prevInv = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && dateInRange(r.dueDate || r.wonDate, _pr));
+    const _prevSales = _prevInv.reduce((sum, s) => sum + s.amount, 0);
+    const _prevWon   = wonQuotes().filter(item => dateInRange(item.wonDate || item.date, _pr));
+    const _prevIgvGen = _prevWon.reduce((sum, item) => sum + item.igv, 0);
+    const _fmtS = (n) => `${n >= 0 ? "+" : "-"}S/ ${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+
     return `
       <section class="metric-grid">
-        ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, "", "", "mint")}
+        ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, totalSales >= _prevSales ? "up" : "down", "", "mint", `${_fmtS(totalSales - _prevSales)} vs ${_pr.label}`)}
         ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber")}
-        ${metric("IGV generado", fmt(igvGen), "En ventas ganadas del periodo", "", "", "purple")}
+        ${metric("IGV generado", fmt(igvGen), "En ventas ganadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`)}
         ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral")}
       </section>
 
@@ -2885,8 +2951,8 @@ const views = {
 function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "") {
   const toneIcon = { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
   const tooltipAttr = tooltip ? ` data-tooltip="${escapeAttr(tooltip)}"` : "";
-  const trendBadge = trend ? `<em class="trend ${trend}"${tooltipAttr}>${trend === "up" ? "▲" : "▼"}${trendValue ? " " + trendValue : ""}</em>` : "";
-  return `<article class="metric metric-${tone}"><div class="metric-top"><span>${label}</span>${trendBadge}</div><span class="metric-icon">${icon(toneIcon)}</span><strong>${value}</strong><small>${note}</small></article>`;
+  const trendDot = trend ? `<em class="metric-trend ${trend}"${tooltipAttr}>${trend === "up" ? "▲" : "▼"}</em>` : "";
+  return `<article class="metric metric-${tone}"><div class="metric-top"><span>${label}</span></div><span class="metric-icon">${icon(toneIcon)}</span>${trendDot}<strong>${value}</strong><small>${note}</small></article>`;
 }
 
 function alertItem(title, note) {

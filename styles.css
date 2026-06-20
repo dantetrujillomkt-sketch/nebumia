@@ -1347,18 +1347,34 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 .metric-amber .metric-icon { color: #d09500; }
 .metric-mint .metric-icon { color: var(--ok); }
 .metric-coral .metric-icon { color: var(--danger); }
-.trend {
-  font-style: normal;
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 500;
-}
+.trend { font-style: normal; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 500; }
 .trend.up { background: #dffbef; color: #00a889; }
 .trend.down { background: #ffe8ec; color: #ef476f; }
-.trend[data-tooltip] { cursor: help; position: relative; }
-.trend[data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); background: rgba(20,20,30,.88); color: #fff; font-size: 11px; font-style: normal; padding: 5px 10px; border-radius: 7px; white-space: nowrap; pointer-events: none; z-index: 200; }
-.trend[data-tooltip]:hover::before { content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: rgba(20,20,30,.88); pointer-events: none; z-index: 200; }
+.metric-trend {
+  position: absolute;
+  top: 42px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  z-index: 4;
+  border: 2px solid var(--panel);
+  cursor: help;
+  line-height: 1;
+}
+.metric-trend.up   { background: #16a34a; color: #fff; }
+.metric-trend.down { background: #dc2626; color: #fff; }
+body[data-theme="dark"] .metric-trend.up   { background: #22c55e; }
+body[data-theme="dark"] .metric-trend.down { background: #ef4444; }
+.metric-trend[data-tooltip] { cursor: help; }
+.metric-trend[data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%); background: rgba(20,20,30,.92); color: #fff; font-size: 11px; padding: 5px 10px; border-radius: 7px; white-space: nowrap; pointer-events: none; z-index: 300; font-weight: 500; }
+.metric-trend[data-tooltip]:hover::before { content: ''; position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-bottom-color: rgba(20,20,30,.92); pointer-events: none; z-index: 300; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr); gap: 18px; }
 .panel {
   background: var(--panel);
