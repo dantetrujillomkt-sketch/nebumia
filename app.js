@@ -2374,12 +2374,37 @@ const views = {
           ];
         }), "tax-obligations")}
         <p class="comp-section-sub" style="margin-top:24px">Detracciones pagadas</p>
-        ${table(["Fecha", "Tipo", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Doc.", "Acciones"],
-          taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado").map(t => [
-            fmtDate(t.date), t.type, t.period, fmt(t.amount), badge(t.status), t.sunatRef || "—",
-            t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
-            `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`
-          ]), "tax-payments")}
+        ${(() => {
+          const _detModes = state.settings.collectionDetModes || {};
+          // Detracciones del cliente: cobranzas Pagadas con mode=cliente y detActual > 0
+          const clienteDets = invoicedSales.filter(r => r.quote?.hasIgv && r.status === "Pagado").map(r => {
+            const dm = _detModes[r.id] || {};
+            const mode = dm.mode || "cliente";
+            if (mode !== "cliente") return null;
+            const detActual = dm.detActual != null ? dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+            if (!detActual) return null;
+            const invoiceDate = r.dueDate || r.wonDate;
+            const period = r.paidDate ? new Date(r.paidDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
+            return { _date: r.paidDate || invoiceDate, _type: "cliente",
+              row: [fmtDate(r.paidDate || invoiceDate), `<span class="status pagado">Cliente</span>`,
+                escapeHtml(r.client), escapeHtml(r.invoice || "—"), period, fmt(detActual, "PEN"),
+                badge("Completado"), "—", "—", "—"] };
+          }).filter(Boolean);
+          // Detracciones manuales nuestras: taxPayments Pagado
+          const manualDets = taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado").map(t => {
+            const linkedCid = t.collectionId || (state.settings.taxPaymentCollections || {})[t.id] || "";
+            const linked = linkedCid ? invoicedSales.find(r => r.id === linkedCid) : null;
+            return { _date: t.date, _type: "manual",
+              row: [fmtDate(t.date), t.type,
+                linked ? escapeHtml(linked.client) : "—", linked ? escapeHtml(linked.invoice || "—") : "—",
+                t.period, fmt(t.amount, "PEN"), badge(t.status), t.sunatRef || "—",
+                t.docLink ? `<a href="${escapeAttr(t.docLink)}" target="_blank" rel="noopener" class="action-link">${icon("link")}<span>Ver</span></a>` : "—",
+                `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar pago">${icon("trash")}</button></div>`] };
+          });
+          const allDets = [...clienteDets, ...manualDets].sort((a, b) => (b._date || "").localeCompare(a._date || ""));
+          return table(["Fecha", "Tipo", "Cliente", "Factura", "Periodo", "Monto", "Estado", "Ref. SUNAT", "Doc.", "Acciones"],
+            allDets.map(d => d.row), "tax-payments");
+        })()}
       </div>
 
       <div class="comp-section">
