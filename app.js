@@ -1661,7 +1661,11 @@ const views = {
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
     const wonWithSource = s.won.map(q => ({ ...q, source: clientSourceMap.get(q.client) || "" })).filter(q => q.source);
     const salesBySource = group(wonWithSource, "source", q => q.total);
-    const leadsNew = state.clients.filter(c => dateInRange(c.date)).length;
+    const newClientNames = new Set(state.clients.filter(c => dateInRange(c.date)).map(c => c.name));
+    const existingClientsWithQuote = new Set(
+      state.quotes.filter(q => dateInRange(q.date) && !newClientNames.has(q.client)).map(q => q.client)
+    );
+    const leadsNew = newClientNames.size + existingClientsWithQuote.size;
     const propuestasCount = s.quotes.filter(q => q.status === "Por cotizar").length;
     const quotedCount = s.quotes.filter(q => q.status === "Cotizado").length;
     const funnelMax = Math.max(leadsNew + propuestasCount + quotedCount + s.won.length + s.lost.length, 1);
