@@ -1163,6 +1163,14 @@ function annualProjectionTables() {
     </div>`;
 }
 
+function autoDetraction(c, dm) {
+  if (dm.detActual != null) return dm.detActual;
+  const isUSD = c.currency === "USD";
+  const threshold = isUSD ? DETRACTION_THRESHOLD_USD : (state.settings.detractionThreshold ?? DETRACTION_THRESHOLD);
+  if (c.amount < threshold) return 0;
+  return c.detraction ? Math.round(c.detraction) : 0;
+}
+
 function collectionRows() {
   return state.collections.map(c => {
     const quote = state.quotes.find(q => q.id === c.quoteId);
@@ -1177,7 +1185,7 @@ function buildCajaRows() {
   const detModes    = state.settings.collectionDetModes  || {};
   collectionRows().filter(c => c.status === "Pagado").forEach(c => {
     const dm    = detModes[c.id] || {};
-    const det   = dm.detActual != null ? dm.detActual : (c.detraction ? Math.round(c.detraction) : 0);
+    const det   = autoDetraction(c, dm);
     const mode  = dm.mode || "cliente";
     const label = [c.code, c.client].filter(Boolean).join(" · ");
     const base  = { date: c.paidDate || c.dueDate, currency: c.currency || "PEN",
@@ -1642,11 +1650,11 @@ const views = {
     const pendingDets = collectionRows().filter(c => {
       if (c.status !== "Pagado") return false;
       const dm = _detModes[c.id] || {};
-      const det = dm.detActual != null ? dm.detActual : (c.detraction > 0 ? Math.round(c.detraction) : 0);
+      const det = autoDetraction(c, dm);
       return det > 0 && (dm.detStatus || "Completado") === "Pendiente";
     }).map(c => {
       const dm = _detModes[c.id] || {};
-      return { ...c, detActual: dm.detActual != null ? dm.detActual : Math.round(c.detraction), mode: dm.mode || "cliente" };
+      return { ...c, detActual: autoDetraction(c, dm), mode: dm.mode || "cliente" };
     });
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", q => q.total);
@@ -1783,11 +1791,10 @@ const views = {
           <div class="panel-head"><div><h3>Embudo comercial</h3><p>Leads → cierre</p></div></div>
           <div class="funnel-flow">
             ${dashFunnelChart([
-              {label:"Nuevos",    count:leadsNew,         color:"var(--brand)"},
-              {label:"Propuesta", count:propuestasCount,   color:"#7c3aed"},
-              {label:"Cotizado",  count:quotedCount,      color:"#0891b2"},
-              {label:"Ganado",    count:s.won.length,     color:"var(--mint)"},
-              {label:"Perdido",   count:s.lost.length,    color:"var(--coral)"},
+              {label:"Leads",    count:leadsNew,         color:"var(--brand)"},
+              {label:"Cotizado", count:quotedCount,      color:"#0891b2"},
+              {label:"Ganado",   count:s.won.length,     color:"var(--mint)"},
+              {label:"Perdido",  count:s.lost.length,    color:"var(--coral)"},
             ])}
           </div>
         </div>
@@ -2036,7 +2043,7 @@ const views = {
         const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
         const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
         const _dm = (state.settings.collectionDetModes || {})[r.id] || {};
-        const detActual = _dm.detActual != null ? _dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+        const detActual = autoDetraction(r, _dm);
         const netAmount  = _dm.montoReal != null ? _dm.montoReal : (r.currency === "PEN" ? r.amount - detActual : r.amount);
         const collRepo   = r.repo || r.quote?.repo || "";
         const repoIcon   = collRepo
@@ -2421,7 +2428,7 @@ const views = {
         ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.filter(s => s.quote?.hasIgv).map(s => {
           const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
           const dm = (state.settings.collectionDetModes || {})[s.id] || {};
-          const detActual = dm.detActual != null ? dm.detActual : (s.detraction > 0 ? Math.round(s.detraction) : 0);
+          const detActual = autoDetraction(s, dm);
           const netAmount = dm.montoReal != null ? dm.montoReal : (s.currency === "PEN" ? s.amount - detActual : s.amount);
           const declaredStatus = s.declared || "Sin declarar";
           const sRepo = s.repo || s.quote?.repo || "";
@@ -2485,7 +2492,7 @@ const views = {
           const period = invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
           const dm = (state.settings.collectionDetModes || {})[r.id] || {};
           const mode = dm.mode || "cliente";
-          const detActual = dm.detActual != null ? dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+          const detActual = autoDetraction(r, dm);
           const detStatus = dm.detStatus || "Completado";
           const detCell = detActual > 0 ? fmt(detActual, "PEN") : "—";
           const detBadge = mode === "bandu"
@@ -2510,7 +2517,7 @@ const views = {
             const dm = _detModes[r.id] || {};
             const mode = dm.mode || "cliente";
             if (mode !== "cliente") return null;
-            const detActual = dm.detActual != null ? dm.detActual : (r.detraction > 0 ? Math.round(r.detraction) : 0);
+            const detActual = autoDetraction(r, dm);
             if (!detActual) return null;
             const invoiceDate = r.dueDate || r.wonDate;
             const igvRate = state.settings.igvRate;
