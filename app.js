@@ -28,7 +28,7 @@ const SB_COLS = {
   purchases:     ["id","date","vendor","ruc","invoice_type","invoice_num","concept","subtotal","igv","total","currency","detraction","paid_date","bank_account","declared","repo"],
   invoiced_sales:["id","date","client","ruc","invoice_type","invoice_num","service","subtotal","igv","total","currency","quote_id","part"],
   cash_entries:  ["id","date","type","concept","category","amount","currency","status","bank_account","notes","invoice"],
-  collections:   ["id","quote_id","part","label","due_date","amount","detraction","currency","status","paid_date","invoice","bank_account","declared"],
+  collections:   ["id","quote_id","part","label","due_date","amount","detraction","currency","status","paid_date","invoice","bank_account","declared","repo"],
   declaraciones: ["id","period","igv1011","renta3121","otro","otro_concepto","status","notes"],
 };
 
@@ -142,7 +142,7 @@ async function sbLoad() {
   state.clients       = (clients       || []).map(r => newClient(toCamel(r)));
   state.leads         = (leads         || []).map(r => newLead(toCamel(r)));
   state.quotes        = (quotes        || []).map(r => newQuote(toCamel(r)));
-  state.collections   = (collections   || []).map(r => { const c = toCamel(r); return { id:c.id, quoteId:c.quoteId||"", part:Number(c.part||1), label:c.label||"", dueDate:c.dueDate||"", amount:Number(c.amount||0), detraction:Number(c.detraction||0), currency:c.currency||"PEN", status:c.status||"Pendiente", paidDate:c.paidDate||"", invoice:c.invoice||"", bankAccount:c.bankAccount||"", declared:c.declared||"Sin declarar" }; });
+  state.collections   = (collections   || []).map(r => { const c = toCamel(r); return { id:c.id, quoteId:c.quoteId||"", part:Number(c.part||1), label:c.label||"", dueDate:c.dueDate||"", amount:Number(c.amount||0), detraction:Number(c.detraction||0), currency:c.currency||"PEN", status:c.status||"Pendiente", paidDate:c.paidDate||"", invoice:c.invoice||"", bankAccount:c.bankAccount||"", declared:c.declared||"Sin declarar", repo:c.repo||"" }; });
   state.expenses      = (expenses      || []).map(r => newExpense(toCamel(r)));
   state.team          = (team          || []).map(r => newTeamPayment(toCamel(r)));
   state.taxPayments   = (taxPayments   || []).map(r => newTaxPayment(toCamel(r)));
