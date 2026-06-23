@@ -167,11 +167,13 @@ async function sbLoad() {
     }
   }
   const base = seedState();
-  const localSnap = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY))?.settings || {}; } catch { return {}; } })();
+  const localSnap = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; } })();
+  // Build a lookup of localStorage collections by id to restore fields that weren't synced (e.g. repo)
+  const localColMap = new Map((localSnap.collections || []).map(c => [c.id, c]));
   state.clients       = (clients       || []).map(r => newClient(toCamel(r)));
   state.leads         = (leads         || []).map(r => newLead(toCamel(r)));
   state.quotes        = (quotes        || []).map(r => newQuote(toCamel(r)));
-  state.collections   = (collections   || []).map(r => { const c = toCamel(r); return { id:c.id, quoteId:c.quoteId||"", part:Number(c.part||1), label:c.label||"", dueDate:c.dueDate||"", amount:Number(c.amount||0), detraction:Number(c.detraction||0), currency:c.currency||"PEN", status:c.status||"Pendiente", paidDate:c.paidDate||"", invoice:c.invoice||"", bankAccount:c.bankAccount||"", declared:c.declared||"Sin declarar", repo:c.repo||"" }; });
+  state.collections   = (collections   || []).map(r => { const c = toCamel(r); const lc = localColMap.get(c.id) || {}; return { id:c.id, quoteId:c.quoteId||"", part:Number(c.part||1), label:c.label||"", dueDate:c.dueDate||"", amount:Number(c.amount||0), detraction:Number(c.detraction||0), currency:c.currency||"PEN", status:c.status||"Pendiente", paidDate:c.paidDate||"", invoice:c.invoice||"", bankAccount:c.bankAccount||"", declared:c.declared||"Sin declarar", repo:c.repo||lc.repo||"" }; });
   state.expenses      = (expenses      || []).map(r => newExpense(toCamel(r)));
   state.team          = (team          || []).map(r => newTeamPayment(toCamel(r)));
   state.taxPayments   = (taxPayments   || []).map(r => newTaxPayment(toCamel(r)));
@@ -180,7 +182,8 @@ async function sbLoad() {
   state.cashEntries   = (cashEntries   || []).map(r => newCashEntry(toCamel(r)));
   state.declaraciones = (declaraciones || []).map(r => newDeclaracion(toCamel(r)));
   if (settings) {
-    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || localSnap.saldosIniciales || [], detractionAccount: settings.detraction_account || localSnap.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || localSnap.collectionDetModes || {}, taxPaymentCollections: settings.tax_payment_collections || localSnap.taxPaymentCollections || {}, fixedExpenseOverrides: settings.fixed_expense_overrides || localSnap.fixedExpenseOverrides || {} };
+    const ls = localSnap.settings || {};
+    state.settings = { ...base.settings, igvRate: settings.igv_rate, detractionRate: settings.detraction_rate, detractionThreshold: settings.detraction_threshold, commissionRate: settings.commission_rate, currency: settings.currency, bankAccounts: settings.bank_accounts || [], fixedExpenses: settings.fixed_expenses || [], teamMembers: settings.team_members || [], saldosIniciales: settings.saldos_iniciales || ls.saldosIniciales || [], detractionAccount: settings.detraction_account || ls.detractionAccount || "Detracciones", collectionDetModes: settings.collection_det_modes || ls.collectionDetModes || {}, taxPaymentCollections: settings.tax_payment_collections || ls.taxPaymentCollections || {}, fixedExpenseOverrides: settings.fixed_expense_overrides || ls.fixedExpenseOverrides || {} };
     state.services   = settings.services   || base.services;
     state.categories = settings.categories || base.categories;
     state.sources    = settings.sources    || base.sources;
@@ -196,7 +199,9 @@ async function sbLoad() {
   syncClientsFromActivity(state);
   const codeChanged = applyCodePadding(state);
   const bankChanged = applyBankAccountDefaults(state);
-  if (codeChanged || bankChanged) sbSync().catch(e => console.error("migration sync:", e));
+  // Restore repo links from localStorage if Supabase had them empty (migration from pre-proxy era)
+  const repoRestored = state.collections.some(c => c.repo && !(collections || []).find(r => r.id === c.id)?.repo);
+  if (codeChanged || bankChanged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -692,7 +697,8 @@ function migrateState(input) {
       paidDate: c.paidDate || "",
       invoice: c.invoice || "",
       bankAccount: c.bankAccount || "",
-      declared: c.declared || "Sin declarar"
+      declared: c.declared || "Sin declarar",
+      repo: c.repo || ""
     })),
     expenses: (input.expenses || base.expenses).map(e => newExpense({ ...e, date: e.date || monthDate(e.month) || today() })),
     team: (input.team || base.team).map(newTeamPayment),
