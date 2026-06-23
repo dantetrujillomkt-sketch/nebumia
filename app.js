@@ -105,12 +105,7 @@ async function sbSync() {
 
 async function sbLoad() {
   const uid = sbUser.id;
-  const [
-    { data: clients }, { data: leads }, { data: quotes }, { data: collections },
-    { data: expenses }, { data: team }, { data: taxPayments }, { data: purchases },
-    { data: invoicedSales }, { data: cashEntries }, { data: declaraciones },
-    { data: settings }, { data: salesTargets }
-  ] = await Promise.all([
+  const results = await Promise.all([
     sb.from("clients").select("*").eq("user_id", uid),
     sb.from("leads").select("*").eq("user_id", uid),
     sb.from("quotes").select("*").eq("user_id", uid),
@@ -125,6 +120,14 @@ async function sbLoad() {
     sb.from("settings").select("*").eq("user_id", uid).maybeSingle(),
     sb.from("sales_targets").select("*").eq("user_id", uid),
   ]);
+  const names = ["clients","leads","quotes","collections","expenses","team","taxPayments","purchases","invoicedSales","cashEntries","declaraciones","settings","salesTargets"];
+  results.forEach((r, i) => { if (r.error) console.error(`sbLoad[${names[i]}]:`, r.error.message, r.error); else console.log(`sbLoad[${names[i]}]:`, r.data?.length ?? r.data); });
+  const [
+    { data: clients }, { data: leads }, { data: quotes }, { data: collections },
+    { data: expenses }, { data: team }, { data: taxPayments }, { data: purchases },
+    { data: invoicedSales }, { data: cashEntries }, { data: declaraciones },
+    { data: settings }, { data: salesTargets }
+  ] = results;
 
   // If Supabase data tables are empty but localStorage has data, push local → Supabase
   // (settings existing does NOT block this — settings may exist from a partial sync)
