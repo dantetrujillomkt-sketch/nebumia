@@ -976,7 +976,7 @@ function dashboardFilterBar() {
     ["salesSource", "Por fuente"],
     ["salesOwner", "Comerciales"],
     ["collections", "Cobros próximos"],
-    ["activity", "Actividad reciente"],
+    ["activity", "Ranking de clientes"],
     ["annualProjection", "Proyección anual"]
   ];
   return `
@@ -1860,8 +1860,8 @@ const views = {
             </div>` : ""}
         </div>
         <div class="panel" data-dash-section="activity">
-          <div class="panel-head"><div><h3>Actividad reciente</h3><p>Últimos movimientos registrados</p></div></div>
-          ${dashRecentActivity()}
+          <div class="panel-head"><div><h3>Ranking de clientes</h3><p>Quién más compró en el periodo</p></div></div>
+          ${dashClientRanking(s.won)}
         </div>
       </div>
 
@@ -3073,37 +3073,37 @@ function ruleCard(title, copy) {
   return `<article class="panel rule-card"><h4>${title}</h4><p>${copy}</p></article>`;
 }
 
-function dashRecentActivity() {
-  const events = [];
-  state.quotes.filter(q => q.status === "Ganado" && q.wonDate).forEach(q => {
-    events.push({ date: q.wonDate, type: "venta", label: `Venta ganada — ${q.client}`, sub: `${q.code} · ${fmt(calcQuote(q).total)}`, color: "var(--mint)" });
+function dashClientRanking(wonQuotes) {
+  if (!wonQuotes.length) return `<div class="empty-state">Sin ventas ganadas en el periodo.</div>`;
+  const map = new Map();
+  wonQuotes.forEach(q => {
+    const cur = q.currency || "PEN";
+    const total = q.total || calcQuote(q).total;
+    if (!map.has(q.client)) map.set(q.client, { pen: 0, usd: 0, count: 0 });
+    const e = map.get(q.client);
+    if (cur === "USD") e.usd += total; else e.pen += total;
+    e.count++;
   });
-  collectionRows().filter(c => c.status === "Pagado" && c.paidDate).forEach(c => {
-    events.push({ date: c.paidDate, type: "cobro", label: `Cobro recibido — ${c.client}`, sub: `${c.label || c.code} · ${fmt(c.amount, c.currency)}`, color: "var(--brand)" });
-  });
-  (state.taxPayments || []).filter(t => t.status === "Pagado" && t.date).forEach(t => {
-    events.push({ date: t.date, type: "sunat", label: `Pago SUNAT — ${t.type}`, sub: `${t.period} · ${fmt(t.amount)}`, color: "#f59e0b" });
-  });
-  state.team.filter(t => t.status === "Pagado" && t.dueDate).forEach(t => {
-    events.push({ date: t.dueDate, type: "personal", label: `Pago personal — ${t.name}`, sub: `${t.role} · ${fmt(t.amount, t.currency)}`, color: "#7c3aed" });
-  });
-  (state.cashEntries || []).filter(e => e.date).forEach(e => {
-    events.push({ date: e.date, type: "caja", label: `${e.type === "ingreso" ? "Ingreso" : "Egreso"} — ${e.concept}`, sub: `${e.category || "Manual"} · ${fmt(e.amount, e.currency)}`, color: e.type === "ingreso" ? "var(--mint)" : "var(--coral)" });
-  });
-
-  const sorted = events.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
-
-  if (!sorted.length) return `<div class="empty-state">Sin actividad registrada aún.</div>`;
-
-  return `<div class="activity-feed">${sorted.map(e => `
-    <div class="activity-item">
-      <div class="activity-dot" style="background:${e.color}"></div>
-      <div class="activity-body">
-        <strong>${escapeHtml(e.label)}</strong>
-        <span>${escapeHtml(e.sub)}</span>
+  const ranked = [...map.entries()]
+    .map(([client, v]) => ({ client, ...v }))
+    .sort((a, b) => (b.pen + b.usd * 3.7) - (a.pen + a.usd * 3.7));
+  const maxVal = ranked[0].pen + ranked[0].usd * 3.7;
+  return `<div class="client-ranking">${ranked.map((r, i) => {
+    const barPct = maxVal > 0 ? Math.round((r.pen + r.usd * 3.7) / maxVal * 100) : 0;
+    const amts = [r.pen > 0 ? fmt(r.pen, "PEN") : "", r.usd > 0 ? fmt(r.usd, "USD") : ""].filter(Boolean).join(" · ");
+    const quoteLabel = r.count === 1 ? "1 venta" : `${r.count} ventas`;
+    return `<div class="ranking-item">
+      <div class="ranking-row">
+        <span class="ranking-pos">${i + 1}</span>
+        <strong class="ranking-name">${escapeHtml(r.client)}</strong>
+        <span class="ranking-amt">${amts}</span>
       </div>
-      <div class="activity-date">${fmtDate(e.date)}</div>
-    </div>`).join("")}</div>`;
+      <div class="ranking-bar-wrap">
+        <div class="ranking-bar" style="width:${barPct}%"></div>
+        <span class="ranking-sub">${quoteLabel}</span>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
 }
 
 function dashFunnelChart(steps) {
