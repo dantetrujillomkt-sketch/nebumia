@@ -799,8 +799,13 @@ function logout() {
   overlay.innerHTML = '<div class="content-spinner"></div>';
   document.body.appendChild(overlay);
   requestAnimationFrame(() => overlay.classList.add("visible"));
-  sb.auth.signOut().finally(() => {
+  // scope:'local' clears the session from localStorage without a network call,
+  // avoiding the CORS failure that was leaving the session intact after logout.
+  sb.auth.signOut({ scope: "local" }).finally(() => {
     sbUser = null;
+    // Belt-and-suspenders: remove Supabase auth key directly in case signOut missed it
+    const sbAuthKey = Object.keys(localStorage).find(k => k.startsWith("sb-") && k.endsWith("-auth-token"));
+    if (sbAuthKey) localStorage.removeItem(sbAuthKey);
     setTimeout(() => {
       localStorage.removeItem(SESSION_KEY);
       appShell.classList.add("hidden");
