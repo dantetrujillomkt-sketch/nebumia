@@ -1589,6 +1589,35 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 }
 .list-item strong { display: block; font-weight: 550; }
 .list-item span { color: var(--muted); font-size: 12px; }
+.minibar-info { font-size: 11px; color: var(--muted); cursor: help; }
+.list-item[data-tooltip] { cursor: help; position: relative; }
+.list-item[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20,20,30,.92);
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 300;
+  font-weight: 500;
+}
+.list-item[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(20,20,30,.92);
+  pointer-events: none;
+  z-index: 300;
+}
 .progress {
   height: 9px;
   border-radius: 999px;
