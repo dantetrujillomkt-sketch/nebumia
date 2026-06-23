@@ -126,9 +126,10 @@ async function sbLoad() {
     sb.from("sales_targets").select("*").eq("user_id", uid),
   ]);
 
-  // If Supabase is completely empty but localStorage has data, push local → Supabase instead of wiping
+  // If Supabase data tables are empty but localStorage has data, push local → Supabase
+  // (settings existing does NOT block this — settings may exist from a partial sync)
   const sbEmpty = ![clients,leads,quotes,collections,expenses,team,taxPayments,purchases,invoicedSales,cashEntries].some(a => a?.length);
-  if (sbEmpty && !settings) {
+  if (sbEmpty) {
     const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
     const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);
     if (localHasData) {
