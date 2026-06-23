@@ -1,11 +1,5 @@
 {
   "outputDirectory": ".",
   "buildCommand": null,
-  "installCommand": null,
-  "rewrites": [
-    {
-      "source": "/sb-proxy/:path*",
-      "destination": "https://avjthwvppogqezlljksz.supabase.co/:path*"
-    }
-  ]
+  "installCommand": null
 }

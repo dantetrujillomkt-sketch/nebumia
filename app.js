@@ -1,5 +1,5 @@
 // ── SUPABASE ─────────────────────────────────────────────
-const SUPABASE_URL = `${window.location.origin}/sb-proxy`;
+const SUPABASE_URL = `${window.location.origin}/api/sb`;
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2anRod3ZwcG9ncWV6bGxqa3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MzM2ODIsImV4cCI6MjA5NzEwOTY4Mn0.xgdZ2WP1sX01LliQztWoy_5NN3so2NxHM3LwzXNbGjY";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let sbUser = null;
