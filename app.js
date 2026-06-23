@@ -1,12 +1,17 @@
 // ── SUPABASE ─────────────────────────────────────────────
 const SUPABASE_URL = "https://avjthwvppogqezlljksz.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2anRod3ZwcG9ncWV6bGxqa3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MzM2ODIsImV4cCI6MjA5NzEwOTY4Mn0.xgdZ2WP1sX01LliQztWoy_5NN3so2NxHM3LwzXNbGjY";
-// Route REST API calls through Vercel proxy to bypass CORS (auth calls go direct)
-// Authorization header is stripped to avoid Vercel 494 (header too large); RLS is disabled, apikey is sufficient
+// Route REST API calls through /api/proxy to bypass CORS.
+// Uses _path query param instead of catch-all routing (more reliable on Vercel without a framework).
+// Authorization header stripped to avoid 494; RLS is disabled so apikey alone is sufficient.
 const _sbProxyFetch = (input, options = {}) => {
   const url = typeof input === "string" ? input : input.url;
   if (url.includes("/rest/v1/") || url.includes("/storage/v1/")) {
-    const proxyUrl = url.replace(SUPABASE_URL, `${window.location.origin}/api/sb`);
+    const suffix = url.slice(SUPABASE_URL.length + 1);
+    const qmark = suffix.indexOf("?");
+    const pathPart = qmark >= 0 ? suffix.slice(0, qmark) : suffix;
+    const qsPart = qmark >= 0 ? suffix.slice(qmark + 1) : "";
+    const proxyUrl = `${window.location.origin}/api/proxy?_path=${encodeURIComponent(pathPart)}${qsPart ? "&" + qsPart : ""}`;
     const opts = { ...options, credentials: "omit" };
     if (opts.headers) {
       const h = typeof opts.headers?.entries === "function"
@@ -6825,7 +6830,8 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
 (async () => {
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
-    const { data: { user: freshUser } } = await sb.auth.getUser();
+    let freshUser = null;
+    try { const { data } = await sb.auth.getUser(); freshUser = data?.user; } catch {}
     sbUser = freshUser || session.user;
     syncFromSupabaseMeta(sbUser);
     loginScreen.classList.add("hidden");
