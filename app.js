@@ -1661,6 +1661,10 @@ const views = {
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
     const wonWithSource = s.won.map(q => ({ ...q, source: clientSourceMap.get(q.client) || "" })).filter(q => q.source);
     const salesBySource = group(wonWithSource, "source", q => q.total);
+    const wonBeforePeriod = state.quotes.filter(q => q.status === "Ganado" && (q.wonDate || q.date) < dashboardRange.start);
+    const recurringClients = new Set(wonBeforePeriod.map(q => q.client));
+    const recurringTotal = s.won.filter(q => recurringClients.has(q.client)).reduce((sum, q) => sum + q.total, 0);
+    if (recurringTotal > 0) salesBySource.push({ label: "Recurrente", value: recurringTotal });
     const newClientNames = new Set(state.clients.filter(c => dateInRange(c.date)).map(c => c.name));
     const existingClientsWithQuote = new Set(
       state.quotes.filter(q => dateInRange(q.date) && !newClientNames.has(q.client)).map(q => q.client)
