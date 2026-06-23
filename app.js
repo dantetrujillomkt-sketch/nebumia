@@ -3075,35 +3075,48 @@ function ruleCard(title, copy) {
 
 function dashClientRanking(wonQuotes) {
   if (!wonQuotes.length) return `<div class="empty-state">Sin ventas ganadas en el periodo.</div>`;
-  const map = new Map();
+  const penMap = new Map(), usdMap = new Map();
   wonQuotes.forEach(q => {
     const cur = q.currency || "PEN";
     const total = q.total || calcQuote(q).total;
-    if (!map.has(q.client)) map.set(q.client, { pen: 0, usd: 0, count: 0 });
+    const map = cur === "USD" ? usdMap : penMap;
+    if (!map.has(q.client)) map.set(q.client, { total: 0, count: 0 });
     const e = map.get(q.client);
-    if (cur === "USD") e.usd += total; else e.pen += total;
-    e.count++;
+    e.total += total; e.count++;
   });
-  const ranked = [...map.entries()]
+  const toRows = map => [...map.entries()]
     .map(([client, v]) => ({ client, ...v }))
-    .sort((a, b) => (b.pen + b.usd * 3.7) - (a.pen + a.usd * 3.7));
-  const maxVal = ranked[0].pen + ranked[0].usd * 3.7;
-  return `<div class="client-ranking">${ranked.map((r, i) => {
-    const barPct = maxVal > 0 ? Math.round((r.pen + r.usd * 3.7) / maxVal * 100) : 0;
-    const amts = [r.pen > 0 ? fmt(r.pen, "PEN") : "", r.usd > 0 ? fmt(r.usd, "USD") : ""].filter(Boolean).join(" · ");
-    const quoteLabel = r.count === 1 ? "1 venta" : `${r.count} ventas`;
-    return `<div class="ranking-item">
-      <div class="ranking-row">
-        <span class="ranking-pos">${i + 1}</span>
-        <strong class="ranking-name">${escapeHtml(r.client)}</strong>
-        <span class="ranking-amt">${amts}</span>
-      </div>
-      <div class="ranking-bar-wrap">
-        <div class="ranking-bar" style="width:${barPct}%"></div>
-        <span class="ranking-sub">${quoteLabel}</span>
-      </div>
-    </div>`;
-  }).join("")}</div>`;
+    .sort((a, b) => b.total - a.total);
+  const penRows = toRows(penMap), usdRows = toRows(usdMap);
+  const renderCol = (rows, cur) => {
+    if (!rows.length) return `<p class="ranking-empty">Sin ventas en ${cur === "PEN" ? "soles" : "dólares"}</p>`;
+    const maxVal = rows[0].total;
+    return rows.map((r, i) => {
+      const barPct = Math.round(r.total / maxVal * 100);
+      const label = r.count === 1 ? "1 venta" : `${r.count} ventas`;
+      return `<div class="rk-row">
+        <span class="rk-pos">${i + 1}</span>
+        <div class="rk-info">
+          <div class="rk-top">
+            <span class="rk-name">${escapeHtml(r.client)}</span>
+            <span class="rk-amt">${fmt(r.total, cur)}</span>
+          </div>
+          <div class="rk-track"><div class="rk-bar" style="width:${barPct}%"></div><span class="rk-sub">${label}</span></div>
+        </div>
+      </div>`;
+    }).join("");
+  };
+  return `<div class="client-ranking">
+    <div class="rk-col">
+      <p class="rk-col-title">Soles (S/)</p>
+      ${renderCol(penRows, "PEN")}
+    </div>
+    <div class="rk-divider"></div>
+    <div class="rk-col">
+      <p class="rk-col-title">Dólares ($)</p>
+      ${renderCol(usdRows, "USD")}
+    </div>
+  </div>`;
 }
 
 function dashFunnelChart(steps) {
