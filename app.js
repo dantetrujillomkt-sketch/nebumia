@@ -1657,14 +1657,14 @@ const views = {
       return { ...c, detActual: autoDetraction(c, dm), mode: dm.mode || "cliente" };
     });
     const salesByOwner = group(s.won, "owner", q => q.total);
-    const salesByCategory = group(s.won, "category", q => q.total);
+    const salesByCategory = group(s.won, "category", () => 1);
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
     const wonWithSource = s.won.map(q => ({ ...q, source: clientSourceMap.get(q.client) || "" })).filter(q => q.source);
-    const salesBySource = group(wonWithSource, "source", q => q.total);
+    const salesBySource = group(wonWithSource, "source", () => 1);
     const wonBeforePeriod = state.quotes.filter(q => q.status === "Ganado" && (q.wonDate || q.date) < dashboardRange.start);
     const recurringClients = new Set(wonBeforePeriod.map(q => q.client));
-    const recurringTotal = s.won.filter(q => recurringClients.has(q.client)).reduce((sum, q) => sum + q.total, 0);
-    if (recurringTotal > 0) salesBySource.push({ label: "Recurrente", value: recurringTotal });
+    const recurringCount = s.won.filter(q => recurringClients.has(q.client)).length;
+    if (recurringCount > 0) salesBySource.push({ label: "Recurrente", value: recurringCount });
     const newClientNames = new Set(state.clients.filter(c => dateInRange(c.date)).map(c => c.name));
     const existingClientsWithQuote = new Set(
       state.quotes.filter(q => dateInRange(q.date) && !newClientNames.has(q.client)).map(q => q.client)
@@ -1812,11 +1812,11 @@ const views = {
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
           <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
-          ${salesByCategory.length ? miniBars(salesByCategory) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          ${salesByCategory.length ? miniBars(salesByCategory, true) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesSource">
           <div class="panel-head"><div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div>
-          ${salesBySource.length ? miniBars(salesBySource) : `<p class="fe-empty">Sin datos de fuente.</p>`}
+          ${salesBySource.length ? miniBars(salesBySource, true) : `<p class="fe-empty">Sin datos de fuente.</p>`}
         </div>
         <div class="panel" data-dash-section="salesOwner">
           <div class="panel-head"><div><h3>Comerciales</h3><p>Ventas del periodo</p></div></div>
@@ -3168,11 +3168,11 @@ function dashAlerts(s) {
     : `<div class="empty-state">${icon("check")} Sin alertas pendientes. Todo al día.</div>`;
 }
 
-function miniBars(data) {
+function miniBars(data, asCount = false) {
   const max = Math.max(...data.map(d => d.value), 1);
   return `<div class="split-list">${data.map(d => `
     <div>
-      <div class="list-item"><strong>${d.label}</strong><span>${fmt(d.value)}</span></div>
+      <div class="list-item"><strong>${d.label}</strong><span>${asCount ? `${d.value} venta${d.value !== 1 ? "s" : ""}` : fmt(d.value)}</span></div>
       <div class="progress"><i style="width:${Math.max(8, d.value / max * 100)}%"></i></div>
     </div>`).join("")}</div>`;
 }
