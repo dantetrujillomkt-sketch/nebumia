@@ -152,18 +152,19 @@ async function sbLoad() {
     { data: settings }, { data: salesTargets }
   ] = results;
 
-  // If localStorage has more records than Supabase, local is the source of truth — push to cloud.
-  // This handles the case where data only lived in localStorage (pre-proxy CORS era).
+  // If Supabase is empty but localStorage has data → first-time setup, push local to cloud.
+  // Otherwise Supabase is always the source of truth (changes sync via saveState → sbSync).
   const sbCount = [clients,leads,quotes,collections,expenses,team,taxPayments,purchases,invoicedSales,cashEntries,declaraciones]
     .reduce((n, a) => n + (a?.length || 0), 0);
-  const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
-  const localCount = local ? [local.clients,local.leads,local.quotes,local.collections,local.expenses,local.team,local.taxPayments,local.purchases,local.invoicedSales,local.cashEntries,local.declaraciones]
-    .reduce((n, a) => n + (a?.length || 0), 0) : 0;
-  console.log(`sbLoad: sbCount=${sbCount} localCount=${localCount}`);
-  if (localCount > sbCount) {
-    state = migrateState(local);
-    sbSync().catch(e => console.error("sbLoad local-wins sync:", e));
-    return;
+  console.log(`sbLoad: sbCount=${sbCount}`);
+  if (sbCount === 0) {
+    const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
+    const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);
+    if (localHasData) {
+      state = migrateState(local);
+      sbSync().catch(e => console.error("sbLoad initial-push sync:", e));
+      return;
+    }
   }
   const base = seedState();
   const localSnap = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY))?.settings || {}; } catch { return {}; } })();
