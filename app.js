@@ -3044,10 +3044,9 @@ const views = {
 };
 
 function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "") {
-  const toneIcon = { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
   const tooltipAttr = tooltip ? ` data-tooltip="${escapeAttr(tooltip)}"` : "";
   const trendDot = trend ? `<em class="metric-trend ${trend}"${tooltipAttr}>${trend === "up" ? "▲" : "▼"}</em>` : "";
-  return `<article class="metric metric-${tone}"><div class="metric-top"><span>${label}</span></div><span class="metric-icon">${icon(toneIcon)}</span>${trendDot}<strong>${value}</strong><small>${note}</small></article>`;
+  return `<article class="metric metric-${tone}"><div class="metric-top"><span>${label}</span></div>${trendDot}<strong>${value}</strong><small>${note}</small></article>`;
 }
 
 function alertItem(title, note) {
