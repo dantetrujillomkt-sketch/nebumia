@@ -1218,6 +1218,33 @@ function collectionRows() {
   });
 }
 
+// Una "venta" se reconoce cuando una cuota (cobranza) se cobra (Pagado), en el mes
+// de su fecha de cobro (paidDate). Cada cuota pagada es una venta independiente; su
+// desglose sin-IGV / IGV / comisión se deriva proporcionalmente de la cotización madre.
+// Así, una venta en 2 partes suma a Ventas en cada mes que entra cada pago (sin duplicar).
+function recognizedSales() {
+  return collectionRows()
+    .filter(c => c.status === "Pagado")
+    .map(c => {
+      const q = c.quote;
+      const calc = q ? calcQuote(q) : null;
+      const frac = (calc && calc.total > 0) ? c.amount / calc.total : 1;
+      const subtotal = q ? q.subtotal * frac : c.amount;
+      const igv = calc ? calc.igv * frac : 0;
+      const commission = calc ? calc.commission * frac : 0;
+      return {
+        quoteId: c.quoteId, collectionId: c.id,
+        code: c.code, client: c.client, service: c.service, owner: c.owner,
+        currency: c.currency || "PEN",
+        date: c.paidDate || c.dueDate || c.wonDate,
+        paidDate: c.paidDate, label: c.label,
+        subtotal, igv, total: c.amount, detraction: c.detraction || 0, commission,
+        bankAccount: c.bankAccount || q?.bankAccount || "", status: c.status,
+        cuotas: q ? (Number(q.cuotas) || 1) : 1, quote: q
+      };
+    });
+}
+
 function buildCajaRows() {
   const rows = [];
 
@@ -1685,6 +1712,12 @@ function render() {
 const views = {
   dashboard() {
     const s = dashboardSnapshot();
+    // Ventas cobradas del periodo (cada cuota pagada cuenta como venta en su mes de cobro)
+    const _recog    = recognizedSales().filter(x => dateInRange(x.date));
+    const _recogPEN = _recog.filter(x => (x.currency || "PEN") === "PEN");
+    const _recogUSD = _recog.filter(x => x.currency === "USD");
+    const _recogPENTotal = _recogPEN.reduce((a, x) => a + x.total, 0);
+    const _recogUSDTotal = _recogUSD.reduce((a, x) => a + x.total, 0);
     const upcoming = collectionRows().filter(r => r.status !== "Pagado").sort((a,b) => (a.dueDate||"").localeCompare(b.dueDate||"")).slice(0, 5);
     const _detModes = state.settings.collectionDetModes || {};
     const pendingDets = collectionRows().filter(c => {
@@ -1751,11 +1784,10 @@ const views = {
         </div>
         <div class="kpi-card">
           ${(() => {
-            const wonPENTotal = s.wonPEN.reduce((a,q)=>a+q.total,0);
-            const wonPct = s.goal > 0 ? Math.round(wonPENTotal / s.goal * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas ganadas</span><span class="kpi-pct ${wonPct>=100?"kpi-pct--ok":wonPct>=50?"kpi-pct--warn":"kpi-pct--low"}">${wonPct}% meta</span></div>
-            <div class="kpi-value kpi-value--blue">${fmt(wonPENTotal)}</div>
-            <div class="kpi-sub">${s.wonPEN.length} ${s.wonPEN.length===1?"venta":"ventas"} · periodo</div>`;
+            const pct = s.goal > 0 ? Math.round(_recogPENTotal / s.goal * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span></div>
+            <div class="kpi-value kpi-value--blue">${fmt(_recogPENTotal)}</div>
+            <div class="kpi-sub">${_recogPEN.length} ${_recogPEN.length===1?"cobro":"cobros"} · periodo</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -1795,11 +1827,10 @@ const views = {
         </div>
         <div class="kpi-card">
           ${(() => {
-            const wonUSDTotal = s.wonUSD.reduce((a,q)=>a+q.total,0);
-            const wonPctUSD = s.goalUSD > 0 ? Math.round(wonUSDTotal / s.goalUSD * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas ganadas</span><span class="kpi-pct ${wonPctUSD>=100?"kpi-pct--ok":wonPctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${wonPctUSD}% meta</span></div>
-            <div class="kpi-value kpi-value--blue">${fmt(wonUSDTotal, "USD")}</div>
-            <div class="kpi-sub">${s.wonUSD.length} ${s.wonUSD.length===1?"venta":"ventas"} · periodo</div>`;
+            const pctUSD = s.goalUSD > 0 ? Math.round(_recogUSDTotal / s.goalUSD * 100) : 0;
+            return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pctUSD>=100?"kpi-pct--ok":pctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${pctUSD}% meta</span></div>
+            <div class="kpi-value kpi-value--blue">${fmt(_recogUSDTotal, "USD")}</div>
+            <div class="kpi-sub">${_recogUSD.length} ${_recogUSD.length===1?"cobro":"cobros"} · periodo</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -1998,7 +2029,9 @@ const views = {
 
   },
   sales() {
-    const sales    = sortByDateDesc(wonQuotes().filter(sale => dateInRange(sale.wonDate || sale.date)), s => s.wonDate || s.date);
+    // Ventas reconocidas por cobro: cada cuota pagada cuenta como venta el mes que se cobró (paidDate).
+    const allSales = recognizedSales();
+    const sales    = sortByDateDesc(allSales.filter(s => dateInRange(s.date)), s => s.date);
     const pen      = sales.filter(s => (s.currency || "PEN") === "PEN");
     const usd      = sales.filter(s => s.currency === "USD");
     const sumFld   = (arr, fld) => arr.reduce((sum, s) => sum + (s[fld] || 0), 0);
@@ -2008,12 +2041,12 @@ const views = {
     const usdSinIGV  = sumFld(usd, "subtotal");
     const comPEN   = sumFld(pen, "commission");
     const comUSD   = sumFld(usd, "commission");
-    const penNote  = `Sin IGV: ${fmt(penSinIGV,"PEN")} · ${pen.length} ${pen.length === 1 ? "venta" : "ventas"}`;
-    const usdNote  = `Sin IGV: ${fmt(usdSinIGV,"USD")} · ${usd.length} ${usd.length === 1 ? "venta" : "ventas"}`;
+    const penNote  = `Sin IGV: ${fmt(penSinIGV,"PEN")} · ${pen.length} ${pen.length === 1 ? "cobro" : "cobros"}`;
+    const usdNote  = `Sin IGV: ${fmt(usdSinIGV,"USD")} · ${usd.length} ${usd.length === 1 ? "cobro" : "cobros"}`;
     const comNote  = comUSD > 0 ? `Com. $: ${fmt(comUSD,"USD")}` : "Base comercial";
 
     const _pr = prevRange();
-    const _prevSales = wonQuotes().filter(s => dateInRange(s.wonDate || s.date, _pr));
+    const _prevSales = allSales.filter(s => dateInRange(s.date, _pr));
     const _prevPen   = _prevSales.filter(s => (s.currency || "PEN") === "PEN");
     const _prevUsd   = _prevSales.filter(s => s.currency === "USD");
     const _prevPenIGV = _prevPen.reduce((sum, s) => sum + (s.total || 0), 0);
@@ -2024,7 +2057,7 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Ventas ganadas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, sales.length >= _prevSales.length ? "up" : "down", "", "purple", `${_fmtN(sales.length - _prevSales.length)} vs ${_pr.label}`)}
+        ${metric("Ventas cobradas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, sales.length >= _prevSales.length ? "up" : "down", "", "purple", `${_fmtN(sales.length - _prevSales.length)} vs ${_pr.label}`)}
         ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, penConIGV >= _prevPenIGV ? "up" : "down", "", "amber", `${_fmtS(penConIGV - _prevPenIGV, "S/")} vs ${_pr.label}`)}
         ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, usdConIGV >= _prevUsdIGV ? "up" : "down", "", "blue", `${_fmtS(usdConIGV - _prevUsdIGV, "$")} vs ${_pr.label}`)}
         ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, comPEN >= _prevComPEN ? "up" : "down", "", "coral", `${_fmtS(comPEN - _prevComPEN, "S/")} vs ${_pr.label}`)}
@@ -2033,26 +2066,24 @@ const views = {
         search: "Buscar venta, cliente o servicio",
         filters: `
           <select data-table-filter class="filter-select"><option value="">Todas las monedas</option><option value="PEN">Soles (PEN)</option><option value="USD">Dólares (USD)</option></select>
-          <select data-table-filter class="filter-select"><option value="">Todos los tipos de pago</option><option value="1 pago">1 pago</option><option value="2 pagos">2 pagos</option><option value="3 pagos">3 pagos</option></select>
         `,
         action: "sale",
         metricsToggle: true
       })}
-      ${table(["PPTO","Fecha venta","Servicio","Cliente","Moneda","Sin IGV","Con IGV","IGV","Detracción","Comisión","Cuenta","Tipo pago","Estado","Acciones"], sales.map(s => {
-        const cur      = s.currency || "PEN";
-        const cuotas   = Number(s.cuotas) || 1;
-        const tipoPago = cuotas === 3 ? "3 pagos" : cuotas === 2 ? "2 pagos" : "1 pago";
+      ${table(["PPTO","Fecha cobro","Servicio","Cliente","Moneda","Sin IGV","Con IGV","IGV","Detracción","Comisión","Cuenta","Nro pago","Estado","Acciones"], sales.map(s => {
+        const cur     = s.currency || "PEN";
+        const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
         return [
-          displayCode(s.code), fmtDate(s.wonDate || s.date),
+          displayCode(s.code), fmtDate(s.date),
           `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
           escapeHtml(s.client),
           cur,
-          fmt(s.subtotal, cur), fmt(s.total || (s.subtotal + s.igv), cur), fmt(s.igv, cur),
+          fmt(s.subtotal, cur), fmt(s.total, cur), fmt(s.igv, cur),
           fmt(s.detraction, cur), fmt(s.commission, cur),
           escapeHtml(s.bankAccount || "—"),
-          tipoPago,
+          nroPago,
           badge(s.status),
-          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.quoteId}" type="button">${icon("edit")}<span>Editar</span></button></div>`
         ];
       }), "sales")}`;
 
