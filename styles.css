@@ -1312,96 +1312,15 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   position: relative;
   overflow: visible;
 }
-.metric::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  opacity: .72;
-}
-.metric-purple::after { background: #ddd8ff; }
-.metric-amber::after { background: #ffe7a3; }
-.metric-mint::after { background: #cef7df; }
-.metric-coral::after { background: #ffd8cd; }
-.metric-blue::after { background: #dbe6ff; }
-.metric-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.metric span { color: var(--muted); font-size: 11px; font-weight: 500; text-transform: uppercase; }
-.metric strong { display: block; margin-top: 10px; font-size: 28px; letter-spacing: 0; font-weight: 650; }
-.metric small { color: var(--muted); }
-.metric > * { position: relative; z-index: 1; }
-.metric-icon {
-  position: absolute;
-  top: 50%;
-  right: 18px;
-  transform: translateY(-50%);
-  z-index: 2;
-  color: var(--brand-strong);
-}
-.metric strong,
-.metric small {
-  max-width: calc(100% - 28px);
-}
-.metric-icon .app-icon { width: 38px; height: 38px; }
-.metric-amber .metric-icon { color: #d09500; }
-.metric-mint .metric-icon { color: var(--ok); }
-.metric-coral .metric-icon { color: var(--danger); }
-.trend { font-style: normal; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 500; }
-.trend.up { background: #dffbef; color: #00a889; }
-.trend.down { background: #ffe8ec; color: #ef476f; }
-.metric-trend {
-  position: absolute;
-  top: calc(50% - 24px);
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 700;
-  z-index: 5;
-  border: 2px solid var(--panel);
-  cursor: help;
-  line-height: 1;
-}
-.metric-trend.up   { background: #16a34a; color: #fff; }
-.metric-trend.down { background: #dc2626; color: #fff; }
-body[data-theme="dark"] .metric-trend.up   { background: #22c55e; }
-body[data-theme="dark"] .metric-trend.down { background: #ef4444; }
-.metric-trend[data-tooltip] { cursor: help; }
-.metric-trend[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20,20,30,.92);
-  color: #fff;
-  font-size: 11px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 300;
-  font-weight: 500;
-}
-.metric-trend[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: calc(100% + 3px);
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(20,20,30,.92);
-  pointer-events: none;
-  z-index: 300;
-}
+.metric-label { color: var(--muted); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .02em; }
+.metric strong { display: block; margin-top: 6px; font-size: 28px; letter-spacing: 0; font-weight: 650; }
+.metric small { color: var(--muted); font-size: 12px; }
+.metric-foot { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 8px; margin-top: 6px; }
+.metric-delta { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.metric-delta.up   { color: #16a34a; }
+.metric-delta.down { color: #dc2626; }
+body[data-theme="dark"] .metric-delta.up   { color: #22c55e; }
+body[data-theme="dark"] .metric-delta.down { color: #ef4444; }
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, .7fr); gap: 18px; }
 .panel {
   background: var(--panel);
