@@ -1941,7 +1941,7 @@ const views = {
         </div>
         <div class="panel" data-dash-section="activity">
           <div class="panel-head"><div><h3>Ranking de clientes</h3><p>Quién más compró en el periodo</p></div></div>
-          ${dashClientRanking(s.won)}
+          ${dashClientRanking(_recog)}
         </div>
       </div>
 
@@ -3153,10 +3153,10 @@ function ruleCard(title, copy) {
   return `<article class="panel rule-card"><h4>${title}</h4><p>${copy}</p></article>`;
 }
 
-function dashClientRanking(wonQuotes) {
-  if (!wonQuotes.length) return `<div class="empty-state">Sin ventas ganadas en el periodo.</div>`;
+function dashClientRanking(salesRows) {
+  if (!salesRows.length) return `<div class="empty-state">Sin ventas cobradas en el periodo.</div>`;
   const penMap = new Map(), usdMap = new Map();
-  wonQuotes.forEach(q => {
+  salesRows.forEach(q => {
     const cur = q.currency || "PEN";
     const total = q.total || calcQuote(q).total;
     const map = cur === "USD" ? usdMap : penMap;
