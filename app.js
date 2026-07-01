@@ -3,8 +3,9 @@ const SUPABASE_URL = "https://avjthwvppogqezlljksz.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2anRod3ZwcG9ncWV6bGxqa3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MzM2ODIsImV4cCI6MjA5NzEwOTY4Mn0.xgdZ2WP1sX01LliQztWoy_5NN3so2NxHM3LwzXNbGjY";
 // Route REST API calls through /api/proxy to bypass CORS.
 // Uses _path query param instead of catch-all routing (more reliable on Vercel without a framework).
-// The user's JWT (Authorization) is forwarded so Supabase RLS can resolve auth.uid().
-// credentials:"omit" drops cookies so the request headers stay small (avoids the Vercel 494).
+// NOTE: Authorization (user JWT) is stripped here — forwarding it re-triggers a Vercel 494
+// (header too large). This keeps the app working with the anon key. RLS is OFF for now; a
+// secure approach that doesn't push the big token through Vercel is pending diagnosis.
 const _sbProxyFetch = (input, options = {}) => {
   const url = typeof input === "string" ? input : input.url;
   if (url.includes("/rest/v1/") || url.includes("/storage/v1/")) {
@@ -13,7 +14,15 @@ const _sbProxyFetch = (input, options = {}) => {
     const pathPart = qmark >= 0 ? suffix.slice(0, qmark) : suffix;
     const qsPart = qmark >= 0 ? suffix.slice(qmark + 1) : "";
     const proxyUrl = `${window.location.origin}/api/proxy?_path=${encodeURIComponent(pathPart)}${qsPart ? "&" + qsPart : ""}`;
-    return fetch(proxyUrl, { ...options, credentials: "omit" });
+    const opts = { ...options, credentials: "omit" };
+    if (opts.headers) {
+      const h = typeof opts.headers?.entries === "function"
+        ? Object.fromEntries(opts.headers.entries())
+        : { ...opts.headers };
+      delete h.authorization;
+      opts.headers = h;
+    }
+    return fetch(proxyUrl, opts);
   }
   return fetch(input, options);
 };
