@@ -6042,8 +6042,11 @@ profileForm.addEventListener("submit", async event => {
   } else if (!img?.src || !img.src.startsWith("data:")) {
     localStorage.removeItem("nebumia-profile-photo");
   }
-  // sync everything to Supabase user metadata
-  const sbMeta = { name: updates.name, companyName: updates.companyName, photo: photoThumb };
+  // sync name/company to Supabase user metadata. NEVER store the photo here: user_metadata
+  // is embedded in every access-token JWT, and a base64 photo bloats it to ~60KB, which
+  // breaks REST calls (Vercel 494 / rejected direct). photo:null clears any old bloat.
+  // The photo lives in localStorage (per device); it no longer travels in the token.
+  const sbMeta = { name: updates.name, companyName: updates.companyName, photo: null };
   if (newPwd) sb.auth.updateUser({ password: newPwd, data: sbMeta }).catch(() => {});
   else sb.auth.updateUser({ data: sbMeta }).catch(() => {});
   syncProfileUI();
