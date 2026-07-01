@@ -124,7 +124,7 @@ async function sbLoad() {
     sb.from("sales_targets").select("*").eq("user_id", uid),
   ]);
   const names = ["clients","leads","quotes","collections","expenses","team","taxPayments","purchases","invoicedSales","cashEntries","declaraciones","settings","salesTargets"];
-  results.forEach((r, i) => { if (r.error) console.error(`sbLoad[${names[i]}]:`, r.error.message, r.error); else console.log(`sbLoad[${names[i]}]:`, r.data?.length ?? r.data); });
+  results.forEach((r, i) => { if (r.error) console.error(`sbLoad[${names[i]}]:`, r.error.message); });
   const [
     { data: clients }, { data: leads }, { data: quotes }, { data: collections },
     { data: expenses }, { data: team }, { data: taxPayments }, { data: purchases },
@@ -136,7 +136,6 @@ async function sbLoad() {
   // Otherwise Supabase is always the source of truth (changes sync via saveState → sbSync).
   const sbCount = [clients,leads,quotes,collections,expenses,team,taxPayments,purchases,invoicedSales,cashEntries,declaraciones]
     .reduce((n, a) => n + (a?.length || 0), 0);
-  console.log(`sbLoad: sbCount=${sbCount}`);
   if (sbCount === 0) {
     const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
     const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);

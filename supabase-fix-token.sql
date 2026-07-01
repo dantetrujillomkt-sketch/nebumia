@@ -6,17 +6,19 @@
 -- Ejecutar en: Supabase → SQL Editor → New query → Run
 -- ================================================================
 
+-- Cuenta de la app: dante@bandu.pe (NO dante.trujillo96@gmail.com)
+
 -- 1) Ver el tamaño actual del metadata (antes):
 select email, length(raw_user_meta_data::text) as tamano_metadata
 from auth.users
-where email = 'dante.trujillo96@gmail.com';
+where email = 'dante@bandu.pe';
 
 -- 2) Quitar la foto:
 update auth.users
 set raw_user_meta_data = raw_user_meta_data - 'photo'
-where email = 'dante.trujillo96@gmail.com';
+where email = 'dante@bandu.pe';
 
 -- 3) Confirmar el tamaño después (debe ser mucho menor):
 select email, length(raw_user_meta_data::text) as tamano_metadata
 from auth.users
-where email = 'dante.trujillo96@gmail.com';
+where email = 'dante@bandu.pe';
