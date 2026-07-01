@@ -15,7 +15,8 @@ module.exports = async function handler(req, res) {
   const url = `${SUPABASE}/${sbPath}${rest ? "?" + rest : ""}`;
 
   const headers = {};
-  for (const h of ["apikey", "content-type", "prefer", "accept", "x-client-info", "range"]) {
+  // "authorization" carries the user's JWT so Supabase RLS can resolve auth.uid().
+  for (const h of ["apikey", "authorization", "content-type", "prefer", "accept", "x-client-info", "range"]) {
     if (req.headers[h]) headers[h] = req.headers[h];
   }
 
