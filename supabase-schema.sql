@@ -136,8 +136,11 @@ create table public.settings (
   categories jsonb default '[]',
   sources jsonb default '[]',
   profiles jsonb default '[]',
+  photo text,
   updated_at timestamptz default now()
 );
+-- Si la tabla settings ya existe, agrega la columna de la foto de perfil:
+-- alter table public.settings add column if not exists photo text;
 
 create table public.sales_targets (
   user_id uuid references auth.users(id) on delete cascade not null,

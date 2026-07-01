@@ -72,7 +72,7 @@ async function sbSyncSettings() {
     vendors: state.vendors || [],
     updated_at: new Date().toISOString()
   };
-  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {}, tax_payment_collections: s.taxPaymentCollections || {}, fixed_expense_overrides: s.fixedExpenseOverrides || {} }, { onConflict: "user_id" });
+  const { error } = await sb.from("settings").upsert({ ...base, saldos_iniciales: s.saldosIniciales || [], detraction_account: s.detractionAccount || "Detracciones", collection_det_modes: s.collectionDetModes || {}, tax_payment_collections: s.taxPaymentCollections || {}, fixed_expense_overrides: s.fixedExpenseOverrides || {}, photo: localStorage.getItem("nebumia-profile-photo") || null }, { onConflict: "user_id" });
   if (error) await sb.from("settings").upsert(base, { onConflict: "user_id" });
 }
 
@@ -168,6 +168,8 @@ async function sbLoad() {
     state.sources    = settings.sources    || base.sources;
     state.profiles   = settings.profiles   || base.profiles;
     state.vendors    = settings.vendors    || [];
+    // Profile photo syncs via the settings row (never in the JWT). Apply it on this device.
+    if (settings.photo) localStorage.setItem("nebumia-profile-photo", settings.photo);
   }
   if (salesTargets?.length) {
     const map = {};
@@ -6006,7 +6008,7 @@ profileForm.addEventListener("submit", async event => {
   const updates = { name: form.get("profileName"), email: form.get("profileEmail"), companyName: form.get("companyName") || "" };
   if (newPwd) updates.password = newPwd;
   saveAuth(updates);
-  // handle photo: compress and sync to Supabase metadata
+  // handle photo: compress and store in localStorage; it syncs across devices via the settings row
   const photoInput = document.getElementById("profilePhotoInput");
   const img = document.getElementById("profilePhotoImg");
   let photoThumb = null;
@@ -6019,6 +6021,8 @@ profileForm.addEventListener("submit", async event => {
   } else if (!img?.src || !img.src.startsWith("data:")) {
     localStorage.removeItem("nebumia-profile-photo");
   }
+  // Push the photo to Supabase (in the settings row, NOT the token) so other devices get it.
+  sbSyncSettings().catch(() => {});
   // sync name/company to Supabase user metadata. NEVER store the photo here: user_metadata
   // is embedded in every access-token JWT, and a base64 photo bloats it to ~60KB, which
   // breaks REST calls (Vercel 494 / rejected direct). photo:null clears any old bloat.
