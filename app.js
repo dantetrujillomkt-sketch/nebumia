@@ -4493,9 +4493,13 @@ function openQuoteDialog(q = null, isNewFromLead = false) {
         </div>
       </div>
       <label>Estado<select name="status">${options(quoteStatuses, item.status)}</select></label>
+      <label>Tipo de pago<select name="cuotas">
+        <option value="1" ${(item.cuotas || 2) == 1 ? "selected" : ""}>1 pago</option>
+        <option value="2" ${(item.cuotas || 2) == 2 ? "selected" : ""}>2 pagos</option>
+        <option value="3" ${(item.cuotas || 2) == 3 ? "selected" : ""}>3 pagos</option>
+      </select></label>
       <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${item.bankAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}</select></label>
       <input name="leadId" type="hidden" value="${escapeAttr(item.leadId || "")}">
-      <input name="cuotas" type="hidden" value="${item.cuotas || 2}">
       <label class="full">Repositorio (Drive)<input name="repo" value="${escapeAttr(item.repo)}" placeholder="https://drive.google.com/..."></label>
       <label class="full">Comentarios<textarea name="comments" rows="3">${escapeHtml(item.comments)}</textarea></label>
     </div>
