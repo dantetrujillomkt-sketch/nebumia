@@ -180,9 +180,10 @@ async function sbLoad() {
   syncClientsFromActivity(state);
   const codeChanged = applyCodePadding(state);
   const bankChanged = applyBankAccountDefaults(state);
+  const detChanged = applyDetractionThreshold(state);
   // Restore repo links from localStorage if Supabase had them empty (migration from pre-proxy era)
   const repoRestored = state.collections.some(c => c.repo && !(collections || []).find(r => r.id === c.id)?.repo);
-  if (codeChanged || bankChanged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
+  if (codeChanged || bankChanged || detChanged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -697,6 +698,7 @@ function migrateState(input) {
   syncClientsFromActivity(migrated);
   applyCodePadding(migrated);
   applyBankAccountDefaults(migrated);
+  applyDetractionThreshold(migrated);
   return migrated;
 }
 
@@ -1135,9 +1137,17 @@ function calcQuote(q, sourceState = state) {
   const total = q.subtotal + igv;
   const isUSD = q.currency === "USD";
   const threshold = isUSD ? DETRACTION_THRESHOLD_USD : (sourceState.settings.detractionThreshold ?? DETRACTION_THRESHOLD);
-  const detraction = total >= threshold && q.hasIgv ? total * sourceState.settings.detractionRate : 0;
+  const rate = sourceState.settings.detractionRate;
+  // La detracción se evalúa POR COBRO (cada pago es su propia factura): un cobro <= umbral no paga detracción.
+  const parts = detractionParts(Number(q.cuotas) || 1);
+  const detraction = q.hasIgv ? parts.reduce((s, p) => { const amt = total * p; return s + (amt >= threshold ? amt * rate : 0); }, 0) : 0;
   const commission = q.subtotal * sourceState.settings.commissionRate;
   return { igv, total, detraction, commission, netCash: total - detraction };
+}
+
+// Fracciones de cada cobro según el número de cuotas (1, 2 o 3 pagos).
+function detractionParts(cuotas) {
+  return cuotas === 3 ? [1/3, 1/3, 1/3] : cuotas === 2 ? [0.5, 0.5] : [1];
 }
 
 function wonQuotes() {
@@ -1632,13 +1642,17 @@ function syncQuoteSideEffects(targetState, q) {
   const calc = calcQuote(q, targetState);
   const existing = targetState.collections.filter(c => c.quoteId === q.id);
   const cuotas = Number(q.cuotas) || 1;
-  const parts = cuotas === 3 ? [1/3, 1/3, 1/3] : cuotas === 2 ? [0.5, 0.5] : [1];
+  const parts = detractionParts(cuotas);
   const totalParts = parts.length;
+  const isUSD = (q.currency || "PEN") === "USD";
+  const detThreshold = isUSD ? DETRACTION_THRESHOLD_USD : (targetState.settings.detractionThreshold ?? DETRACTION_THRESHOLD);
+  const detRate = targetState.settings.detractionRate;
   const next = parts.map((part, index) => {
     const old = existing.find(c => c.part === index + 1) || {};
     const label = totalParts === 1 ? "Pago 100%" : `Pago ${index + 1}/${totalParts}`;
     const isPending = !old.status || old.status === "Pendiente";
     const dueDate = (!isPending && old.dueDate) ? old.dueDate : (index === 0 ? (q.wonDate || q.date) : (old.dueDate || ""));
+    const partAmount = calc.total * part;
     return {
       id: old.id || uid(),
       quoteId: q.id,
@@ -1646,8 +1660,8 @@ function syncQuoteSideEffects(targetState, q) {
       part: index + 1,
       label,
       dueDate,
-      amount: calc.total * part,
-      detraction: calc.detraction * part,
+      amount: partAmount,
+      detraction: (q.hasIgv && partAmount >= detThreshold) ? partAmount * detRate : 0,
       status: old.status || "Pendiente",
       paidDate: old.paidDate || "",
       invoice: index === 0 ? (q.invoice || old.invoice || "") : (old.invoice || ""),
@@ -5105,6 +5119,22 @@ function applyBankAccountDefaults(st) {
         changed = true;
       }
     }
+  });
+  return changed;
+}
+
+// Recalcula la detracción de cada cobro según SU propio monto (umbral por cobro, no por total de cotización).
+function applyDetractionThreshold(st) {
+  const rate = st.settings.detractionRate ?? DETRACTION_RATE;
+  let changed = false;
+  (st.collections || []).forEach(c => {
+    const q = (st.quotes || []).find(x => x.id === c.quoteId);
+    if (!q) return; // sin cotización no podemos determinar el tratamiento de IGV
+    const isUSD = (c.currency || q.currency) === "USD";
+    const threshold = isUSD ? DETRACTION_THRESHOLD_USD : (st.settings.detractionThreshold ?? DETRACTION_THRESHOLD);
+    const amount = Number(c.amount) || 0;
+    const correct = (q.hasIgv && amount >= threshold) ? amount * rate : 0;
+    if (Math.abs((Number(c.detraction) || 0) - correct) > 0.01) { c.detraction = correct; changed = true; }
   });
   return changed;
 }
