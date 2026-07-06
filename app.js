@@ -4928,7 +4928,10 @@ function openCashEntryDialog(type = "egreso", entry = null) {
   const catOptions = isIngreso
     ? ["Cobro de venta", "Adelanto", "Otro ingreso"]
     : ["Gasto fijo", "Gasto variable", "Personal", "Impuesto", "Inversión", "Otro egreso"];
-  const bankOpts = (state.settings.bankAccounts || []);
+  // Include the detractions account so payments can be recorded from it, not just bank accounts.
+  const detAccount = state.settings.detractionAccount || "Detracciones";
+  const bankOpts = [...(state.settings.bankAccounts || [])];
+  if (!bankOpts.includes(detAccount)) bankOpts.push(detAccount);
   dialogShell("cashEntry", editingId ? "Editar movimiento" : (isIngreso ? "Nuevo ingreso" : "Nuevo egreso"), `
     <div class="form-grid">
       <input type="hidden" name="type" value="${isIngreso ? "ingreso" : "egreso"}">
