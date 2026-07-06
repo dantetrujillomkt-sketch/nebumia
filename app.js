@@ -2599,8 +2599,8 @@ const views = {
                 fmt(subtotal, r.currency), fmt(igv, r.currency), fmt(r.amount, r.currency),
                 fmt(detActual, "PEN"), `<span class="status cliente">Cliente</span>`, "—"] };
           }).filter(Boolean);
-          // Detracciones manuales nuestras: taxPayments Pagado
-          const manualDets = taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado").map(t => {
+          // Detracciones manuales nuestras: taxPayments Pagado en el periodo seleccionado
+          const manualDets = taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado" && dateInRange(t.date)).map(t => {
             const linkedCid = t.collectionId || (state.settings.taxPaymentCollections || {})[t.id] || "";
             const linked = linkedCid ? invoicedSales.find(r => r.id === linkedCid) : null;
             const nroPago = linked ? (linked.label === "Pago 100%" ? "1/1" : (linked.label || "").replace("Pago ", "")) : "—";
