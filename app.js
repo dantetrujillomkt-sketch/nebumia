@@ -1235,21 +1235,19 @@ async function ensureTc(dates) {
 // Calcula el Formulario 0621 del periodo: IGV a pagar (ventas − compras), renta 1% y total,
 // consolidando USD → soles al TC venta de la fecha de cada comprobante.
 function computeDeclaracion(range = dashboardRange) {
-  const igvRate = state.settings.igvRate || 0.18;
   const inRange = d => d && d >= range.start && d <= range.end;
-  const sales = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && inRange(r.dueDate || r.wonDate));
+  // La declaración SUNAT va por las FACTURAS EMITIDAS del mes (por su fecha de emisión), no por los cobros.
+  const facturas = (state.invoicedSales || []).filter(f => inRange(f.date));
   const purchases = (state.purchases || []).filter(p => inRange(p.date));
   const missingTc = new Set();
   let ventasGravadasBase = 0, ingresosNetos = 0, igvVentas = 0, usdSales = 0;
-  sales.forEach(s => {
-    const date = s.dueDate || s.wonDate;
+  facturas.forEach(f => {
     let tc = 1;
-    if ((s.currency || "PEN") === "USD") { const v = getTcVenta(date); if (v == null) { missingTc.add(date); return; } tc = v; usdSales++; }
-    const con = s.amount;
-    const base = (s.quote?.hasIgv ? con / (1 + igvRate) : con) * tc;
-    const igv  = (s.quote?.hasIgv ? con - con / (1 + igvRate) : 0) * tc;
+    if ((f.currency || "PEN") === "USD") { const v = getTcVenta(f.date); if (v == null) { missingTc.add(f.date); return; } tc = v; usdSales++; }
+    const base = (Number(f.subtotal) || 0) * tc;
+    const igv  = (Number(f.igv) || 0) * tc;
     ingresosNetos += base;
-    if (s.quote?.hasIgv) { ventasGravadasBase += base; igvVentas += igv; }
+    if (igv > 0) { ventasGravadasBase += base; igvVentas += igv; }
   });
   let comprasBase = 0, igvCompras = 0;
   purchases.forEach(p => {
@@ -1267,7 +1265,7 @@ function computeDeclaracion(range = dashboardRange) {
     ventasGravadasBase: round(ventasGravadasBase), ingresosNetos: round(ingresosNetos),
     igvVentas: igvVentasR, comprasBase: round(comprasBase), igvCompras: igvComprasR,
     igvAPagar, renta, rentaRate, total: igvAPagar + renta,
-    usdSales, missingTc: [...missingTc], salesCount: sales.length, purchasesCount: purchases.length
+    usdSales, missingTc: [...missingTc], salesCount: facturas.length, purchasesCount: purchases.length
   };
 }
 
