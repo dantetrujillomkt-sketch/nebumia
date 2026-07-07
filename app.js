@@ -1202,6 +1202,108 @@ function autoDetraction(c, dm) {
   return c.detraction ? Math.round(c.detraction) : 0;
 }
 
+// ── TIPO DE CAMBIO SUNAT + DECLARACIÓN F0621 ──────────────
+const TC_CACHE_KEY = "nebumia-tc-cache";
+function getTcCache() { try { return JSON.parse(localStorage.getItem(TC_CACHE_KEY) || "{}"); } catch { return {}; } }
+// TC venta para una fecha: primero override manual, luego lo cacheado de SUNAT.
+function getTcVenta(date) {
+  const ov = (state.settings.tcOverrides || {})[date];
+  if (ov) return Number(ov);
+  const c = getTcCache();
+  return c[date] ? Number(c[date].venta) : null;
+}
+let _tcFetching = false;
+async function ensureTc(dates) {
+  const c = getTcCache();
+  const overrides = state.settings.tcOverrides || {};
+  const missing = [...new Set(dates)].filter(d => d && !c[d] && !overrides[d]);
+  if (!missing.length || _tcFetching) return false;
+  _tcFetching = true;
+  try {
+    const results = await Promise.all(missing.map(async d => {
+      try { const r = await fetch(`/api/tipocambio?date=${d}`); if (!r.ok) return null; const j = await r.json(); return { d, venta: j.venta, compra: j.compra }; }
+      catch { return null; }
+    }));
+    const cache = getTcCache();
+    let got = false;
+    results.forEach(x => { if (x && x.venta) { cache[x.d] = { venta: x.venta, compra: x.compra }; got = true; } });
+    if (got) localStorage.setItem(TC_CACHE_KEY, JSON.stringify(cache));
+    return got;
+  } finally { _tcFetching = false; }
+}
+
+// Calcula el Formulario 0621 del periodo: IGV a pagar (ventas − compras), renta 1% y total,
+// consolidando USD → soles al TC venta de la fecha de cada comprobante.
+function computeDeclaracion(range = dashboardRange) {
+  const igvRate = state.settings.igvRate || 0.18;
+  const inRange = d => d && d >= range.start && d <= range.end;
+  const sales = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && inRange(r.dueDate || r.wonDate));
+  const purchases = (state.purchases || []).filter(p => inRange(p.date));
+  const missingTc = new Set();
+  let ventasGravadasBase = 0, ingresosNetos = 0, igvVentas = 0, usdSales = 0;
+  sales.forEach(s => {
+    const date = s.dueDate || s.wonDate;
+    let tc = 1;
+    if ((s.currency || "PEN") === "USD") { const v = getTcVenta(date); if (v == null) { missingTc.add(date); return; } tc = v; usdSales++; }
+    const con = s.amount;
+    const base = (s.quote?.hasIgv ? con / (1 + igvRate) : con) * tc;
+    const igv  = (s.quote?.hasIgv ? con - con / (1 + igvRate) : 0) * tc;
+    ingresosNetos += base;
+    if (s.quote?.hasIgv) { ventasGravadasBase += base; igvVentas += igv; }
+  });
+  let comprasBase = 0, igvCompras = 0;
+  purchases.forEach(p => {
+    let tc = 1;
+    if ((p.currency || "PEN") === "USD") { const v = getTcVenta(p.date); if (v == null) { missingTc.add(p.date); return; } tc = v; }
+    comprasBase += (Number(p.subtotal) || 0) * tc;
+    igvCompras  += (Number(p.igv) || 0) * tc;
+  });
+  const round = n => Math.round(n);
+  const igvVentasR = round(igvVentas), igvComprasR = round(igvCompras);
+  const igvAPagar = Math.max(0, igvVentasR - igvComprasR);
+  const rentaRate = state.settings.rentaRate ?? 0.01;
+  const renta = round(round(ingresosNetos) * rentaRate);
+  return {
+    ventasGravadasBase: round(ventasGravadasBase), ingresosNetos: round(ingresosNetos),
+    igvVentas: igvVentasR, comprasBase: round(comprasBase), igvCompras: igvComprasR,
+    igvAPagar, renta, rentaRate, total: igvAPagar + renta,
+    usdSales, missingTc: [...missingTc], salesCount: sales.length, purchasesCount: purchases.length
+  };
+}
+
+function declaracionPanel(dec) {
+  const _pl = new Date(dashboardRange.start + "T00:00:00");
+  const periodo = _pl.toLocaleString("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase());
+  const loading = dec.missingTc.length ? `<span style="font-size:12px;color:var(--muted)">⏳ Cargando tipo de cambio SUNAT…</span>` : "";
+  const usdNote = dec.usdSales ? ` · incluye ${dec.usdSales} en US$ convertidas al TC SUNAT` : "";
+  const R = "text-align:right";
+  return `
+    <section class="comp-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <h2 class="comp-section-title" style="margin:0">Declaración SUNAT · Formulario 0621 · ${periodo}</h2>
+        ${loading}
+      </div>
+      <div class="metric-grid" style="margin-top:12px">
+        ${metric("IGV a pagar", fmt(dec.igvAPagar), `IGV ventas ${fmt(dec.igvVentas)} − compras ${fmt(dec.igvCompras)}`, "", "", "amber")}
+        ${metric("Renta MYPE (1%)", fmt(dec.renta), `1% de ingresos ${fmt(dec.ingresosNetos)}`, "", "", "purple")}
+        ${metric("Total a pagar", fmt(dec.total), "IGV a pagar + Renta", "", "", "coral")}
+      </div>
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead><tr><th>Concepto</th><th style="${R}">Base (S/)</th><th style="${R}">Tributo (S/)</th></tr></thead>
+          <tbody>
+            <tr><td>Ventas gravadas${usdNote}</td><td style="${R}">${fmt(dec.ventasGravadasBase)}</td><td style="${R}">${fmt(dec.igvVentas)}</td></tr>
+            <tr><td>Compras · crédito fiscal (${dec.purchasesCount} comprobante${dec.purchasesCount === 1 ? "" : "s"})</td><td style="${R}">${fmt(dec.comprasBase)}</td><td style="${R}">${fmt(dec.igvCompras)}</td></tr>
+            <tr><td><strong>IGV a pagar</strong> (ventas − compras)</td><td></td><td style="${R}"><strong>${fmt(dec.igvAPagar)}</strong></td></tr>
+            <tr><td>Renta · 1% de ingresos netos</td><td style="${R}">${fmt(dec.ingresosNetos)}</td><td style="${R}"><strong>${fmt(dec.renta)}</strong></td></tr>
+            <tr><td><strong>TOTAL A PAGAR SUNAT</strong></td><td></td><td style="${R}"><strong>${fmt(dec.total)}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:8px">Cálculo automático desde tus ventas facturadas y compras del periodo. Los montos en dólares se convierten al tipo de cambio <strong>venta</strong> de SUNAT según la fecha de cada comprobante.</p>
+    </section>`;
+}
+
 function collectionRows() {
   return state.collections.map(c => {
     const quote = state.quotes.find(q => q.id === c.quoteId);
@@ -2506,6 +2608,8 @@ const views = {
         </div>
       </div>
 
+      ${declaracionPanel(computeDeclaracion())}
+
       <div class="comp-section">
         <h2 class="comp-section-title">Registro de ventas</h2>
         ${table(["Fecha", "Concepto", "Razón Social", "Factura", "Fecha RP", "Total", "Detracción", "Monto a recibir", "Cuenta", "Nro pago", "Repositorio", "Estado", "Acciones"], invoicedSales.filter(s => s.quote?.hasIgv).map(s => {
@@ -3359,6 +3463,11 @@ function bindMetricsToggle() {
 }
 
 function bindViewEvents() {
+  // Contabilidad: si faltan tipos de cambio para las ventas en US$, los jala de SUNAT y refresca.
+  if (activeView === "comprobantes") {
+    const _dec = computeDeclaracion();
+    if (_dec.missingTc.length) ensureTc(_dec.missingTc).then(got => { if (got && activeView === "comprobantes") render(); });
+  }
   document.getElementById("revenueChartTabs")?.addEventListener("click", e => {
     const btn = e.target.closest("[data-acct]");
     if (!btn) return;
