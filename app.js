@@ -5069,7 +5069,9 @@ function openInvoicedSaleDialog(sale = null) {
 
 function openCashEntryDialog(type = "egreso", entry = null) {
   const defaultBank = activeCajaTab && activeCajaTab !== "general" ? activeCajaTab : (state.settings.bankAccounts?.[0] || "");
-  const item = entry || newCashEntry({ type, bankAccount: defaultBank });
+  // La moneda por defecto sigue la cuenta activa (misma regla que usa la pestaña de Caja para tabCurrency).
+  const defaultCurrency = defaultBank && /\$|USD/i.test(defaultBank) ? "USD" : "PEN";
+  const item = entry || newCashEntry({ type, bankAccount: defaultBank, currency: defaultCurrency });
   editingId = entry?.id || "";
   const isIngreso = (entry?.type || type) === "ingreso";
   const catOptions = isIngreso
