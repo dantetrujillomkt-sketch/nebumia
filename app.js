@@ -1897,7 +1897,7 @@ const views = {
       <!-- KPIs -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalPctPEN, s.wonThisMonthPEN, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel)}
+          ${gaugeKpi(s.goal > 0 ? Math.min(100, Math.round(_recogPENTotal / s.goal * 100)) : 0, _recogPENTotal, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel)}
         </div>
         <div class="kpi-card">
           ${(() => {
@@ -1940,7 +1940,7 @@ const views = {
       <!-- KPIs USD -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalPctUSD, s.wonThisMonthUSD, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel)}
+          ${gaugeKpi(s.goalUSD > 0 ? Math.min(100, Math.round(_recogUSDTotal / s.goalUSD * 100)) : 0, _recogUSDTotal, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel)}
         </div>
         <div class="kpi-card">
           ${(() => {
