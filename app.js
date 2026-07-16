@@ -5132,7 +5132,8 @@ function openFixedExpenseBankDialog(id, month) {
 }
 
 function openExpenseRecurBankDialog(id, month) {
-  const e = (state.expenses || []).find(x => x.id === id);
+  // Estas filas virtuales vienen de state.cashEntries (categoría "Gasto fijo"), no de state.expenses.
+  const e = (state.cashEntries || []).find(x => x.id === id);
   if (!e) return;
   editingId = id;
   const bankOpts = state.settings.bankAccounts || [];
@@ -5202,7 +5203,7 @@ function saveFixedExpenseBank(data) {
   const keyPrefix = isRecur ? `expense-${id}-` : `${id}-`;
 
   if (isRecur) {
-    const e = (state.expenses || []).find(x => x.id === id);
+    const e = (state.cashEntries || []).find(x => x.id === id);
     if (!e) return;
   } else {
     const fe = (state.settings.fixedExpenses || []).find(f => f.id === id);
@@ -5210,7 +5211,7 @@ function saveFixedExpenseBank(data) {
   }
 
   if (data.scope === "always") {
-    if (isRecur) (state.expenses.find(x => x.id === id)).bankAccount = data.bankAccount || "";
+    if (isRecur) (state.cashEntries.find(x => x.id === id)).bankAccount = data.bankAccount || "";
     else (state.settings.fixedExpenses.find(f => f.id === id)).assignedAccount = data.bankAccount || "";
     // Limpia los overrides de cuenta ahora redundantes, preservando cualquier estado de mes ya guardado.
     Object.keys(overrides).forEach(k => {
