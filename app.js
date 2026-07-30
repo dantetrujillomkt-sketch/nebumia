@@ -1474,10 +1474,16 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
     const fe = new Date(toMonth  + "-01T00:00:00");
     while (fc < fe) {
       const d = isoDate(fc);
-      fixedAssigned.forEach(f => result.push({
-        date: d, type: "egreso", amount: f.amount, currency: f.currency,
-        bankAccount: f.assignedAccount || ""
-      }));
+      const mk = d.substring(0, 7);
+      fixedAssigned.forEach(f => {
+        const ov = readFixedOverride(`${f.id}-${mk}`);
+        result.push({
+          date: d, type: "egreso",
+          amount: ov.amount !== undefined ? ov.amount : f.amount,
+          currency: f.currency,
+          bankAccount: ov.bankAccount !== undefined ? ov.bankAccount : (f.assignedAccount || "")
+        });
+      });
       fc.setMonth(fc.getMonth() + 1);
     }
     return result;
@@ -2298,6 +2304,7 @@ const views = {
           const monthKey = monthStr.substring(0, 7);
           const ov = readFixedOverride(`${f.id}-${monthKey}`);
           const account = ov.bankAccount !== undefined ? ov.bankAccount : (f.assignedAccount || "");
+          const amount = ov.amount !== undefined ? ov.amount : f.amount;
           // Los meses cerrados mantienen el comportamiento histórico (contados); el mes
           // actual y futuros arrancan "Pendiente" hasta que se marquen como Pagado.
           const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
@@ -2307,7 +2314,7 @@ const views = {
             type: "egreso",
             concept: f.concept,
             category: f.category || "Gasto fijo",
-            amount: f.amount,
+            amount,
             currency: f.currency,
             status,
             source: "Fijo",
@@ -2332,6 +2339,7 @@ const views = {
           if (monthKey <= e.date.substring(0, 7)) return; // skip original month and prior
           const ov = readFixedOverride(`expense-${e.id}-${monthKey}`);
           const account = ov.bankAccount !== undefined ? ov.bankAccount : (e.bankAccount || "");
+          const amount = ov.amount !== undefined ? ov.amount : e.amount;
           const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
           const origDay = new Date(e.date + "T00:00:00").getDate();
           const daysInMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
@@ -2342,7 +2350,7 @@ const views = {
             type: "egreso",
             concept: e.concept,
             category: "Gasto fijo",
-            amount: e.amount,
+            amount,
             currency: e.currency,
             status,
             source: "Fijo",
@@ -5113,6 +5121,7 @@ function openFixedExpenseBankDialog(id, month) {
   const bankOpts = (state.settings.bankAccounts || []);
   const ov = month ? readFixedOverride(`${id}-${month}`) : {};
   const currentAccount = ov.bankAccount !== undefined ? ov.bankAccount : (fe.assignedAccount || "");
+  const currentAmount = ov.amount !== undefined ? ov.amount : fe.amount;
   const currentStatus = ov.status || (isPastMonth(month) ? "Pagado" : "Pendiente");
   const monthLabel = month ? new Date(month + "-01T00:00:00").toLocaleString("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : "";
   dialogShell("fixedExpenseBank", "Editar gasto fijo", `
@@ -5121,11 +5130,12 @@ function openFixedExpenseBankDialog(id, month) {
       <input type="hidden" name="month" value="${escapeAttr(month || "")}">
       <label class="full" style="font-weight:600">${escapeHtml(fe.concept)}${monthLabel ? " · " + escapeHtml(monthLabel) : ""}</label>
       <label class="full">Estado de este mes<select name="status">${fixedStatusOptions(currentStatus)}</select></label>
-      <label class="full">Cuenta bancaria<select name="bankAccount">
+      <label>Monto (${fe.currency === "USD" ? "US$" : "S/"})<input name="amount" type="number" step="0.01" min="0" value="${currentAmount}"></label>
+      <label>Cuenta bancaria<select name="bankAccount">
         <option value="">— Sin cuenta —</option>
         ${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${currentAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}
       </select></label>
-      <label class="full">Cuenta bancaria aplica a<select name="scope">
+      <label class="full">Monto y cuenta aplican a<select name="scope">
         ${month ? `<option value="month">Solo ${monthLabel}</option>` : ""}
         <option value="always">Siempre (todos los meses)</option>
       </select></label>
@@ -5141,6 +5151,7 @@ function openExpenseRecurBankDialog(id, month) {
   const bankOpts = state.settings.bankAccounts || [];
   const ov = readFixedOverride(`expense-${id}-${month}`);
   const currentAccount = ov.bankAccount !== undefined ? ov.bankAccount : (e.bankAccount || "");
+  const currentAmount = ov.amount !== undefined ? ov.amount : e.amount;
   const currentStatus = ov.status || (isPastMonth(month) ? "Pagado" : "Pendiente");
   const monthLabel = month ? new Date(month + "-01T00:00:00").toLocaleString("es-PE", { month: "long", year: "numeric", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : "";
   dialogShell("fixedExpenseBank", "Editar gasto fijo", `
@@ -5150,11 +5161,12 @@ function openExpenseRecurBankDialog(id, month) {
       <input type="hidden" name="isExpenseRecur" value="1">
       <label class="full" style="font-weight:600">${escapeHtml(e.concept)}${monthLabel ? " · " + escapeHtml(monthLabel) : ""}</label>
       <label class="full">Estado de este mes<select name="status">${fixedStatusOptions(currentStatus)}</select></label>
-      <label class="full">Cuenta bancaria<select name="bankAccount">
+      <label>Monto (${e.currency === "USD" ? "US$" : "S/"})<input name="amount" type="number" step="0.01" min="0" value="${currentAmount}"></label>
+      <label>Cuenta bancaria<select name="bankAccount">
         <option value="">— Sin cuenta —</option>
         ${bankOpts.map(a => `<option value="${escapeAttr(a)}" ${currentAccount === a ? "selected" : ""}>${escapeHtml(a)}</option>`).join("")}
       </select></label>
-      <label class="full">Cuenta bancaria aplica a<select name="scope">
+      <label class="full">Monto y cuenta aplican a<select name="scope">
         ${month ? `<option value="month">Solo ${monthLabel}</option>` : ""}
         <option value="always">Siempre (todos los meses)</option>
       </select></label>
@@ -5203,19 +5215,18 @@ function saveFixedExpenseBank(data) {
   const monthKey = data.month || "";
   const isRecur = data.isExpenseRecur === "1";
   const keyPrefix = isRecur ? `expense-${id}-` : `${id}-`;
+  const amount = data.amount !== undefined && data.amount !== "" ? Number(data.amount) : undefined;
 
-  if (isRecur) {
-    const e = (state.cashEntries || []).find(x => x.id === id);
-    if (!e) return;
-  } else {
-    const fe = (state.settings.fixedExpenses || []).find(f => f.id === id);
-    if (!fe) return;
-  }
+  const record = isRecur
+    ? (state.cashEntries || []).find(x => x.id === id)
+    : (state.settings.fixedExpenses || []).find(f => f.id === id);
+  if (!record) return;
 
   if (data.scope === "always") {
-    if (isRecur) (state.cashEntries.find(x => x.id === id)).bankAccount = data.bankAccount || "";
-    else (state.settings.fixedExpenses.find(f => f.id === id)).assignedAccount = data.bankAccount || "";
-    // Limpia los overrides de cuenta ahora redundantes, preservando cualquier estado de mes ya guardado.
+    if (isRecur) record.bankAccount = data.bankAccount || "";
+    else record.assignedAccount = data.bankAccount || "";
+    if (amount != null) record.amount = amount;
+    // Limpia los overrides de cuenta/monto ahora redundantes, preservando cualquier estado de mes ya guardado.
     Object.keys(overrides).forEach(k => {
       if (!k.startsWith(keyPrefix)) return;
       const cur = overrides[k];
@@ -5224,10 +5235,12 @@ function saveFixedExpenseBank(data) {
       else delete overrides[k];
     });
   } else if (monthKey) {
-    overrides[keyPrefix + monthKey] = { bankAccount: data.bankAccount || "", status };
+    const ov = { bankAccount: data.bankAccount || "", status };
+    if (amount != null) ov.amount = amount;
+    overrides[keyPrefix + monthKey] = ov;
   }
   // El estado (Pendiente/Pagado/Exonerado) del mes editado siempre se guarda para ESE mes,
-  // sin importar si la cuenta bancaria se aplicó "siempre".
+  // sin importar si el monto/cuenta se aplicaron "siempre".
   if (monthKey && data.scope === "always") {
     const cur = overrides[keyPrefix + monthKey];
     overrides[keyPrefix + monthKey] = { ...(typeof cur === "object" && cur ? cur : {}), status };
