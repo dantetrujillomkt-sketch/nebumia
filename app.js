@@ -1781,6 +1781,19 @@ function syncQuoteSideEffects(targetState, q) {
     const isPending = !old.status || old.status === "Pendiente";
     const dueDate = (!isPending && old.dueDate) ? old.dueDate : (index === 0 ? (q.wonDate || q.date) : (old.dueDate || ""));
     const partAmount = calc.total * part;
+    // Si el monto de este cobro cambió (se editó la cotización), un ajuste manual guardado
+    // (monto real recibido / detracción manual) quedaría calculado sobre el monto viejo.
+    // Se limpia para que se recalcule automático con el nuevo monto.
+    if (old.id && Math.abs((old.amount || 0) - partAmount) > 0.01) {
+      const modes = targetState.settings.collectionDetModes || {};
+      const dm = modes[old.id];
+      if (dm && (dm.montoReal != null || dm.detActual != null)) {
+        const { montoReal, detActual, ...rest } = dm;
+        if (Object.keys(rest).length) modes[old.id] = rest;
+        else delete modes[old.id];
+        targetState.settings.collectionDetModes = modes;
+      }
+    }
     return {
       id: old.id || uid(),
       quoteId: q.id,
