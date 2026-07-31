@@ -178,13 +178,14 @@ async function sbLoad() {
   }
   state.quotes.forEach(q => syncQuoteSideEffects(state, q));
   syncClientsFromActivity(state);
+  const dupesMerged = mergeDuplicateClients(state);
   const codeChanged = applyCodePadding(state);
   const bankChanged = applyBankAccountDefaults(state);
   const detChanged = applyDetractionThreshold(state);
   const staleFixed = repairStaleDetractionOverrides(state);
   // Restore repo links from localStorage if Supabase had them empty (migration from pre-proxy era)
   const repoRestored = state.collections.some(c => c.repo && !(collections || []).find(r => r.id === c.id)?.repo);
-  if (codeChanged || bankChanged || detChanged || staleFixed || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
+  if (codeChanged || bankChanged || detChanged || staleFixed || dupesMerged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -697,6 +698,7 @@ function migrateState(input) {
   };
   migrated.quotes.forEach(q => syncQuoteSideEffects(migrated, q));
   syncClientsFromActivity(migrated);
+  mergeDuplicateClients(migrated);
   applyCodePadding(migrated);
   applyBankAccountDefaults(migrated);
   applyDetractionThreshold(migrated);
@@ -1743,14 +1745,61 @@ function renderPaginator(key, page, totalPages, pageSize, total) {
   `;
 }
 
+// Normaliza un nombre de cliente para comparar: espacios, mayúsculas y tildes no deben
+// hacer que se trate como un cliente distinto (evita duplicados por variaciones menores de texto).
+function normalizeClientName(name) {
+  return (name || "")
+    .trim().replace(/\s+/g, " ").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 function syncClientsFromActivity(targetState = state) {
-  const names = new Set(targetState.clients.map(c => c.name.toLowerCase()));
+  const names = new Set(targetState.clients.map(c => normalizeClientName(c.name)));
   [...targetState.leads, ...targetState.quotes].forEach(item => {
-    if (item.client && !names.has(item.client.toLowerCase())) {
+    if (item.client && !names.has(normalizeClientName(item.client))) {
       targetState.clients.push(newClient({ name: item.client, owner: item.owner || "Dante Trujillo" }));
-      names.add(item.client.toLowerCase());
+      names.add(normalizeClientName(item.client));
     }
   });
+}
+
+// Cuántos campos "reales" tiene un cliente (más allá de nombre/país/comercial por defecto).
+// Un cliente auto-creado por syncClientsFromActivity siempre tiene 0.
+function clientDataScore(c) {
+  return ["ruc", "date", "contact", "email", "phone", "clientType", "source", "notes"]
+    .filter(k => (c[k] || "").toString().trim()).length;
+}
+
+// Repara duplicados ya creados por la comparación estricta de antes (espacios/tildes/mayúsculas
+// distintas). Solo fusiona un grupo si AL MENOS uno de sus miembros luce auto-creado (score 0) —
+// si todos tienen datos propios, no arriesga fusionar dos clientes legítimos con nombre parecido.
+// Repunta las cotizaciones/leads del duplicado al nombre del cliente canónico (el más completo)
+// y elimina el duplicado, para que no vuelva a recrearse en la próxima carga.
+function mergeDuplicateClients(st) {
+  const clients = st.clients || [];
+  if (clients.length < 2) return false;
+  const groups = new Map();
+  clients.forEach(c => {
+    const key = normalizeClientName(c.name);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  });
+  let changed = false;
+  const toRemove = new Set();
+  groups.forEach(group => {
+    if (group.length < 2) return;
+    if (!group.some(c => clientDataScore(c) === 0)) return;
+    group.sort((a, b) => clientDataScore(b) - clientDataScore(a));
+    const canonical = group[0];
+    group.slice(1).forEach(dupe => {
+      (st.quotes || []).forEach(q => { if (q.client === dupe.name) q.client = canonical.name; });
+      (st.leads  || []).forEach(l => { if (l.client === dupe.name) l.client = canonical.name; });
+      toRemove.add(dupe.id);
+      changed = true;
+    });
+  });
+  if (changed) st.clients = st.clients.filter(c => !toRemove.has(c.id));
+  return changed;
 }
 
 function syncQuoteSideEffects(targetState, q) {
