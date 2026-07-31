@@ -181,9 +181,10 @@ async function sbLoad() {
   const codeChanged = applyCodePadding(state);
   const bankChanged = applyBankAccountDefaults(state);
   const detChanged = applyDetractionThreshold(state);
+  const staleFixed = repairStaleDetractionOverrides(state);
   // Restore repo links from localStorage if Supabase had them empty (migration from pre-proxy era)
   const repoRestored = state.collections.some(c => c.repo && !(collections || []).find(r => r.id === c.id)?.repo);
-  if (codeChanged || bankChanged || detChanged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
+  if (codeChanged || bankChanged || detChanged || staleFixed || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -699,6 +700,7 @@ function migrateState(input) {
   applyCodePadding(migrated);
   applyBankAccountDefaults(migrated);
   applyDetractionThreshold(migrated);
+  repairStaleDetractionOverrides(migrated);
   return migrated;
 }
 
@@ -5318,6 +5320,32 @@ function applyDetractionThreshold(st) {
     const correct = (q.hasIgv && amount >= threshold) ? amount * rate : 0;
     if (Math.abs((Number(c.detraction) || 0) - correct) > 0.01) { c.detraction = correct; changed = true; }
   });
+  return changed;
+}
+
+// Repara ajustes manuales guardados en collectionDetModes (montoReal/detActual) que quedaron
+// pegados a un monto viejo tras editar la cotización ANTES de que existiera el fix que evita
+// esto en ediciones nuevas. Regla: ni el monto recibido ni la detracción manual pueden ser
+// mayores al monto actual del cobro (más un pequeño margen) — si lo son, es dato viejo.
+function repairStaleDetractionOverrides(st) {
+  const modes = st.settings.collectionDetModes || {};
+  let changed = false;
+  (st.collections || []).forEach(c => {
+    const dm = modes[c.id];
+    if (!dm) return;
+    const amount = Number(c.amount) || 0;
+    const margin = amount * 1.05;
+    let dirty = false;
+    const clean = { ...dm };
+    if (clean.montoReal != null && clean.montoReal > margin) { delete clean.montoReal; dirty = true; }
+    if (clean.detActual != null && clean.detActual > margin) { delete clean.detActual; dirty = true; }
+    if (dirty) {
+      if (Object.keys(clean).length) modes[c.id] = clean;
+      else delete modes[c.id];
+      changed = true;
+    }
+  });
+  if (changed) st.settings.collectionDetModes = modes;
   return changed;
 }
 
