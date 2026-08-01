@@ -1903,7 +1903,7 @@ label.profile-photo-upload-btn {
 
 /* Comprobantes sections */
 .comp-section { margin-bottom: 32px; }
-.comp-section-title { font-size: 17px; font-weight: 650; color: var(--ink); margin: 0 0 10px; padding-bottom: 8px; border-bottom: 2px solid var(--brand); display: inline-block; }
+.comp-section-title { font-size: 17px; font-weight: 650; color: var(--ink); margin: 0 0 10px; padding-bottom: 8px; display: inline-block; }
 .comp-section-sub { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; }
 .comp-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .comp-section-head .comp-section-title { margin-bottom: 0; }
@@ -2678,8 +2678,8 @@ label.profile-photo-upload-btn {
   font-weight: 700;
   letter-spacing: .01em;
 }
-.ingreso-head { border-left: 3px solid var(--ok); }
-.egreso-head  { border-left: 3px solid var(--danger); }
+.ingreso-head { border-left: none; }
+.egreso-head  { border-left: none; }
 .caja-section-head span {
   font-size: 12px;
   color: var(--muted);
