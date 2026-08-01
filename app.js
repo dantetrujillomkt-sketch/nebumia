@@ -811,7 +811,7 @@ function setAuthMode(mode) {
 
   if (mode === "login") {
     authTitle.textContent = "Bienvenido de vuelta";
-    authSubtitle.textContent = "Ingresa tus datos para acceder a Nebumia.";
+    authSubtitle.textContent = "Ingresa tus datos para acceder a Guvia.";
     authSubmitBtn.innerHTML = "Ingresar";
     authHint.textContent = "";
   }
@@ -3034,7 +3034,7 @@ const views = {
                 <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">
                   <span class="bank-account-name">${escapeHtml(p.name)}</span>
                   <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(p.name)}" data-profile-idx="${i}">
-                  ${p.hasCommission ? `<span class="badge-type" style="background:var(--brand-light,#e8f0fe);color:var(--brand);font-size:11px">★ Comisión</span>` : ""}
+                  ${p.hasCommission ? `<span class="badge-type" style="background:var(--brand-light,#ffe8db);color:var(--brand);font-size:11px">★ Comisión</span>` : ""}
                 </div>
                 <div class="bank-account-actions">
                   <button class="action-link" data-toggle-profile-comm="${i}" type="button" title="${p.hasCommission ? "Quitar comisión" : "Activar comisión"}">${p.hasCommission ? icon("check") : icon("plus")}<span>${p.hasCommission ? "Comisión ON" : "Comisión OFF"}</span></button>
@@ -4375,7 +4375,7 @@ function exportState() {
 }
 
 function exportStateJson() {
-  const payload = JSON.stringify({ product:"Nebumia", exportedAt:new Date().toISOString(), state }, null, 2);
+  const payload = JSON.stringify({ product:"Guvia", exportedAt:new Date().toISOString(), state }, null, 2);
   const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([payload], {type:"application/json"})), download:`nebumia-respaldo-${today()}.json` });
   a.click();
 }
@@ -4433,7 +4433,7 @@ function importState() {
         }).filter(o => Object.keys(o).length > 1);
 
         if (!imported.length) {
-          showImportErrorModal("No se encontraron datos válidos.\n\nAsegúrate de usar la plantilla descargada desde Nebumia con los encabezados correctos.", []);
+          showImportErrorModal("No se encontraron datos válidos.\n\nAsegúrate de usar la plantilla descargada desde Guvia con los encabezados correctos.", []);
           return;
         }
         showImportConfirmModal(schema, imported, errors);
@@ -4547,7 +4547,7 @@ function importStateJson(file) {
       saveState(); render();
       showToast("Respaldo importado correctamente");
     } catch {
-      showToast("El archivo no contiene un respaldo válido de Nebumia");
+      showToast("El archivo no contiene un respaldo válido de Guvia");
     }
   });
   reader.readAsText(file);
@@ -5960,7 +5960,7 @@ function drawCharts() {
   periods.forEach((p, i) => {
     const cx = padL + i * groupW + groupW / 2;
     const gap = barW + 2;
-    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#4f7cff");
+    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#ff5100");
     drawRoundedBar(cx         - barW/2, padT + chartH - (cobValues[i]/max)*chartH, barW, (cobValues[i]/max)*chartH, 3, "#34d399");
     drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#fb7185");
     ctx.fillStyle = "#64748b";
@@ -5988,7 +5988,7 @@ function drawCharts() {
   if (subtitleEl) subtitleEl.textContent = `${dashboardRange.label} · vendido vs cobrado`;
 
   // Legend — top right
-  const legendItems = [["#4f7cff","Vendido"],["#34d399","Cobrado"],["#fb7185","Egresos"]];
+  const legendItems = [["#ff5100","Vendido"],["#34d399","Cobrado"],["#fb7185","Egresos"]];
   ctx.font = `11px Inter, sans-serif`;
   const totalLegendW = legendItems.reduce((s,[,l]) => s + 10 + 4 + ctx.measureText(l).width + 16, 0);
   let lx = rect.width - padR - totalLegendW;
@@ -6008,7 +6008,7 @@ function drawCharts() {
     return {
       label: p.label,
       bars: [
-        { name: "Vendido", color: "#4f7cff", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
+        { name: "Vendido", color: "#ff5100", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
         { name: "Cobrado", color: "#34d399", value: cobValues[i], x: cx - barW/2,       y: padT + chartH - (cobValues[i]/max)*chartH, w: barW, h: (cobValues[i]/max)*chartH },
         { name: "Egresos", color: "#fb7185", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
       ]
@@ -6228,7 +6228,7 @@ function renderNotifDropdown() {
     sections[it.section].push(it);
   });
 
-  const dotColor = type => type === "red" ? "#ef4444" : "#4f7cff";
+  const dotColor = type => type === "red" ? "#ef4444" : "#ff5100";
 
   let html = `<div class="notif-header"><span class="notif-header-title">Notificaciones</span></div><div class="notif-body">`;
 
@@ -6343,7 +6343,7 @@ document.getElementById("helpForm")?.addEventListener("submit", e => {
   e.preventDefault();
   const current = auth();
   const form = new FormData(e.currentTarget);
-  const subject = encodeURIComponent(`[Nebumia] ${form.get("helpSubject")}`);
+  const subject = encodeURIComponent(`[Guvia] ${form.get("helpSubject")}`);
   const body = encodeURIComponent(`De: ${current.name} (${current.email})\n\n${form.get("helpMessage")}`);
   window.open(`mailto:soporte@bandu.pe?subject=${subject}&body=${body}`, "_blank");
   document.getElementById("helpFeedback").textContent = "✓ Abriendo tu cliente de correo…";
@@ -7033,7 +7033,7 @@ function renderOnbStep(step) {
   content.innerHTML = `
     <div class="onb-head">
       <div class="onb-head-label">Configuración inicial · Paso ${step + 1} de 3</div>
-      <div class="onb-head-title">Nebumia</div>
+      <div class="onb-head-title">Guvia</div>
       <div class="onb-steps-track">${trackHtml}</div>
     </div>
     <div class="onb-body">${bodyHtml}</div>
