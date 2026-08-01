@@ -1372,7 +1372,7 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); }
 table { width: 100%; border-collapse: collapse; min-width: 860px; background: var(--panel); table-layout: fixed; }
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-th { color: #000000; font-size: 11px; font-weight: 550; text-transform: uppercase; background: #ffffff; }
+th { color: var(--ink); font-size: 11px; font-weight: 550; text-transform: uppercase; background: var(--panel); }
 tr:last-child td { border-bottom: 0; }
 .table-wrap table th:last-child { width: 90px; }
 .table-wrap table td:last-child { text-align: right; }
@@ -1779,7 +1779,7 @@ label.profile-photo-upload-btn {
   align-items: center;
   gap: 8px;
   padding: 8px 11px;
-  border: 1px solid #b9c5d6;
+  border: 1px solid var(--line);
   border-radius: 9px;
   color: var(--ink);
   background: var(--panel);
@@ -2061,8 +2061,8 @@ label.profile-photo-upload-btn {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .05em;
-  color: #000000;
-  background: #ffffff;
+  color: var(--ink);
+  background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
 .targets-table td {
@@ -2608,7 +2608,7 @@ label.profile-photo-upload-btn {
 /* Gastos fijos en Settings */
 .settings-fixed-expenses { margin-top: 16px; }
 .fixed-exp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.fixed-exp-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: #000000; background: #ffffff; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
+.fixed-exp-table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--ink); background: var(--panel); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--border); }
 .fixed-exp-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .fixed-exp-table tr:last-child td { border-bottom: none; }
 .fixed-exp-table tr:hover td { background: var(--soft); }
@@ -2697,7 +2697,7 @@ label.profile-photo-upload-btn {
 }
 .caja-total-pen.egreso, .caja-total-usd.egreso { color: var(--danger); }
 .caja-section .data-table { border: none; border-radius: 0; }
-.caja-section .data-table th { background: #ffffff; color: #000000; }
+.caja-section .data-table th { background: var(--panel); color: var(--ink); }
 .source-tag {
   display: inline-block;
   font-size: 11px;
