@@ -4451,7 +4451,7 @@ function showImportConfirmModal(schema, imported, warnings) {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
   overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;">
       <h3 style="margin:0 0 8px;font-size:16px;">Confirmar importación</h3>
       <p style="margin:0 0 16px;color:var(--muted);font-size:14px;">Módulo: <strong style="color:var(--ink)">${schema.label}</strong></p>
       <div style="background:var(--surface);border-radius:10px;padding:14px 16px;margin-bottom:${warnings.length?'12px':'20px'};display:grid;gap:6px;">
@@ -4477,7 +4477,7 @@ function showImportErrorModal(msg, errors) {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
   overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;">
       <h3 style="margin:0 0 12px;font-size:16px;color:var(--danger);">Error en la importación</h3>
       <p style="margin:0 0 ${errors.length?'12px':'20px'};font-size:14px;color:var(--muted);white-space:pre-line;">${msg}</p>
       ${errors.length ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#991b1b;max-height:120px;overflow-y:auto;">${errors.map(e=>`✗ ${e}`).join("<br>")}</div>` : ""}
@@ -4490,7 +4490,7 @@ async function runImport(schema, imported) {
   const overlay = document.createElement("div");
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
   overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:360px;width:90%;text-align:center;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:360px;width:90%;text-align:center;">
       <div style="margin-bottom:16px;font-size:22px;">⏳</div>
       <h3 style="margin:0 0 8px;font-size:15px;" id="importProgressTitle">Importando registros…</h3>
       <p style="margin:0 0 16px;font-size:13px;color:var(--muted);" id="importProgressSub">0 de ${imported.length}</p>
@@ -6022,7 +6022,7 @@ function drawCharts() {
     if (!tooltip) {
       tooltip = document.createElement("div");
       tooltip.id = "chartTooltip";
-      tooltip.style.cssText = "position:fixed;pointer-events:none;background:#1e293b;color:#f1f5f9;font:12px Inter,sans-serif;padding:8px 12px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:9999;line-height:1.6;white-space:nowrap;";
+      tooltip.style.cssText = "position:fixed;pointer-events:none;background:#1e293b;color:#f1f5f9;font:12px Inter,sans-serif;padding:8px 12px;border-radius:8px;display:none;z-index:9999;line-height:1.6;white-space:nowrap;";
       document.body.appendChild(tooltip);
     }
     canvas.addEventListener("mousemove", e => {
