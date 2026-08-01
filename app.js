@@ -3239,13 +3239,17 @@ const views = {
 };
 
 function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "") {
-  const delta = trend && tooltip
-    ? `<span class="metric-delta ${trend}">${tooltip} ${trend === "up" ? "↗" : "↘"}</span>`
+  const toneIcon = { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
+  const deltaText = trend && tooltip ? `${tooltip} ${trend === "up" ? "↗" : "↘"}` : "";
+  const detail = [note, deltaText].filter(Boolean).join(" · ");
+  const more = detail
+    ? `<button type="button" class="metric-more" data-tooltip="${escapeAttr(detail)}">Ver más detalles</button>`
     : "";
-  const foot = (note || delta)
-    ? `<div class="metric-foot">${note ? `<small>${note}</small>` : ""}${delta}</div>`
-    : "";
-  return `<article class="metric metric-${tone}"><span class="metric-label">${label}</span><strong>${value}</strong>${foot}</article>`;
+  return `<article class="metric metric-${tone}">
+    <div class="metric-top"><span class="metric-label">${label}</span><span class="metric-icon">${icon(toneIcon)}</span></div>
+    <strong>${value}</strong>
+    ${more}
+  </article>`;
 }
 
 function alertItem(title, note) {
