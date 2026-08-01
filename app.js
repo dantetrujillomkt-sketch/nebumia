@@ -754,11 +754,10 @@ function syncFromSupabaseMeta(user) {
 function syncProfileUI() {
   const current = auth();
   const name = current.name || "Administrador";
-  const firstName = name.split(" ")[0];
-  const hello = document.getElementById("topbarHello");
-  const company = document.getElementById("topbarCompany");
-  if (hello) hello.textContent = `¡Hola, ${firstName}!`;
-  if (company) company.textContent = current.companyName || "";
+  const topName = document.getElementById("topbarProfileName");
+  const topCompany = document.getElementById("topbarProfileCompany");
+  if (topName) topName.textContent = name;
+  if (topCompany) topCompany.textContent = current.companyName || "";
   profileName.textContent = name;
   profileEmail.textContent = current.email || "admin@bandu.pe";
   const photo = localStorage.getItem("nebumia-profile-photo");

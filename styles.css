@@ -498,7 +498,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shad
   display: flex;
   flex-direction: column;
 }
-.sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 4px 4px 8px 12px; }
+.sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 4px 4px 14px 12px; border-bottom: 1px solid var(--line); }
 .sidebar-brand strong { display: block; font-size: 30px; font-weight: 700; color: var(--brand); }
 .sidebar-brand .sidebar-brand-initial { display: none; font-size: 30px; font-weight: 700; color: var(--brand); transition: opacity .15s; }
 .sidebar-brand span { color: var(--muted); font-size: 12px; }
@@ -659,22 +659,6 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   background: var(--glass);
   backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
-}
-.topbar-greeting {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.topbar-hello {
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--ink);
-  line-height: 1.2;
-}
-.topbar-company {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.2;
 }
 .topbar-actions {
   display: flex;
@@ -892,9 +876,10 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 .profile-trigger {
   display: flex;
   align-items: center;
+  gap: 10px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: 999px;
   color: var(--ink);
   background: transparent;
   box-shadow: none;
