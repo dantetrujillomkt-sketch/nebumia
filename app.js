@@ -2668,14 +2668,16 @@ const views = {
       }), "team")}`;
   },
   comprobantes() {
-    const purchases = sortByDateDesc(state.purchases || []);
+    const purchases = sortByDateDesc((state.purchases || []).filter(p => dateInRange(p.date)));
     const invoicedSales = sortByDateDesc(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && dateInRange(r.dueDate || r.wonDate)), r => r.paidDate || r.dueDate);
-    const taxPayments = sortByDateDesc(state.taxPayments || []);
+    const taxPayments = sortByDateDesc((state.taxPayments || []).filter(t => dateInRange(t.date)));
     const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
     const totalSales = invoicedSales.reduce((sum, s) => sum + s.amount, 0);
     const won = wonQuotes().filter(item => dateInRange(item.wonDate || item.date));
     const igvGen = won.reduce((sum, item) => sum + item.igv, 0);
-    const detPaid = taxPayments.filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
+    // Det. saldo es un balance acumulado (detracciones cobradas vs. remitidas a SUNAT en TODO el historial),
+    // no una métrica del periodo — por eso usa state.taxPayments sin filtrar, a diferencia de igvPaid.
+    const detPaid = (state.taxPayments || []).filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
     const detBilled = collectionRows().filter(r => r.status === "Pagado").reduce((sum, r) => sum + r.detraction, 0);
     const igvPaid = taxPayments.filter(t => t.status === "Pagado").reduce((s, t) => s + t.amount, 0);
 
