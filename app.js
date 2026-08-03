@@ -2673,8 +2673,11 @@ const views = {
     const taxPayments = sortByDateDesc((state.taxPayments || []).filter(t => dateInRange(t.date)));
     const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
     const totalSales = invoicedSales.reduce((sum, s) => sum + s.amount, 0);
-    const won = wonQuotes().filter(item => dateInRange(item.wonDate || item.date));
-    const igvGen = won.reduce((sum, item) => sum + item.igv, 0);
+    // IGV generado = IGV de las mismas ventas facturadas (misma base que "Ventas facturadas"),
+    // no de las cotizaciones Ganado — así ambas tarjetas reflejan el mismo momento contable
+    // (la factura emitida), no el pipeline comercial.
+    const _igvRate = state.settings.igvRate || 0.18;
+    const igvGen = invoicedSales.reduce((sum, r) => sum + (r.quote?.hasIgv ? r.amount - r.amount / (1 + _igvRate) : 0), 0);
     // Det. saldo es un balance acumulado (detracciones cobradas vs. remitidas a SUNAT en TODO el historial),
     // no una métrica del periodo — por eso usa state.taxPayments sin filtrar, a diferencia de igvPaid.
     const detPaid = (state.taxPayments || []).filter(t => t.type === "Detracción" && t.status === "Pagado").reduce((sum, t) => sum + t.amount, 0);
@@ -2684,15 +2687,14 @@ const views = {
     const _pr = prevRange();
     const _prevInv = collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && dateInRange(r.dueDate || r.wonDate, _pr));
     const _prevSales = _prevInv.reduce((sum, s) => sum + s.amount, 0);
-    const _prevWon   = wonQuotes().filter(item => dateInRange(item.wonDate || item.date, _pr));
-    const _prevIgvGen = _prevWon.reduce((sum, item) => sum + item.igv, 0);
+    const _prevIgvGen = _prevInv.reduce((sum, r) => sum + (r.quote?.hasIgv ? r.amount - r.amount / (1 + _igvRate) : 0), 0);
     const _fmtS = (n) => `${n >= 0 ? "+" : "-"}S/ ${Math.abs(n).toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`;
 
     return `
       <section class="metric-grid">
         ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, totalSales >= _prevSales ? "up" : "down", "", "mint", `${_fmtS(totalSales - _prevSales)} vs ${_pr.label}`)}
         ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber")}
-        ${metric("IGV generado", fmt(igvGen), "En ventas ganadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`)}
+        ${metric("IGV generado", fmt(igvGen), "En ventas facturadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`)}
         ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral")}
       </section>
 
