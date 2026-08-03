@@ -925,9 +925,15 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   box-shadow: none;
 }
 .profile-dropdown-info {
-  display: grid;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 8px 11px 10px;
+}
+.profile-dropdown-text {
+  display: grid;
   gap: 2px;
+  min-width: 0;
 }
 .profile-dropdown-info strong {
   font-size: 13px;

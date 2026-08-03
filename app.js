@@ -260,6 +260,8 @@ const icons = {
   target: '<circle cx="12" cy="12" r="8"></circle><circle cx="12" cy="12" r="3"></circle>',
   fileText: '<path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"></path><path d="M14 2v5h5"></path><path d="M9 13h6"></path><path d="M9 17h6"></path>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>',
+  user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>',
+  logOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>',
   receipt: '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2z"></path><path d="M8 7h8"></path><path d="M8 11h8"></path><path d="M8 15h5"></path>',
   wallet: '<path d="M19 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h14a2 2 0 0 1 2 2v4h-3a2 2 0 0 0 0 4h3v1a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"></path><path d="M18 14h.01"></path>',
   banknote: '<rect x="3" y="6" width="18" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M7 12h.01"></path><path d="M17 12h.01"></path>',
@@ -714,8 +716,9 @@ function saveState() {
 
 function applyTheme(theme) {
   document.body.dataset.theme = theme;
-  const label = theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
-  themeToggleBtn.textContent = label;
+  const label = theme === "dark" ? "Modo Claro" : "Modo Oscuro";
+  const labelEl = document.getElementById("themeToggleLabel");
+  if (labelEl) labelEl.textContent = label;
   themeToggleBtn.setAttribute("aria-label", label);
   localStorage.setItem(THEME_KEY, theme);
 }
@@ -762,19 +765,26 @@ function syncProfileUI() {
   profileEmail.textContent = current.email || "admin@bandu.pe";
   const photo = localStorage.getItem("nebumia-profile-photo");
   const img = document.getElementById("profilePhotoImg");
+  const initial = name.trim().charAt(0).toUpperCase() || "N";
+  [profileAvatar, document.getElementById("profileDropdownAvatar")].forEach(av => {
+    if (!av) return;
+    if (photo) {
+      av.textContent = "";
+      av.style.backgroundImage = `url(${photo})`;
+      av.style.backgroundSize = "cover";
+      av.style.backgroundPosition = "center";
+    } else {
+      av.textContent = initial;
+      av.style.backgroundImage = "";
+    }
+  });
   if (photo) {
-    profileAvatar.textContent = "";
-    profileAvatar.style.backgroundImage = `url(${photo})`;
-    profileAvatar.style.backgroundSize = "cover";
-    profileAvatar.style.backgroundPosition = "center";
     if (img) { img.src = photo; img.style.display = "block"; }
     document.getElementById("profilePhotoInitial").style.display = "none";
   } else {
-    profileAvatar.textContent = name.trim().charAt(0).toUpperCase() || "N";
-    profileAvatar.style.backgroundImage = "";
     if (img) { img.src = ""; img.style.display = "none"; }
     const ini = document.getElementById("profilePhotoInitial");
-    if (ini) { ini.textContent = name.trim().charAt(0).toUpperCase() || "N"; ini.style.display = ""; }
+    if (ini) { ini.textContent = initial; ini.style.display = ""; }
   }
 }
 
@@ -6334,23 +6344,6 @@ profileForm.addEventListener("submit", async event => {
   message.textContent = "";
   showToast(newPwd ? "Perfil y contraseña actualizados" : "Perfil actualizado");
   setTimeout(() => profileDialog.close(), 500);
-});
-
-document.getElementById("helpBtn")?.addEventListener("click", () => {
-  document.getElementById("helpFeedback").textContent = "";
-  document.getElementById("helpForm").reset();
-  profileDropdown.classList.add("hidden");
-  document.getElementById("helpDialog").showModal();
-});
-document.getElementById("helpForm")?.addEventListener("submit", e => {
-  e.preventDefault();
-  const current = auth();
-  const form = new FormData(e.currentTarget);
-  const subject = encodeURIComponent(`[Guvia] ${form.get("helpSubject")}`);
-  const body = encodeURIComponent(`De: ${current.name} (${current.email})\n\n${form.get("helpMessage")}`);
-  window.open(`mailto:soporte@bandu.pe?subject=${subject}&body=${body}`, "_blank");
-  document.getElementById("helpFeedback").textContent = "✓ Abriendo tu cliente de correo…";
-  setTimeout(() => document.getElementById("helpDialog").close(), 1200);
 });
 
 const SK_SIDEBAR = `
