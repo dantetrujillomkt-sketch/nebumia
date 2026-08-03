@@ -4901,6 +4901,7 @@ function openCollectionDialog(row) {
       <label>Cuenta<select name="bankAccount"><option value="">— Sin cuenta —</option>${(state.settings.bankAccounts || []).map(a => `<option value="${escapeAttr(a)}" ${effectiveBankAccount === a ? "selected" : ""}>${a}</option>`).join("")}</select></label>
       <label>Fecha PP (vencimiento)<input name="dueDate" type="date" value="${row.dueDate || ""}"></label>
       <label>Fecha RP (cobrado)<input name="paidDate" type="date" value="${row.paidDate || ""}"></label>
+      <label>Estado declaración<select name="declared">${options(["Sin declarar", "Declarado"], row.declared || "Sin declarar")}</select></label>
       <label class="full">Link repositorio<input name="repo" type="url" value="${escapeAttr(row.repo || "")}" placeholder="https://..."></label>
       ${calc.detraction > 0 ? (() => {
         const dm = (state.settings.collectionDetModes || {})[row.id] || {};
