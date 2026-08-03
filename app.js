@@ -1101,7 +1101,10 @@ function dashboardSnapshot() {
   const overdueCollections = allCollections.filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < today());
   const pendingSunat = (state.taxPayments||[]).filter(t => t.status === "Pendiente");
   const pendingTeam = state.team.filter(t => t.status === "Pendiente");
-  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD, rangePeriodLabel };
+  // Comprobantes (ventas facturadas + compras) marcados "Sin declarar" — global, no depende del periodo filtrado.
+  const undeclaredCount = (state.invoicedSales || []).filter(f => (f.declared || "Sin declarar") !== "Declarado").length
+    + (state.purchases || []).filter(p => (p.declared || "Sin declarar") !== "Declarado").length;
+  return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, undeclaredCount, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD, rangePeriodLabel };
 }
 
 function currentMonthName() {
@@ -1967,7 +1970,7 @@ const views = {
       const vendido = s.won.filter(q => q.bankAccount === bank).reduce((a, q) => a + q.total, 0);
       return { bank, currency, vendido, cobrado, egresos, balance: cobrado - egresos };
     });
-    const alertCount = s.overdueCollections.length + s.pendingSunat.length + s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).length;
+    const alertCount = s.overdueCollections.length + s.pendingSunat.length + s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).length + (s.undeclaredCount > 0 ? 1 : 0);
 
     return `
       ${onboardingBannerHTML()}
@@ -2057,6 +2060,12 @@ const views = {
             <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${convUSD}%;background:var(--mint)"></div></div>`;
           })()}
         </div>
+      </div>
+
+      <!-- Alertas -->
+      <div class="panel" style="margin-bottom:14px">
+        <div class="panel-head"><div><h3>Alertas</h3><p>Cosas que necesitan tu atención</p></div></div>
+        ${dashAlerts(s)}
       </div>
 
       <!-- Fila 2: Ingresos vs Egresos + Embudo comercial -->
@@ -3473,6 +3482,12 @@ function dashAlerts(s) {
       <div class="alert-body"><strong>Pago personal vencido</strong><span>${escapeHtml(t.name)} · ${fmt(t.amount, t.currency)}</span></div>
     </div>`);
   });
+  if (s.undeclaredCount > 0) {
+    items.push(`<div class="alert-item alert-item--amber">
+      <div class="alert-icon">${icon("fileText")}</div>
+      <div class="alert-body"><strong>Comprobantes sin declarar</strong><span>Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar</span></div>
+    </div>`);
+  }
   return items.length
     ? `<div class="alert-list">${items.join("")}</div>`
     : `<div class="empty-state">${icon("check")} Sin alertas pendientes. Todo al día.</div>`;
