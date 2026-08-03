@@ -2824,22 +2824,29 @@ const views = {
                 fmt(subtotal, r.currency), fmt(igv, r.currency), fmt(r.amount, r.currency),
                 fmt(detActual, "PEN"), `<span class="status cliente">Cliente</span>`, "—"] };
           }).filter(Boolean);
-          // Detracciones manuales nuestras: taxPayments Pagado en el periodo seleccionado
-          const manualDets = taxPayments.filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado" && dateInRange(t.date)).map(t => {
-            const linkedCid = t.collectionId || (state.settings.taxPaymentCollections || {})[t.id] || "";
-            const linked = linkedCid ? invoicedSales.find(r => r.id === linkedCid) : null;
-            const nroPago = linked ? (linked.label === "Pago 100%" ? "1/1" : (linked.label || "").replace("Pago ", "")) : "—";
-            const igvRate = state.settings.igvRate;
-            const subtotal = linked?.quote?.hasIgv ? linked.amount / (1 + igvRate) : (linked?.amount ?? 0);
-            const igv = linked?.quote?.hasIgv ? linked.amount - subtotal : 0;
-            return { _date: t.date, _type: "manual",
-              row: [fmtDate(t.date), nroPago,
-                linked ? escapeHtml(linked.client) : "—", linked ? escapeHtml(linked.invoice || "—") : "—",
-                linked ? fmt(subtotal, linked.currency) : "—", linked ? fmt(igv, linked.currency) : "—",
-                linked ? fmt(linked.amount, linked.currency) : "—",
-                fmt(t.amount, "PEN"), badge(t.status),
-                `<div class="row-actions">${t.sunatRef ? `<span style="color:var(--text2);font-size:12px">${escapeHtml(t.sunatRef)}</span>` : ""}<button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar">${icon("trash")}</button></div>`] };
-          });
+          // Detracciones manuales nuestras: se clasifican por el mes de la VENTA/FACTURA a la que
+          // pertenecen, no por cuándo se pagó la detracción a SUNAT — si la venta es de junio pero
+          // la detracción se pagó en julio, debe aparecer en junio. Se busca en collectionRows()
+          // (sin filtrar por periodo) porque la venta vinculada puede caer en un mes distinto al actual.
+          const manualDets = (state.taxPayments || [])
+            .filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado")
+            .map(t => {
+              const linkedCid = t.collectionId || (state.settings.taxPaymentCollections || {})[t.id] || "";
+              const linked = linkedCid ? collectionRows().find(r => r.id === linkedCid) : null;
+              const belongsDate = linked ? (linked.dueDate || linked.wonDate) : t.date;
+              if (!dateInRange(belongsDate)) return null;
+              const nroPago = linked ? (linked.label === "Pago 100%" ? "1/1" : (linked.label || "").replace("Pago ", "")) : "—";
+              const igvRate = state.settings.igvRate;
+              const subtotal = linked?.quote?.hasIgv ? linked.amount / (1 + igvRate) : (linked?.amount ?? 0);
+              const igv = linked?.quote?.hasIgv ? linked.amount - subtotal : 0;
+              return { _date: belongsDate, _type: "manual",
+                row: [fmtDate(belongsDate), nroPago,
+                  linked ? escapeHtml(linked.client) : "—", linked ? escapeHtml(linked.invoice || "—") : "—",
+                  linked ? fmt(subtotal, linked.currency) : "—", linked ? fmt(igv, linked.currency) : "—",
+                  linked ? fmt(linked.amount, linked.currency) : "—",
+                  fmt(t.amount, "PEN"), badge(t.status),
+                  `<div class="row-actions">${t.sunatRef ? `<span style="color:var(--text2);font-size:12px">${escapeHtml(t.sunatRef)}</span>` : ""}<button class="action-link" data-edit-taxpayment="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-taxpayment="${t.id}" type="button" title="Eliminar">${icon("trash")}</button></div>`] };
+            }).filter(Boolean);
           const allDets = [...clienteDets, ...manualDets].sort((a, b) => (b._date || "").localeCompare(a._date || ""));
           return table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"],
             allDets.map(d => d.row), "tax-payments");
@@ -2854,8 +2861,16 @@ const views = {
           </div>
         </div>
         ${(() => {
-          const declaraciones = state.declaraciones || [];
-          if (!declaraciones.length) return `<div class="empty-state">Sin declaraciones registradas. Usa el botón para registrar el cierre mensual.</div>`;
+          // La declaración se presenta el mes siguiente, pero sus datos pertenecen al periodo
+          // seleccionado en su campo "Periodo" (nombre de mes) — se filtra por ESE mes, no por
+          // cuándo se presentó, cubriendo cada mes que abarque el rango de fecha seleccionado.
+          const _rangeMonths = new Set();
+          let _mc = new Date(dashboardRange.start + "T00:00:00");
+          _mc = new Date(_mc.getFullYear(), _mc.getMonth(), 1);
+          const _mEnd = new Date(dashboardRange.end + "T00:00:00");
+          while (_mc <= _mEnd) { _rangeMonths.add(months[_mc.getMonth()]); _mc.setMonth(_mc.getMonth() + 1); }
+          const declaraciones = (state.declaraciones || []).filter(d => _rangeMonths.has(d.period));
+          if (!declaraciones.length) return `<div class="empty-state">Sin declaraciones registradas para este periodo. Usa el botón para registrar el cierre mensual.</div>`;
           return table(
             ["Periodo", "IGV 1011", "Renta 3121", "Otro", "Concepto otro", "Total", "Estado", "Acciones"],
             declaraciones.map(d => {
