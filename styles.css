@@ -278,11 +278,8 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   margin: 0;
-  color: var(--brand);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
 }
+.login-brand-img { height: 34px; width: auto; display: block; }
 .brand-mark {
   width: 48px;
   height: 48px;
@@ -499,8 +496,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shad
   flex-direction: column;
 }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; padding: 4px 4px 14px 12px; border-bottom: 1px solid var(--line); }
-.sidebar-brand strong { display: block; font-size: 30px; font-weight: 700; color: var(--brand); }
-.sidebar-brand .sidebar-brand-initial { display: none; font-size: 30px; font-weight: 700; color: var(--brand); transition: opacity .15s; }
+.sidebar-brand-img { display: block; height: 32px; width: auto; }
+.sidebar-brand .sidebar-brand-initial { display: none; width: 30px; height: 30px; transition: opacity .15s; }
 .sidebar-brand span { color: var(--muted); font-size: 12px; }
 .main-nav { display: grid; gap: 5px; }
 .nav-btn {
@@ -2389,12 +2386,8 @@ label.profile-photo-upload-btn {
   align-items: center;
   gap: 14px;
 }
-.mobile-gate-logo {
-  font-size: 22px;
-  font-weight: 750;
-  color: var(--ink);
-  letter-spacing: -.5px;
-}
+.mobile-gate-logo { display: flex; justify-content: center; }
+.mobile-gate-logo-img { height: 26px; width: auto; }
 .mobile-gate-icon {
   width: 72px;
   height: 72px;

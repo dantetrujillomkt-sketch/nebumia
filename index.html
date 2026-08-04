@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Guvia</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='32' y='32' font-family='Inter, system-ui, sans-serif' font-weight='700' font-size='58' fill='%23FF5100' text-anchor='middle' dominant-baseline='central'%3EG%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="styles.css?v=44">
+    <link rel="icon" type="image/svg+xml" href="guvia-isotipo.svg">
+    <link rel="stylesheet" href="styles.css?v=45">
     <script>
       try { document.documentElement.dataset.theme = localStorage.getItem("bandu-panel-theme") || "dark"; } catch {}
     </script>
@@ -15,7 +15,7 @@
     <main id="loginScreen" class="login-shell">
       <section class="login-panel" aria-label="Acceso a Guvia">
         <div class="login-brand">
-          <span>Guvia</span>
+          <img src="guvia-logo.svg" alt="Guvia" class="login-brand-img">
         </div>
 
         <div class="auth-copy">
@@ -74,9 +74,9 @@
       <aside class="sidebar">
         <div class="sidebar-brand">
           <div class="sidebar-brand-name">
-            <strong>Guvia</strong>
+            <img src="guvia-logo.svg" alt="Guvia" class="sidebar-brand-img">
           </div>
-          <span class="sidebar-brand-initial" aria-hidden="true">G</span>
+          <img src="guvia-isotipo.svg" alt="Guvia" class="sidebar-brand-initial" aria-hidden="true">
           <button class="sidebar-toggle-btn" id="sidebarCollapseBtn" type="button" title="Colapsar menú"></button>
         </div>
         <nav id="mainNav" class="main-nav" aria-label="Módulos"></nav>
@@ -146,7 +146,7 @@
     <!-- Mobile gate: shown on phones after login -->
     <div id="mobileGate" class="mobile-gate hidden">
       <div class="mobile-gate-card">
-        <div class="mobile-gate-logo">Guvia</div>
+        <div class="mobile-gate-logo"><img src="guvia-logo.svg" alt="Guvia" class="mobile-gate-logo-img"></div>
         <div class="mobile-gate-icon" aria-hidden="true">
           <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="12" width="56" height="36" rx="4" stroke="currentColor" stroke-width="3" fill="none"/>
@@ -278,6 +278,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=44"></script>
+    <script src="app.js?v=45"></script>
   </body>
 </html>
