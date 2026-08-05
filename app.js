@@ -598,6 +598,7 @@ let state = loadState();
 let activeView = localStorage.getItem("nebumia-active-view") || "dashboard";
 let editingId = "";
 let editingType = "";
+let collectionDialogReturnView = "collections";
 let activeCajaTab = "general";
 let activeSettingsTab = "financiero";
 let salesTargetsYear = new Date().getFullYear();
@@ -4848,6 +4849,7 @@ function saveSale(data) {
 function openCollectionDialog(row) {
   if (!row) return;
   editingId = row.id;
+  collectionDialogReturnView = activeView;
   const quote = state.quotes.find(q => q.id === row.quoteId);
   const clientRecord = state.clients.find(c => c.name === (quote?.client || ""));
   const client = quote?.client || "—";
@@ -5605,7 +5607,7 @@ function saveCollection(data) {
       repo: data.repo !== undefined ? data.repo : (c.repo || "")
     };
   });
-  activeView = "collections";
+  activeView = collectionDialogReturnView;
 }
 
 function saveExpense(data) {
