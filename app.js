@@ -1379,12 +1379,16 @@ function buildCajaRows() {
       category: "Cobro de venta", amount: ingresoAmt, bankAccount: c.bankAccount || "" });
     if (det > 0 && detStatus === "Completado") {
       if (mode === "bandu") {
+        // El pago a SUNAT se hace en una fecha manual, distinta a la del cobro (la factura
+        // puede ser de julio pero pagarse en agosto) — usar detPaidDate para que el dinero
+        // se refleje en la cuenta Detracciones el día real en que se abonó, no el del cobro.
+        const paidRow = { ...base, date: dm.detPaidDate || base.date };
         // Egreso de la cuenta corriente (nosotros transferimos la detracción)
-        rows.push({ ...base, id: `col-det-out-${c.id}`, type: "egreso", sourceType: "collectionDet",
+        rows.push({ ...paidRow, id: `col-det-out-${c.id}`, type: "egreso", sourceType: "collectionDet",
           concept: `Detracción pagada · ${label}`, category: "Detracción",
           amount: det, bankAccount: dm.cuenta || c.bankAccount || "", status: "Completado", currency: "PEN" });
         // Ingreso a la cuenta detracciones (el dinero entra a Detracciones)
-        rows.push({ ...base, id: `col-det-in-${c.id}`, type: "ingreso", sourceType: "collectionDet",
+        rows.push({ ...paidRow, id: `col-det-in-${c.id}`, type: "ingreso", sourceType: "collectionDet",
           concept: `Detracción · ${label}`, category: "Detracción",
           amount: det, bankAccount: detAccount, status: "Completado", currency: "PEN" });
       } else {
@@ -3621,7 +3625,8 @@ function bindViewEvents() {
     const dm = modes[id] || {};
     const current = dm.detStatus || "Completado";
     const next = current === "Completado" ? "Pendiente" : "Completado";
-    modes[id] = { ...dm, mode: dm.mode || "bandu", detStatus: next };
+    const detPaidDate = next === "Completado" ? (dm.detPaidDate || today()) : dm.detPaidDate;
+    modes[id] = { ...dm, mode: dm.mode || "bandu", detStatus: next, detPaidDate };
     state.settings.collectionDetModes = modes;
     saveState(); render();
     showToast(next === "Completado" ? "Detracción marcada como pagada" : "Detracción marcada como pendiente");
@@ -4902,14 +4907,20 @@ function openCollectionDialog(row) {
             placeholder="${mode === "bandu" ? calc.total.toFixed(2) : (calc.total - Math.round(calc.detraction)).toFixed(2)}"></label>
           <label id="detCuentaLabel" ${mode !== "bandu" ? 'style="display:none"' : ""}>¿Desde qué cuenta sale la detracción?<select name="detraccionCuenta">
             <option value="">— Cuenta —</option>${bankOpts}
-          </select></label>`;
+          </select></label>
+          <label id="detPaidDateLabel" ${mode !== "bandu" ? 'style="display:none"' : ""}>Fecha de abono (a la cuenta Detracciones)<input name="detPaidDate" type="date" value="${dm.detPaidDate || today()}"></label>`;
       })() : ""}
     </div>
     <script>
       (function(){
         const sel = document.getElementById("detModeSelect");
         const lbl = document.getElementById("detCuentaLabel");
-        if (sel && lbl) sel.addEventListener("change", () => { lbl.style.display = sel.value === "bandu" ? "" : "none"; });
+        const dateLbl = document.getElementById("detPaidDateLabel");
+        if (sel) sel.addEventListener("change", () => {
+          const show = sel.value === "bandu" ? "" : "none";
+          if (lbl) lbl.style.display = show;
+          if (dateLbl) dateLbl.style.display = show;
+        });
       })();
     </script>
   `);
@@ -5575,7 +5586,8 @@ function saveCollection(data) {
       cuenta:    data.detraccionCuenta || "",
       detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null,
       montoReal: data.montoReal ? (parseFloat(cleanNumericImport(data.montoReal)) || null) : null,
-      detStatus: data.detStatus || "Pendiente"
+      detStatus: data.detStatus || "Pendiente",
+      detPaidDate: data.detraccionMode === "bandu" ? (data.detPaidDate || "") : ""
     };
     state.settings.collectionDetModes = modes;
   }
