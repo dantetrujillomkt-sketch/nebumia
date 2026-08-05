@@ -183,9 +183,10 @@ async function sbLoad() {
   const bankChanged = applyBankAccountDefaults(state);
   const detChanged = applyDetractionThreshold(state);
   const staleFixed = repairStaleDetractionOverrides(state);
+  const phantomFixed = repairPhantomDetractionStatus(state);
   // Restore repo links from localStorage if Supabase had them empty (migration from pre-proxy era)
   const repoRestored = state.collections.some(c => c.repo && !(collections || []).find(r => r.id === c.id)?.repo);
-  if (codeChanged || bankChanged || detChanged || staleFixed || dupesMerged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
+  if (codeChanged || bankChanged || detChanged || staleFixed || phantomFixed || dupesMerged || repoRestored) sbSync().catch(e => console.error("migration sync:", e));
 }
 // ─────────────────────────────────────────────────────────
 
@@ -705,6 +706,7 @@ function migrateState(input) {
   applyBankAccountDefaults(migrated);
   applyDetractionThreshold(migrated);
   repairStaleDetractionOverrides(migrated);
+  repairPhantomDetractionStatus(migrated);
   return migrated;
 }
 
@@ -4936,9 +4938,10 @@ function openCollectionDialog(row) {
             <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
           </select></label>
           <label>Estado detracción<select name="detStatus">
-            <option value="Completado" ${dm.detStatus === "Completado" ? "selected" : ""}>Completado (ya pagado)</option>
+            <option value="Completado" ${dm.detStatus === "Completado" ? "selected" : ""} disabled>Completado (ya pagado)</option>
             <option value="Pendiente"  ${(dm.detStatus || "Pendiente") === "Pendiente" ? "selected" : ""}>Pendiente (aún no pagado)</option>
-          </select></label>
+          </select>
+          <small style="display:block;margin-top:4px;color:var(--muted,#8a8f98)">Para marcar como pagado usa el botón "Pagar" en Contabilidad — así queda registrado correctamente.</small></label>
           <label>Monto real de detracción (S/)<input name="detActual" type="text" inputmode="decimal"
             value="${dm.detActual != null ? dm.detActual : (currency === "USD" ? "" : Math.round(calc.detraction).toFixed(2))}"
             placeholder="${currency === "USD" ? "Ej: 235.00" : Math.round(calc.detraction).toFixed(2)}"></label>
@@ -5461,6 +5464,31 @@ function repairStaleDetractionOverrides(st) {
     if (dirty) {
       if (Object.keys(clean).length) modes[c.id] = clean;
       else delete modes[c.id];
+      changed = true;
+    }
+  });
+  if (changed) st.settings.collectionDetModes = modes;
+  return changed;
+}
+
+// Repara collectionDetModes con detStatus "Completado" que quedaron marcados manualmente desde
+// el diálogo de cobranza (bug corregido) sin que exista un pago real vinculado en taxPayments.
+// Sin esto, "Detracciones pagadas" nunca los muestra (se alimenta solo de pagos reales) pero
+// tampoco aparecen en "Obligaciones generadas" (se filtran por estar "Completado") — quedan invisibles.
+function repairPhantomDetractionStatus(st) {
+  const modes = st.settings.collectionDetModes || {};
+  const tpc = st.settings.taxPaymentCollections || {};
+  const paidCollectionIds = new Set(
+    (st.taxPayments || [])
+      .filter(t => (t.type === "Detracción" || t.type === "Autodetracción") && t.status === "Pagado")
+      .map(t => t.collectionId || tpc[t.id] || "")
+      .filter(Boolean)
+  );
+  let changed = false;
+  Object.keys(modes).forEach(cid => {
+    const dm = modes[cid];
+    if (dm && dm.detStatus === "Completado" && !paidCollectionIds.has(cid)) {
+      modes[cid] = { ...dm, detStatus: "Pendiente" };
       changed = true;
     }
   });
