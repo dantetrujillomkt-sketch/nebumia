@@ -1519,6 +1519,8 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 .status.pendiente, .status.por-cotizar, .status.nuevo, .status.contactado, .status.reunion { background: #eaf0ff; color: var(--blue); }
 .status.declarado { background: #ddfaef; color: var(--ok); }
 .status.sin-declarar { background: #fff4d7; color: #d09500; }
+.detstatus-toggle { background: none; border: 0; padding: 0; cursor: pointer; }
+.detstatus-toggle:hover .status { filter: brightness(0.95); }
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
 .toolbar input, .toolbar select { max-width: 230px; }
 .split-list { display: grid; gap: 10px; }
