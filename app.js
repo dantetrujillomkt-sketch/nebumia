@@ -1560,11 +1560,14 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
     rows.push({
       id: `saldo-${firstDay}`,
       date: firstDay,
-      type: saldo >= 0 ? "ingreso" : "egreso",
+      // Siempre va en Ingresos (es el saldo con el que arranca el periodo), aunque sea
+      // negativo — el monto queda con signo para que la suma de Ingresos y el Balance
+      // neto sigan siendo matemáticamente correctos.
+      type: "ingreso",
       concept: "Saldo anterior de caja",
       category: "Saldo anterior",
       source: "Saldo anterior",
-      amount: Math.abs(saldo),
+      amount: saldo,
       currency: tabCurrency,
       sourceType: "saldoAnterior",
       bankAccount: tab !== "general" ? tab : "",
