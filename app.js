@@ -2786,34 +2786,45 @@ const views = {
 
       <div class="comp-section">
         <h2 class="comp-section-title">Pago SUNAT</h2>
-        <p class="comp-section-sub">Obligaciones generadas (facturas emitidas)</p>
-        ${table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"], invoicedSales.filter(r => r.quote?.hasIgv).map(r => {
+        <p class="comp-section-sub">Obligaciones generadas (facturas emitidas con detracción)</p>
+        ${(() => {
           const igvRate = state.settings.igvRate;
-          const hasIgv = r.quote?.hasIgv;
-          const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
-          const igv = hasIgv ? r.amount - subtotal : 0;
-          const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
-          const invoiceDate = r.dueDate || r.wonDate;
-          const period = invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
-          const dm = (state.settings.collectionDetModes || {})[r.id] || {};
-          const mode = dm.mode || "cliente";
-          const detActual = autoDetraction(r, dm);
-          const detStatus = dm.detStatus || "Completado";
-          const detCell = detActual > 0 ? fmt(detActual, "PEN") : "—";
-          const detBadge = mode === "bandu"
-            ? badge(detStatus === "Completado" ? "Completado" : "Pendiente")
-            : `<span class="status cliente">Cliente</span>`;
-          const pagarBtn = mode === "bandu" && detActual > 0 && detStatus !== "Completado"
-            ? `<button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${detActual}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button>`
-            : "";
-          return [
-            fmtDate(invoiceDate), nroPago,
-            escapeHtml(r.client), escapeHtml(r.invoice || "—"),
-            fmt(subtotal, r.currency), fmt(igv, r.currency),
-            fmt(r.amount, r.currency), detCell, detBadge,
-            `<div class="row-actions">${pagarBtn}</div>`
-          ];
-        }), "tax-obligations")}
+          // Solo facturas con IGV que SÍ generan obligación de detracción (monto del cobro >= umbral)
+          // y que aún no están completadas — una vez pagada (nosotros) pasa a "Detracciones pagadas"
+          // y sale de esta lista; si se cancela el pago, vuelve a aparecer aquí automáticamente.
+          const withDet = invoicedSales.filter(r => r.quote?.hasIgv).map(r => {
+            const dm = (state.settings.collectionDetModes || {})[r.id] || {};
+            return { r, dm, detActual: autoDetraction(r, dm) };
+          }).filter(x => {
+            if (x.detActual <= 0) return false;
+            const mode = x.dm.mode || "cliente";
+            const detStatus = x.dm.detStatus || "Completado";
+            return mode !== "bandu" || detStatus !== "Completado";
+          });
+          return table(["Fecha", "Nro Pago", "Cliente", "Factura", "Subtotal", "IGV", "Total", "Detracción", "Estado Detrac.", "Acciones"], withDet.map(({ r, dm, detActual }) => {
+            const hasIgv = r.quote?.hasIgv;
+            const subtotal = hasIgv ? r.amount / (1 + igvRate) : r.amount;
+            const igv = hasIgv ? r.amount - subtotal : 0;
+            const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
+            const invoiceDate = r.dueDate || r.wonDate;
+            const period = invoiceDate ? new Date(invoiceDate + "T00:00:00").toLocaleString("es-PE", { month: "long", timeZone: "America/Lima" }).replace(/^\w/, c => c.toUpperCase()) : currentMonthName();
+            const mode = dm.mode || "cliente";
+            const detStatus = dm.detStatus || "Completado";
+            const detBadge = mode === "bandu"
+              ? badge(detStatus === "Completado" ? "Completado" : "Pendiente")
+              : `<span class="status cliente">Cliente</span>`;
+            const pagarBtn = mode === "bandu" && detStatus !== "Completado"
+              ? `<button class="action-link" data-pay-detraction="${r.id}" data-det-amount="${detActual}" data-det-period="${escapeAttr(period)}" type="button">${icon("creditCard")}<span>Pagar</span></button>`
+              : "";
+            return [
+              fmtDate(invoiceDate), nroPago,
+              escapeHtml(r.client), escapeHtml(r.invoice || "—"),
+              fmt(subtotal, r.currency), fmt(igv, r.currency),
+              fmt(r.amount, r.currency), fmt(detActual, "PEN"), detBadge,
+              `<div class="row-actions">${pagarBtn}</div>`
+            ];
+          }), "tax-obligations");
+        })()}
         <p class="comp-section-sub" style="margin-top:24px">Detracciones pagadas</p>
         ${(() => {
           const _detModes = state.settings.collectionDetModes || {};
@@ -3663,7 +3674,16 @@ function bindViewEvents() {
   bindActions("[data-edit-taxpayment]", id => openTaxPaymentDialog((state.taxPayments || []).find(x => x.id === id)));
   bindActions("[data-delete-taxpayment]", id => {
     confirmDelete("Este pago SUNAT será eliminado permanentemente.", () => {
+      const tp = (state.taxPayments || []).find(t => t.id === id);
       state.taxPayments = (state.taxPayments || []).filter(t => t.id !== id);
+      // Si era una detracción vinculada a una cobranza, revertir su estado a Pendiente
+      // para que la obligación vuelva a aparecer en "Obligaciones generadas".
+      const linkedCollectionId = tp?.collectionId || (state.settings.taxPaymentCollections || {})[id] || "";
+      if (tp && (tp.type === "Detracción" || tp.type === "Autodetracción") && linkedCollectionId) {
+        const modes = state.settings.collectionDetModes || {};
+        modes[linkedCollectionId] = { ...(modes[linkedCollectionId] || {}), detStatus: "Pendiente" };
+        state.settings.collectionDetModes = modes;
+      }
       saveState(); render();
     });
   });
@@ -3673,7 +3693,8 @@ function bindViewEvents() {
         type: "Detracción",
         amount: Number(btn.dataset.detAmount || 0),
         period: btn.dataset.detPeriod || currentMonthName(),
-        collectionId: btn.dataset.payDetraction || ""
+        collectionId: btn.dataset.payDetraction || "",
+        status: "Pagado"
       });
     });
   });
@@ -4915,8 +4936,8 @@ function openCollectionDialog(row) {
             <option value="bandu"   ${mode === "bandu"   ? "selected" : ""}>Nosotros (cliente depositó el 100%, nosotros pagamos)</option>
           </select></label>
           <label>Estado detracción<select name="detStatus">
-            <option value="Completado" ${(dm.detStatus || "Completado") === "Completado" ? "selected" : ""}>Completado (ya pagado)</option>
-            <option value="Pendiente"  ${dm.detStatus === "Pendiente" ? "selected" : ""}>Pendiente (aún no pagado)</option>
+            <option value="Completado" ${dm.detStatus === "Completado" ? "selected" : ""}>Completado (ya pagado)</option>
+            <option value="Pendiente"  ${(dm.detStatus || "Pendiente") === "Pendiente" ? "selected" : ""}>Pendiente (aún no pagado)</option>
           </select></label>
           <label>Monto real de detracción (S/)<input name="detActual" type="text" inputmode="decimal"
             value="${dm.detActual != null ? dm.detActual : (currency === "USD" ? "" : Math.round(calc.detraction).toFixed(2))}"
@@ -5059,6 +5080,7 @@ function openTaxPaymentDialog(record = null, prefill = {}) {
   const amountVal = prefill.amount !== undefined ? prefill.amount : item.amount;
   const periodVal = prefill.period || item.period;
   const collectionId = prefill.collectionId || item.collectionId || "";
+  const statusVal = prefill.status || item.status;
   dialogShell("taxPayment", editingId ? "Editar pago a SUNAT" : "Nuevo pago a SUNAT", `
     <div class="form-grid">
       <input type="hidden" name="collectionId" value="${escapeAttr(collectionId)}">
@@ -5066,7 +5088,7 @@ function openTaxPaymentDialog(record = null, prefill = {}) {
       <label>Tipo<select name="type">${options(["IGV 1011", "Renta 3121", "Detracción", "Autodetracción", "Otro"], typeVal)}</select></label>
       <label>Periodo<select name="period">${options(months, periodVal)}</select></label>
       <label>Monto<input name="amount" type="number" min="0" step="0.01" value="${amountVal}" required></label>
-      <label>Estado<select name="status">${options(["Pendiente", "Pagado"], item.status)}</select></label>
+      <label>Estado<select name="status">${options(["Pendiente", "Pagado"], statusVal)}</select></label>
       <label>Ref. SUNAT<input name="sunatRef" value="${escapeAttr(item.sunatRef)}" placeholder="N° operación SUNAT"></label>
       <label class="full">Link carpeta<input name="docLink" type="url" value="${escapeAttr(item.docLink)}" placeholder="https://drive.google.com/..."></label>
     </div>
@@ -5598,7 +5620,7 @@ function saveCollection(data) {
       cuenta:    data.detraccionCuenta || "",
       detActual: data.detActual ? (parseFloat(cleanNumericImport(data.detActual)) || null) : null,
       montoReal: data.montoReal ? (parseFloat(cleanNumericImport(data.montoReal)) || null) : null,
-      detStatus: data.detStatus || "Completado"
+      detStatus: data.detStatus || "Pendiente"
     };
     state.settings.collectionDetModes = modes;
   }
