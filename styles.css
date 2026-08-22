@@ -1366,7 +1366,7 @@ tr:last-child td { border-bottom: 0; }
 .table-wrap table td:last-child { text-align: right; }
 /* Cells that should wrap (service/concept descriptions) */
 td.cell-wrap { white-space: normal; word-break: break-word; }
-.cell-clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; word-break: break-word; line-height: 1.45; }
+.cell-clamp2 { white-space: normal; word-break: break-word; line-height: 1.45; }
 
 /* Allow wrapping in specific quote columns */
 .table-quotes td:nth-child(4),
