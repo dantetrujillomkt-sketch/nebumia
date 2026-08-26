@@ -124,6 +124,7 @@ async function sbLoad() {
     sb.from("sales_targets").select("*").eq("user_id", uid),
   ]);
   const names = ["clients","leads","quotes","collections","expenses","team","taxPayments","purchases","invoicedSales","cashEntries","declaraciones","settings","salesTargets"];
+  const anyError = results.some(r => r.error);
   results.forEach((r, i) => { if (r.error) console.error(`sbLoad[${names[i]}]:`, r.error.message); });
   const [
     { data: clients }, { data: leads }, { data: quotes }, { data: collections },
@@ -136,6 +137,12 @@ async function sbLoad() {
   // Otherwise Supabase is always the source of truth (changes sync via saveState → sbSync).
   const sbCount = [clients,leads,quotes,collections,expenses,team,taxPayments,purchases,invoicedSales,cashEntries,declaraciones]
     .reduce((n, a) => n + (a?.length || 0), 0);
+  // Si alguna consulta falló (red, timeout, etc.) NUNCA se debe interpretar como "cuenta nueva
+  // y vacía" — eso empujaría datos locales desactualizados y borraría lo que hay en la nube.
+  // Se corta la carga con un error claro en vez de sincronizar sobre datos incompletos.
+  if (sbCount === 0 && anyError) {
+    throw new Error("No se pudo cargar tu información desde Supabase. Revisa tu conexión e intenta de nuevo — no se modificó nada.");
+  }
   if (sbCount === 0) {
     const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
     const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);
@@ -6122,10 +6129,16 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
   syncFromSupabaseMeta(data.user);
   loginScreen.classList.add("hidden");
   if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
-  await sbLoad();
-  render();
-  hideSkeleton(2000);
-  setTimeout(initOnboarding, 400);
+  try {
+    await sbLoad();
+    render();
+    hideSkeleton(2000);
+    setTimeout(initOnboarding, 400);
+  } catch (err) {
+    console.error("sbLoad:", err);
+    hideSkeleton(0);
+    alert(err.message || "No se pudo cargar tu información. Revisa tu conexión e intenta de nuevo.");
+  }
 });
 
 profileMenuBtn.addEventListener("click", () => {
@@ -7189,10 +7202,16 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
     syncFromSupabaseMeta(sbUser);
     loginScreen.classList.add("hidden");
     if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
-    await sbLoad();
-    render();
-    hideSkeleton(2000);
-    setTimeout(initOnboarding, 400);
+    try {
+      await sbLoad();
+      render();
+      hideSkeleton(2000);
+      setTimeout(initOnboarding, 400);
+    } catch (err) {
+      console.error("sbLoad:", err);
+      hideSkeleton(0);
+      alert(err.message || "No se pudo cargar tu información. Revisa tu conexión e intenta de nuevo.");
+    }
   } else {
     hideSkeleton(0);
   }
