@@ -47,11 +47,24 @@ async function sbSyncTable(table, records) {
     }
     return filtered;
   });
-  const { data: existing } = await sb.from(table).select("id").eq("user_id", uid);
-  const dbIds = new Set((existing || []).map(r => r.id));
-  const localIds = new Set(rows.map(r => r.id));
-  const toDelete = [...dbIds].filter(id => !localIds.has(id));
-  if (toDelete.length) await sb.from(table).delete().in("id", toDelete);
+  const { data: existing, error: fetchErr } = await sb.from(table).select("id").eq("user_id", uid);
+  if (fetchErr) {
+    console.error(`sbSyncTable(${table}) no pudo verificar filas existentes, se omite el borrado por seguridad:`, fetchErr.message);
+  } else {
+    const dbIds = new Set((existing || []).map(r => r.id));
+    const localIds = new Set(rows.map(r => r.id));
+    const toDelete = [...dbIds].filter(id => !localIds.has(id));
+    // Red de seguridad: si el estado local (por cualquier bug futuro) queda incompleto,
+    // esto evita que ese hueco se convierta en un borrado masivo real en la nube — nunca se
+    // borra en silencio una porción grande de una tabla ya poblada.
+    const wipesTooMuch = dbIds.size >= 5 && toDelete.length / dbIds.size > 0.3;
+    if (wipesTooMuch) {
+      console.error(`sbSyncTable(${table}): borrado bloqueado (${toDelete.length}/${dbIds.size} filas) — parece un error, no se tocó nada.`);
+      showToast(`⚠ Se bloqueó un borrado masivo en "${table}" para proteger tus datos.`);
+    } else if (toDelete.length) {
+      await sb.from(table).delete().in("id", toDelete);
+    }
+  }
   if (rows.length) {
     const { error } = await sb.from(table).upsert(rows, { onConflict: "id" });
     if (error) console.error(`sbSyncTable(${table}):`, error.message);
@@ -147,9 +160,21 @@ async function sbLoad() {
     const local = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; } })();
     const localHasData = local && [local.clients,local.leads,local.quotes,local.expenses].some(a => a?.length);
     if (localHasData) {
-      state = migrateState(local);
-      sbSync().catch(e => console.error("sbLoad initial-push sync:", e));
-      return;
+      // Nunca subir datos locales a una cuenta "vacía" en automático y en silencio — se pide
+      // confirmación explícita, así una lectura vacía legítima (pero incorrecta) nunca termina
+      // sobrescribiendo la nube sin que la persona lo sepa y lo apruebe.
+      const counts = [
+        local.clients?.length ? `${local.clients.length} clientes` : "",
+        local.quotes?.length ? `${local.quotes.length} cotizaciones` : "",
+        local.collections?.length ? `${local.collections.length} cobros` : "",
+      ].filter(Boolean).join(", ");
+      const confirmed = confirm(`Tu cuenta en la nube aparece vacía, pero este navegador tiene una copia local guardada (${counts}).\n\n¿Quieres subir esa copia local a tu cuenta? Solo confirma esto si es la primera vez que usas esta cuenta en este dispositivo — si ya tenías datos en la nube, cancela y avisa antes de continuar.`);
+      if (confirmed) {
+        state = migrateState(local);
+        sbSync().catch(e => console.error("sbLoad initial-push sync:", e));
+        return;
+      }
+      throw new Error("Carga cancelada — no se subió ni se modificó ningún dato.");
     }
   }
   const base = seedState();
