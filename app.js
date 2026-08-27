@@ -57,7 +57,7 @@ async function sbSyncTable(table, records) {
     // Red de seguridad: si el estado local (por cualquier bug futuro) queda incompleto,
     // esto evita que ese hueco se convierta en un borrado masivo real en la nube — nunca se
     // borra en silencio una porción grande de una tabla ya poblada.
-    const wipesTooMuch = dbIds.size >= 5 && toDelete.length / dbIds.size > 0.3;
+    const wipesTooMuch = dbIds.size >= 5 && toDelete.length / dbIds.size > 0.25;
     if (wipesTooMuch) {
       console.error(`sbSyncTable(${table}): borrado bloqueado (${toDelete.length}/${dbIds.size} filas) — parece un error, no se tocó nada.`);
       showToast(`⚠ Se bloqueó un borrado masivo en "${table}" para proteger tus datos.`);
