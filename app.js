@@ -35,6 +35,20 @@ const SB_COLS = {
   declaraciones: ["id","period","igv1011","renta3121","otro","otro_concepto","status","notes"],
 };
 
+// Borrados explícitos pendientes de sincronizar con Supabase, por tabla. Persistidos en
+// localStorage para que un borrado sobreviva un refresh antes de alcanzar a sincronizar.
+// CRÍTICO: esta es la ÚNICA fuente de qué se borra en la nube — nunca se infiere comparando
+// contra lo que falta en el estado local (eso fue justo lo que causó el borrado masivo del
+// 2026-08-27: un estado local incompleto por un bug se interpretó como "esto se eliminó").
+// Un registro solo entra aquí cuando el usuario le da clic explícito a un botón "Eliminar".
+const PENDING_DELETES_KEY = "bandu-panel-pending-deletes";
+let pendingDeletes = (() => { try { return JSON.parse(localStorage.getItem(PENDING_DELETES_KEY)) || {}; } catch { return {}; } })();
+function markDeleted(table, id) {
+  pendingDeletes[table] = pendingDeletes[table] || [];
+  if (!pendingDeletes[table].includes(id)) pendingDeletes[table].push(id);
+  localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(pendingDeletes));
+}
+
 async function sbSyncTable(table, records) {
   if (!sbUser) return;
   const uid = sbUser.id;
@@ -47,22 +61,20 @@ async function sbSyncTable(table, records) {
     }
     return filtered;
   });
-  const { data: existing, error: fetchErr } = await sb.from(table).select("id").eq("user_id", uid);
-  if (fetchErr) {
-    console.error(`sbSyncTable(${table}) no pudo verificar filas existentes, se omite el borrado por seguridad:`, fetchErr.message);
-  } else {
-    const dbIds = new Set((existing || []).map(r => r.id));
-    const localIds = new Set(rows.map(r => r.id));
-    const toDelete = [...dbIds].filter(id => !localIds.has(id));
-    // Red de seguridad: si el estado local (por cualquier bug futuro) queda incompleto,
-    // esto evita que ese hueco se convierta en un borrado masivo real en la nube — nunca se
-    // borra en silencio una porción grande de una tabla ya poblada.
-    const wipesTooMuch = dbIds.size >= 5 && toDelete.length / dbIds.size > 0.25;
-    if (wipesTooMuch) {
-      console.error(`sbSyncTable(${table}): borrado bloqueado (${toDelete.length}/${dbIds.size} filas) — parece un error, no se tocó nada.`);
-      showToast(`⚠ Se bloqueó un borrado masivo en "${table}" para proteger tus datos.`);
-    } else if (toDelete.length) {
-      await sb.from(table).delete().in("id", toDelete);
+  const idsToDelete = pendingDeletes[table] || [];
+  // Tope de cordura: nunca hay una función de "borrar en lote" en la app (cada eliminación es
+  // manual, una por una), así que una lista de borrado grande no puede ser legítima — se
+  // bloquea y se avisa en vez de ejecutarla.
+  if (idsToDelete.length > 20) {
+    console.error(`sbSyncTable(${table}): se bloquearon ${idsToDelete.length} borrados pendientes (sospechoso) — no se tocó nada.`);
+    showToast(`⚠ Se bloqueó un borrado masivo en "${table}" para proteger tus datos.`);
+  } else if (idsToDelete.length) {
+    const { error } = await sb.from(table).delete().eq("user_id", uid).in("id", idsToDelete);
+    if (error) {
+      console.error(`sbSyncTable(${table}) delete:`, error.message);
+    } else {
+      pendingDeletes[table] = (pendingDeletes[table] || []).filter(id => !idsToDelete.includes(id));
+      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(pendingDeletes));
     }
   }
   if (rows.length) {
@@ -1829,10 +1841,11 @@ function clientDataScore(c) {
 }
 
 // Repara duplicados ya creados por la comparación estricta de antes (espacios/tildes/mayúsculas
-// distintas). Solo fusiona un grupo si AL MENOS uno de sus miembros luce auto-creado (score 0) —
+// distintas). Solo actúa en un grupo si AL MENOS uno de sus miembros luce auto-creado (score 0) —
 // si todos tienen datos propios, no arriesga fusionar dos clientes legítimos con nombre parecido.
-// Repunta las cotizaciones/leads del duplicado al nombre del cliente canónico (el más completo)
-// y elimina el duplicado, para que no vuelva a recrearse en la próxima carga.
+// Repunta las cotizaciones/leads del duplicado al nombre del cliente canónico (el más completo).
+// NO elimina el duplicado — ningún proceso automático borra datos; si el usuario quiere limpiar
+// el registro vacío que quede, lo hace manualmente con el botón Eliminar de Clientes.
 function mergeDuplicateClients(st) {
   const clients = st.clients || [];
   if (clients.length < 2) return false;
@@ -1843,20 +1856,16 @@ function mergeDuplicateClients(st) {
     groups.get(key).push(c);
   });
   let changed = false;
-  const toRemove = new Set();
   groups.forEach(group => {
     if (group.length < 2) return;
     if (!group.some(c => clientDataScore(c) === 0)) return;
     group.sort((a, b) => clientDataScore(b) - clientDataScore(a));
     const canonical = group[0];
     group.slice(1).forEach(dupe => {
-      (st.quotes || []).forEach(q => { if (q.client === dupe.name) q.client = canonical.name; });
-      (st.leads  || []).forEach(l => { if (l.client === dupe.name) l.client = canonical.name; });
-      toRemove.add(dupe.id);
-      changed = true;
+      (st.quotes || []).forEach(q => { if (q.client === dupe.name) { q.client = canonical.name; changed = true; } });
+      (st.leads  || []).forEach(l => { if (l.client === dupe.name) { l.client = canonical.name; changed = true; } });
     });
   });
-  if (changed) st.clients = st.clients.filter(c => !toRemove.has(c.id));
   return changed;
 }
 
@@ -3641,7 +3650,9 @@ function bindViewEvents() {
   bindActions("[data-copy-quote]", id => duplicateQuote(id));
   bindActions("[data-delete-quote]", id => {
     confirmDelete("Esta cotización y sus cobranzas asociadas serán eliminadas permanentemente.", () => {
+      state.collections.filter(c => c.quoteId === id).forEach(c => markDeleted("collections", c.id));
       state.collections = state.collections.filter(c => c.quoteId !== id);
+      markDeleted("quotes", id);
       state.quotes = state.quotes.filter(q => q.id !== id);
       saveState(); render();
     });
@@ -3652,6 +3663,7 @@ function bindViewEvents() {
   bindActions("[data-edit-client]", id => openClientDialog(state.clients.find(x => x.id === id)));
   bindActions("[data-delete-client]", id => {
     if (!confirm("¿Eliminar este cliente? Esta acción no se puede deshacer.")) return;
+    markDeleted("clients", id);
     state.clients = state.clients.filter(c => c.id !== id);
     saveState(); render(); showToast("Cliente eliminado");
   });
@@ -3674,6 +3686,7 @@ function bindViewEvents() {
   bindActions("[data-edit-team]", id => openTeamDialog(state.team.find(x => x.id === id)));
   bindActions("[data-delete-team]", id => {
     confirmDelete("Este pago será eliminado permanentemente y no se podrá restablecer.", () => {
+      markDeleted("team_payments", id);
       state.team = state.team.filter(t => t.id !== id);
       saveState(); render();
     });
@@ -3682,6 +3695,7 @@ function bindViewEvents() {
   bindActions("[data-delete-taxpayment]", id => {
     confirmDelete("Este pago SUNAT será eliminado permanentemente.", () => {
       const tp = (state.taxPayments || []).find(t => t.id === id);
+      markDeleted("tax_payments", id);
       state.taxPayments = (state.taxPayments || []).filter(t => t.id !== id);
       // Si era una detracción vinculada a una cobranza, revertir su estado a Pendiente
       // para que la obligación vuelva a aparecer en "Obligaciones generadas".
@@ -3697,6 +3711,7 @@ function bindViewEvents() {
   bindActions("[data-edit-declaracion]", id => openDeclaracionDialog((state.declaraciones || []).find(x => x.id === id)));
   bindActions("[data-delete-declaracion]", id => {
     confirmDelete("Esta declaración será eliminada permanentemente.", () => {
+      markDeleted("declaraciones", id);
       state.declaraciones = (state.declaraciones || []).filter(d => d.id !== id);
       saveState(); render();
     });
@@ -3704,6 +3719,7 @@ function bindViewEvents() {
   bindActions("[data-edit-purchase]", id => openPurchaseDialog((state.purchases || []).find(x => x.id === id)));
   bindActions("[data-delete-purchase]", id => {
     confirmDelete("Esta compra será eliminada permanentemente.", () => {
+      markDeleted("purchases", id);
       state.purchases = (state.purchases || []).filter(p => p.id !== id);
       saveState(); render();
     });
@@ -3722,6 +3738,7 @@ function bindViewEvents() {
   });
   bindActions("[data-delete-cash-entry]", id => {
     confirmDelete("Este movimiento será eliminado permanentemente y no se podrá restablecer.", () => {
+      markDeleted("cash_entries", id);
       state.cashEntries = (state.cashEntries || []).filter(e => e.id !== id);
       saveState(); render();
     });
@@ -4293,7 +4310,9 @@ function bindQuoteTableActions() {
   bindActions("[data-copy-quote]", id => duplicateQuote(id));
   bindActions("[data-delete-quote]", id => {
     confirmDelete("Esta cotización y sus cobranzas asociadas serán eliminadas permanentemente.", () => {
+      state.collections.filter(c => c.quoteId === id).forEach(c => markDeleted("collections", c.id));
       state.collections = state.collections.filter(c => c.quoteId !== id);
+      markDeleted("quotes", id);
       state.quotes = state.quotes.filter(q => q.id !== id);
       saveState(); render();
     });
