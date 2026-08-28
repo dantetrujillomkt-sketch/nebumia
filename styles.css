@@ -1372,7 +1372,7 @@ tr:last-child td { border-bottom: 0; }
 .col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 2; }
 .col-resize-handle:hover, .col-resizing .col-resize-handle { background: rgba(255,81,0,.25); }
 .col-resizing, .col-resizing * { cursor: col-resize !important; user-select: none !important; }
-.table-resized table { table-layout: fixed; }
+.table-resized table { table-layout: fixed; width: auto; min-width: 0; }
 .table-resized th, .table-resized td { white-space: normal; overflow-wrap: break-word; word-break: break-word; }
 /* Cells that should wrap (service/concept descriptions) */
 td.cell-wrap { white-space: normal; word-break: break-word; }
