@@ -2390,7 +2390,7 @@ const views = {
         `,
         metricsToggle: true
       })}
-      ${table(["PPTO","Fecha venta","Servicio","Cliente","Factura","Fecha PP","Fecha RP","Moneda","Total","Detracción","Monto recibir","Cuenta","Nro pago","Repo","Estado","Acciones"], allColls.map(r => {
+      ${table(["PPTO","Fecha venta","Servicio","Cliente","Factura","Fecha PP","Fecha RP","Moneda","Total","Detracción","Monto recibir","Cuenta","Nro pago","Repositorio","Estado","Acciones"], allColls.map(r => {
         const nroPago    = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
         const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
         const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
