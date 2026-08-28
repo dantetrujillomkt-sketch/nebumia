@@ -1682,16 +1682,17 @@ label.profile-photo-upload-btn {
 .action-link {
   border: 0;
   background: transparent;
-  color: var(--brand-strong);
+  color: var(--muted);
   padding: 0;
   font-weight: 550;
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
+.action-link:hover { color: var(--ink); }
 .action-link .app-icon { width: 14px; height: 14px; }
-.danger-link { color: var(--danger); }
-.action-link--danger { color: var(--coral); }
+.danger-link { color: var(--muted); }
+.action-link--danger { color: var(--muted); }
 .action-link--danger:hover { color: var(--danger); }
 .row-actions {
   display: flex;
@@ -2708,7 +2709,8 @@ label.profile-photo-upload-btn {
   font-weight: 500;
   white-space: nowrap;
 }
-.action-link.danger { color: var(--danger); }
+.action-link.danger { color: var(--muted); }
+.action-link.danger:hover { color: var(--danger); }
 
 /* Quote form calc preview */
 .quote-subtotal-block { display: flex; flex-direction: column; gap: 10px; }
