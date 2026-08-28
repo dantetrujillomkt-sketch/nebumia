@@ -878,7 +878,10 @@ function setAuthMode(mode) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  // Fecha calendario LOCAL, no UTC — toISOString() usa UTC y puede adelantar o atrasar
+  // el día real según la hora y el huso horario, rompiendo los filtros de fecha ("hoy",
+  // "este mes", etc.) justo en el límite del rango.
+  return isoDate(new Date());
 }
 
 function isoDate(date) {
