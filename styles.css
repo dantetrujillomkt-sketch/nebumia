@@ -1365,6 +1365,10 @@ tr:last-child td { border-bottom: 0; }
 .table-wrap table th:last-child { width: 90px; }
 .table-wrap table td:last-child { text-align: right; }
 
+/* Prueba: cuadrícula completa (bordes en cada celda) solo en la tabla de Cobranzas */
+.table-collections th, .table-collections td { border: 1px solid var(--line); }
+.table-collections tr:last-child td { border-bottom: 1px solid var(--line); }
+
 /* Ajuste de ancho de columna estilo Excel: manija invisible en el borde derecho de cada
    encabezado; una vez que la tabla tiene anchos guardados, pasa a table-layout fixed y el
    contenido que no quepa baja de línea (crece la fila) en vez de cortarse o estirar la tabla. */
