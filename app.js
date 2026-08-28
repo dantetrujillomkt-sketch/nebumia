@@ -4127,9 +4127,27 @@ function bindViewEvents() {
   });
   document.querySelectorAll("[data-delete-service]").forEach(btn => btn.addEventListener("click", () => {
     const i = Number(btn.dataset.deleteService);
-    confirmDelete("Este servicio será eliminado del catálogo permanentemente.", () => {
+    const serviceName = state.services[i];
+    const affected = state.quotes.filter(q => q.service === serviceName);
+    const impactHtml = affected.length
+      ? `<button type="button" id="confirmServiceQuotesToggle" class="action-link" style="text-decoration:underline;margin-top:6px">${affected.length} cotización${affected.length === 1 ? "" : "es"} ${affected.length === 1 ? "usa" : "usan"} este servicio</button>
+         <div id="confirmServiceQuotesList" class="hidden" style="margin-top:8px;max-height:160px;overflow-y:auto;text-align:left;border:1px solid var(--line);border-radius:8px;padding:6px;">
+           ${affected.map(q => `<button type="button" class="action-link" data-open-affected-quote="${q.id}" style="display:block;width:100%;text-align:left;padding:5px 6px">${escapeHtml(displayCode(q.code))} · ${escapeHtml(q.client)}</button>`).join("")}
+         </div>`
+      : `<span style="display:block;margin-top:6px;color:var(--muted);font-size:12px">Ninguna cotización usa este servicio actualmente.</span>`;
+    confirmDelete(`Este servicio será eliminado del catálogo permanentemente.${impactHtml}`, () => {
       state.services = state.services.filter((_, idx) => idx !== i);
       saveState(); render();
+    });
+    const toggleBtn = document.getElementById("confirmServiceQuotesToggle");
+    const list = document.getElementById("confirmServiceQuotesList");
+    if (toggleBtn && list) toggleBtn.addEventListener("click", () => list.classList.toggle("hidden"));
+    document.querySelectorAll("[data-open-affected-quote]").forEach(b => {
+      b.addEventListener("click", () => {
+        document.getElementById("confirmModal").classList.add("hidden");
+        _pendingDeleteCallback = null;
+        openQuoteDialog(state.quotes.find(q => q.id === b.dataset.openAffectedQuote));
+      });
     });
   }));
   document.querySelectorAll("[data-open-cash-entry]").forEach(btn => {
@@ -6632,7 +6650,7 @@ function initConfirmDialog() {
 function confirmDelete(message, onConfirm) {
   const modal = document.getElementById("confirmModal");
   if (!modal) return;
-  document.getElementById("confirmMessage").textContent = message || "Esta acción no se puede revertir. El elemento será eliminado permanentemente.";
+  document.getElementById("confirmMessage").innerHTML = message || "Esta acción no se puede revertir. El elemento será eliminado permanentemente.";
   _pendingDeleteCallback = onConfirm;
   modal.classList.remove("hidden");
 }
