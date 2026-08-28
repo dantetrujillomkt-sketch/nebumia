@@ -3343,7 +3343,11 @@ function table(headers, rows, key = null) {
   const colgroup = `<colgroup>${headers.map((_, i) => `<col${savedWidths && savedWidths[i] ? ` style="width:${savedWidths[i]}px"` : ""}>`).join("")}</colgroup>`;
   const theadRow = headers.map((h, i) => `<th>${h}<span class="col-resize-handle" data-col-idx="${i}"></span></th>`).join("");
   const wrapCls = savedWidths ? " table-resized" : "";
-  return `<div class="table-wrap${wrapCls}" data-table-key="${escapeAttr(key || "")}"><table${cls}>${colgroup}<thead><tr>${theadRow}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
+  // El ancho de la tabla se fija en px (suma de columnas), NUNCA "auto": con table-layout
+  // fixed, "auto" igual se deja comprimir por el contenedor, arrastrando todas las columnas
+  // proporcionalmente en vez de dejar que cada una sea independiente y la tabla desborde.
+  const tableStyle = savedWidths ? ` style="width:${savedWidths.reduce((a, w) => a + (w || 0), 0)}px"` : "";
+  return `<div class="table-wrap${wrapCls}" data-table-key="${escapeAttr(key || "")}"><table${cls}${tableStyle}>${colgroup}<thead><tr>${theadRow}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
 }
 
 function initColumnResize() {
@@ -3365,6 +3369,7 @@ function initColumnResize() {
         let widths = getColWidths(key) || ths.map(t => t.getBoundingClientRect().width);
         widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w + "px"; });
         tableEl.style.tableLayout = "fixed";
+        tableEl.style.width = widths.reduce((a, w) => a + w, 0) + "px";
         wrap.classList.add("table-resized");
         const startX = e.clientX;
         const startWidth = widths[idx];
@@ -3373,6 +3378,7 @@ function initColumnResize() {
           const newWidth = Math.max(50, startWidth + (moveEvt.clientX - startX));
           widths[idx] = newWidth;
           cols[idx].style.width = newWidth + "px";
+          tableEl.style.width = widths.reduce((a, w) => a + w, 0) + "px";
         };
         const onUp = () => {
           document.removeEventListener("mousemove", onMove);
