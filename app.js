@@ -2197,7 +2197,7 @@ const views = {
               <div class="timeline">
                 ${pendingDets.map(r => `
                   <div class="timeline-item timeline-item--overdue">
-                    <div class="timeline-row"><strong>${escapeHtml(r.client)}</strong><span class="status pendiente">Pendiente</span></div>
+                    <div class="timeline-row"><strong>${escapeHtml(r.client)}</strong><span class="status pendiente"><i class="status-dot"></i>Pendiente</span></div>
                     <div class="timeline-row"><span>${r.mode === "bandu" ? "Nosotros pagamos" : "Cobrar al cliente"} · ${fmt(r.detActual, "PEN")}</span><small>${fmtDate(r.dueDate || r.paidDate)}</small></div>
                   </div>`).join("")}
               </div>
@@ -2580,9 +2580,9 @@ const views = {
           rows.map(r => [
             fmtDate(r.date),
             r.status === "Pendiente"
-              ? `${escapeHtml(r.concept)} <span class="status pendiente" style="font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle">Pendiente</span>`
+              ? `${escapeHtml(r.concept)} <span class="status pendiente" style="font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle;min-width:auto"><i class="status-dot"></i>Pendiente</span>`
               : r.status === "Exonerado"
-                ? `${escapeHtml(r.concept)} <span class="status pendiente" style="font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle">Exonerado</span>`
+                ? `${escapeHtml(r.concept)} <span class="status pendiente" style="font-size:10px;padding:1px 6px;margin-left:4px;vertical-align:middle;min-width:auto"><i class="status-dot"></i>Exonerado</span>`
                 : escapeHtml(r.concept),
             escapeHtml(r.category),
             `<span class="source-tag">${r.source}</span>`,
@@ -2864,7 +2864,7 @@ const views = {
             const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
             const invoiceDate = r.dueDate || r.wonDate;
             const estadoBadge = mode === "cliente"
-              ? `<span class="status cliente">Cliente</span>`
+              ? `<span class="status cliente"><i class="status-dot"></i>Cliente</span>`
               : `<button class="detstatus-toggle" data-toggle-detstatus="${r.id}" type="button" title="Clic para marcar como ${detStatus === "Completado" ? "Pendiente" : "Pagada"}">${badge(detStatus === "Completado" ? "Pagado" : "Pendiente")}</button>`;
             return [
               fmtDate(invoiceDate), nroPago,
@@ -3307,7 +3307,7 @@ function alertItem(title, note) {
 }
 
 function badge(status) {
-  return `<span class="status ${normalizeStatus(status)}">${status}</span>`;
+  return `<span class="status ${normalizeStatus(status)}"><i class="status-dot"></i>${status}</span>`;
 }
 
 // Anchos de columna ajustados a mano por el usuario (estilo Excel), guardados por tabla —
