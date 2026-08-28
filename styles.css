@@ -1364,6 +1364,7 @@ th { color: var(--ink); font-size: 11px; font-weight: 550; text-transform: upper
 tr:last-child td { border-bottom: 0; }
 .table-wrap table th:last-child { width: 90px; }
 .table-wrap table th:last-child, .table-wrap table td:last-child { border-right: 0; }
+.table-wrap table tfoot td { font-weight: 700; color: var(--ink); background: var(--soft); border-top: 2px solid var(--line); border-bottom: 0; }
 .table-wrap table td:last-child { text-align: right; }
 
 /* Ajuste de ancho de columna estilo Excel: manija invisible en el borde derecho de cada

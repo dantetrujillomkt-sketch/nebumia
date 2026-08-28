@@ -1227,6 +1227,7 @@ function wonQuotes() {
 function annualProjectionTables() {
   const year = new Date().getFullYear();
   const currentMk = `${year}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  let penGoalSum = 0, penGanadoSum = 0, penCobradoSum = 0;
   const penRows = months.map((name, i) => {
     const monthNum = i + 1;
     const key = `${year}-${String(monthNum).padStart(2, "0")}`;
@@ -1235,10 +1236,15 @@ function annualProjectionTables() {
     const goal = target.pen || 0;
     const ganado = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
     const cobrado = collectionRows().filter(c => (c.currency||"PEN") === "PEN" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
+    penGoalSum += goal; penGanadoSum += ganado; penCobradoSum += cobrado;
     const pct = goal > 0 ? Math.round((ganado / goal) * 100) : 0;
     const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
     return [nameTd, goal > 0 ? fmt(goal) : "—", fmt(ganado), fmt(cobrado), goal > 0 ? `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>` : "—"];
   });
+  const penTotalPct = penGoalSum > 0 ? Math.round((penGanadoSum / penGoalSum) * 100) : 0;
+  const penFooter = ["Total", penGoalSum > 0 ? fmt(penGoalSum) : "—", fmt(penGanadoSum), fmt(penCobradoSum), penGoalSum > 0 ? `<span class="${penTotalPct >= 100 ? "badge-ok" : penTotalPct >= 50 ? "badge-warn" : "badge-low"}">${penTotalPct}%</span>` : "—"];
+
+  let usdGoalSum = 0, usdGanadoSum = 0, usdCobradoSum = 0;
   const usdRows = months.map((name, i) => {
     const monthNum = i + 1;
     const key = `${year}-${String(monthNum).padStart(2, "0")}`;
@@ -1247,19 +1253,23 @@ function annualProjectionTables() {
     const goalUsd = target.usd || 0;
     const ganado = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
     const cobrado = collectionRows().filter(c => c.currency === "USD" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
+    usdGoalSum += goalUsd; usdGanadoSum += ganado; usdCobradoSum += cobrado;
     const pct = goalUsd > 0 ? Math.round((ganado / goalUsd) * 100) : 0;
     const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
     return [nameTd, goalUsd > 0 ? fmt(goalUsd, "USD") : "—", fmt(ganado, "USD"), fmt(cobrado, "USD"), goalUsd > 0 ? `<span class="${pct >= 100 ? "badge-ok" : pct >= 50 ? "badge-warn" : "badge-low"}">${pct}%</span>` : "—"];
   });
+  const usdTotalPct = usdGoalSum > 0 ? Math.round((usdGanadoSum / usdGoalSum) * 100) : 0;
+  const usdFooter = ["Total", usdGoalSum > 0 ? fmt(usdGoalSum, "USD") : "—", fmt(usdGanadoSum, "USD"), fmt(usdCobradoSum, "USD"), usdGoalSum > 0 ? `<span class="${usdTotalPct >= 100 ? "badge-ok" : usdTotalPct >= 50 ? "badge-warn" : "badge-low"}">${usdTotalPct}%</span>` : "—"];
+
   return `
     <div class="annual-proj-tables">
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Soles (S/)</div>
-        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows, "targets-pen")}
+        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows, "targets-pen", penFooter)}
       </div>
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Dólares ($)</div>
-        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows, "targets-usd")}
+        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows, "targets-usd", usdFooter)}
       </div>
     </div>`;
 }
@@ -3327,7 +3337,7 @@ function setColWidths(key, widths) {
   } catch {}
 }
 
-function table(headers, rows, key = null) {
+function table(headers, rows, key = null, footerRow = null) {
   if (!rows.length) return `<div class="empty-state">Sin registros todavia.</div>`;
   let displayRows = rows;
   let paginatorHtml = "";
@@ -3347,7 +3357,9 @@ function table(headers, rows, key = null) {
   // fixed, "auto" igual se deja comprimir por el contenedor, arrastrando todas las columnas
   // proporcionalmente en vez de dejar que cada una sea independiente y la tabla desborde.
   const tableStyle = savedWidths ? ` style="width:${savedWidths.reduce((a, w) => a + (w || 0), 0)}px"` : "";
-  return `<div class="table-wrap${wrapCls}" data-table-key="${escapeAttr(key || "")}"><table${cls}${tableStyle}>${colgroup}<thead><tr>${theadRow}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
+  // Fila de totales: siempre visible (no se pagina), va después de todas las filas de datos.
+  const tfoot = footerRow ? `<tfoot><tr>${footerRow.map(cell => `<td>${cell}</td>`).join("")}</tr></tfoot>` : "";
+  return `<div class="table-wrap${wrapCls}" data-table-key="${escapeAttr(key || "")}"><table${cls}${tableStyle}>${colgroup}<thead><tr>${theadRow}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody>${tfoot}</table></div>${paginatorHtml}`;
 }
 
 function initColumnResize() {
