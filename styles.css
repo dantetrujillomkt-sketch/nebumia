@@ -2663,6 +2663,34 @@ label.profile-photo-upload-btn {
   border-bottom-color: var(--brand);
   font-weight: 600;
 }
+.settings-layout { display: flex; align-items: flex-start; gap: 24px; }
+.settings-sidenav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 200px;
+  flex-shrink: 0;
+}
+.settings-sidenav-btn {
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.settings-sidenav-btn:hover { color: var(--ink); background: var(--hover); }
+.settings-sidenav-btn.active { color: var(--brand); background: rgba(255,81,0,.1); font-weight: 600; }
+.settings-content { flex: 1; min-width: 0; }
+@media (max-width: 768px) {
+  .settings-layout { flex-direction: column; }
+  .settings-sidenav { flex-direction: row; width: 100%; overflow-x: auto; gap: 4px; }
+  .settings-sidenav-btn { white-space: nowrap; flex-shrink: 0; }
+}
 .caja-section {
   margin-bottom: 28px;
   background: var(--panel);

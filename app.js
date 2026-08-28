@@ -2941,8 +2941,8 @@ const views = {
       { key: "perfiles",   label: "Perfiles" },
     ];
 
-    const tabStrip = `<div class="caja-bank-tabs">
-      ${settingsTabs.map(t => `<button class="caja-bank-btn ${activeSettingsTab === t.key ? "active" : ""}" data-settings-tab="${t.key}">${t.label}</button>`).join("")}
+    const tabStrip = `<div class="settings-sidenav">
+      ${settingsTabs.map(t => `<button class="settings-sidenav-btn ${activeSettingsTab === t.key ? "active" : ""}" data-settings-tab="${t.key}">${t.label}</button>`).join("")}
     </div>`;
 
     let tabContent = "";
@@ -3294,7 +3294,7 @@ const views = {
         </section>`;
     }
 
-    return `${tabStrip}${tabContent}`;
+    return `<div class="settings-layout">${tabStrip}<div class="settings-content">${tabContent}</div></div>`;
   }
 };
 
