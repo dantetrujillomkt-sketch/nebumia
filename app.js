@@ -2347,7 +2347,7 @@ const views = {
           escapeHtml(s.bankAccount || "—"),
           nroPago,
           badge(s.status),
-          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.quoteId}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.quoteId}" type="button">${icon("edit")}</button></div>`
         ];
       }), "sales")}`;
 
@@ -2555,16 +2555,16 @@ const views = {
     const pending = pendingCobros.reduce((s, c) => s + c.amount, 0);
 
     const editBtn = row => {
-      if (row.sourceType === "expense")   return `<div class="row-actions"><button class="action-link" data-edit-expense="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
-      if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
-      if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" data-edit-fixed-month="${(row.date || "").substring(0, 7)}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "expenseRecurring") return `<div class="row-actions"><button class="action-link" data-edit-expense-recur="${row.sourceId}" data-edit-fixed-month="${(row.date || "").substring(0, 7)}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
-      if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}<span>Editar saldo</span></button></div>`;
+      if (row.sourceType === "expense")   return `<div class="row-actions"><button class="action-link" data-edit-expense="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "team")       return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-team="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "commission") return `<div class="row-actions"><button class="action-link" data-edit-team="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "tax")       return `<div class="row-actions"><button class="action-link" data-edit-taxpayment="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "cashEntry")   return `<div class="row-actions"><button class="action-link" data-edit-cash-entry="${row.sourceId}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-cash-entry="${row.sourceId}" type="button">${icon("trash")}</button></div>`;
+      if (row.sourceType === "collection")   return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "collectionDet") return `<div class="row-actions"><button class="action-link" data-edit-collection="${row.sourceId}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "fixedExpense") return `<div class="row-actions"><button class="action-link" data-edit-fixed-expense="${row.sourceId}" data-edit-fixed-month="${(row.date || "").substring(0, 7)}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "expenseRecurring") return `<div class="row-actions"><button class="action-link" data-edit-expense-recur="${row.sourceId}" data-edit-fixed-month="${(row.date || "").substring(0, 7)}" type="button">${icon("edit")}</button></div>`;
+      if (row.sourceType === "saldoAnterior") return `<div class="row-actions"><button class="action-link" data-edit-saldo="${escapeAttr(row._monthKey + "||" + row.bankAccount + "||" + row._signedAmount)}" type="button">${icon("edit")}</button></div>`;
       return "—";
     };
 
@@ -2731,7 +2731,7 @@ const views = {
             ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" title="Ver RHE" style="color:var(--brand)">${icon("link")}</a>`
             : `<span style="color:var(--muted)">${icon("link")}</span>`,
           badge(t.status),
-          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
+          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}</button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
         ];
       }), "team")}`;
   },
@@ -2812,7 +2812,7 @@ const views = {
             nroPago,
             sRepoIcon,
             badge(declaredStatus),
-            `<div class="row-actions"><button class="action-link" data-edit-collection="${s.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+            `<div class="row-actions"><button class="action-link" data-edit-collection="${s.id}" type="button">${icon("edit")}</button></div>`
           ];
         }), "invoiced-sales")}
       </div>
@@ -2838,7 +2838,7 @@ const views = {
             "—",
             repoIcon,
             badge(declaredStatus),
-            `<div class="row-actions"><button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-purchase="${p.id}" type="button" title="Eliminar compra">${icon("trash")}</button></div>`
+            `<div class="row-actions"><button class="action-link" data-edit-purchase="${p.id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-purchase="${p.id}" type="button" title="Eliminar compra">${icon("trash")}</button></div>`
           ];
         }), "purchases")}
       </div>
@@ -2871,7 +2871,7 @@ const views = {
               escapeHtml(r.client), escapeHtml(r.invoice || "—"),
               fmt(subtotal, r.currency), fmt(igv, r.currency),
               fmt(r.amount, r.currency), fmt(detActual, "PEN"), estadoBadge,
-              `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`
+              `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}</button></div>`
             ];
           }), "tax-obligations");
         })()}
@@ -2905,7 +2905,7 @@ const views = {
                 escapeHtml(d.otroConcepto || "—"),
                 `<strong>${fmt(total)}</strong>`,
                 badge(d.status),
-                `<div class="row-actions"><button class="action-link" data-edit-declaracion="${d.id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-declaracion="${d.id}" type="button">${icon("trash")}</button></div>`
+                `<div class="row-actions"><button class="action-link" data-edit-declaracion="${d.id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-declaracion="${d.id}" type="button">${icon("trash")}</button></div>`
               ];
             }), "declaraciones");
         })()}
@@ -2994,7 +2994,7 @@ const views = {
                 <span class="bank-account-name">${escapeHtml(a)}</span>
                 <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(a)}" data-bank-idx="${i}">
                 <div class="bank-account-actions">
-                  <button class="action-link" data-edit-bank-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-bank-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-bank-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-bank="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3028,7 +3028,7 @@ const views = {
                   <td><span class="fe-account-tag ${isCC ? "cc" : "cp"}">${escapeHtml(f.assignedAccount)}</span></td>
                   <td>
                     <div class="bank-account-actions">
-                      <button class="action-link fe-edit" data-fe-edit="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                      <button class="action-link fe-edit" data-fe-edit="${i}" type="button">${icon("edit")}</button>
                       <button class="action-link fe-save" data-fe-save="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                       <button class="action-link danger" data-fe-delete="${i}" type="button">${icon("trash")}</button>
                     </div>
@@ -3060,7 +3060,7 @@ const views = {
                   <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(m.name)}" data-member-idx="${i}">
                 </div>
                 <div class="bank-account-actions">
-                  <button class="action-link" data-edit-member-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-member-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-member-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-member="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3088,7 +3088,7 @@ const views = {
                 </div>
                 <div class="bank-account-actions">
                   <button class="action-link" data-toggle-profile-comm="${i}" type="button" title="${p.hasCommission ? "Quitar comisión" : "Activar comisión"}">${p.hasCommission ? icon("check") : icon("plus")}<span>${p.hasCommission ? "Comisión ON" : "Comisión OFF"}</span></button>
-                  <button class="action-link" data-edit-profile-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-profile-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-profile-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-profile="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3113,7 +3113,7 @@ const views = {
                 <span class="bank-account-name">${escapeHtml(s)}</span>
                 <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(s)}" data-source-idx="${i}">
                 <div class="bank-account-actions">
-                  <button class="action-link" data-edit-source-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-source-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-source-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-source="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3137,7 +3137,7 @@ const views = {
                 <span class="bank-account-name">${escapeHtml(c)}</span>
                 <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(c)}" data-cat-idx="${i}">
                 <div class="bank-account-actions">
-                  <button class="action-link" data-edit-cat-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-cat-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-cat-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-cat="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3186,7 +3186,7 @@ const views = {
                 <span class="bank-account-name">${escapeHtml(s)}</span>
                 <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(s)}" data-service-idx="${i}">
                 <div class="bank-account-actions">
-                  <button class="action-link" data-edit-service-inline="${i}" type="button">${icon("edit")}<span>Editar</span></button>
+                  <button class="action-link" data-edit-service-inline="${i}" type="button">${icon("edit")}</button>
                   <button class="action-link" data-save-service-inline="${i}" type="button" style="display:none">${icon("check")}<span>Guardar</span></button>
                   <button class="action-link danger" data-delete-service="${i}" type="button">${icon("trash")}</button>
                 </div>
@@ -3397,7 +3397,7 @@ function leadActions(l) {
   const quoteText = l.quoteId ? "Ver cotizacion" : "Cotizar";
   return `
     <div class="row-actions">
-      <button class="action-link" data-edit-lead="${l.id}" type="button">${icon("edit")}<span>Editar</span></button>
+      <button class="action-link" data-edit-lead="${l.id}" type="button">${icon("edit")}</button>
       <button class="action-link" data-quote-lead="${l.id}" type="button">${icon("fileText")}<span>${quoteText}</span></button>
       <button class="action-link danger-link" data-close-lead="${l.id}" type="button">${icon("x")}<span>Cerrar perdido</span></button>
     </div>
@@ -3435,7 +3435,7 @@ function quotesTable(rows) {
 function quoteActions(q) {
   return `
     <div class="row-actions">
-      <button class="action-link" data-edit-quote="${q.id}" type="button">${icon("edit")}<span>Editar</span></button>
+      <button class="action-link" data-edit-quote="${q.id}" type="button">${icon("edit")}</button>
       <button class="action-link" data-copy-quote="${q.id}" type="button" title="Duplicar cotización">${icon("copy")}</button>
       <button class="action-link danger" data-delete-quote="${q.id}" type="button" title="Eliminar cotización">${icon("trash")}</button>
     </div>
@@ -3452,11 +3452,11 @@ function duplicateQuote(id) {
 }
 
 function clientActions(id) {
-  return `<div class="row-actions"><button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}<span>Editar</span></button><button class="action-link danger" data-delete-client="${id}" type="button">${icon("trash")}</button></div>`;
+  return `<div class="row-actions"><button class="action-link" data-edit-client="${id}" type="button">${icon("edit")}</button><button class="action-link danger" data-delete-client="${id}" type="button">${icon("trash")}</button></div>`;
 }
 
 function collectionActions(r) {
-  return `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}<span>Editar</span></button></div>`;
+  return `<div class="row-actions"><button class="action-link" data-edit-collection="${r.id}" type="button">${icon("edit")}</button></div>`;
 }
 
 function options(values, selected = "") {
