@@ -2269,7 +2269,7 @@ const views = {
       escapeHtml(client.contact || "—"),
       client.email ? `<a href="mailto:${escapeAttr(client.email)}" class="action-link">${escapeHtml(client.email)}</a>` : "—",
       escapeHtml(client.phone || "—"),
-      client.clientType ? `<span class="badge-type">${escapeHtml(client.clientType)}</span>` : "—",
+      escapeHtml(client.clientType || "—"),
       escapeHtml(client.country || "—"),
       escapeHtml(client.owner || "—"),
       clientActions(client.id)
