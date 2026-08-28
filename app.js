@@ -1255,11 +1255,11 @@ function annualProjectionTables() {
     <div class="annual-proj-tables">
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Soles (S/)</div>
-        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows)}
+        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows, "targets-pen")}
       </div>
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Dólares ($)</div>
-        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows)}
+        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows, "targets-usd")}
       </div>
     </div>`;
 }
@@ -1963,6 +1963,7 @@ function render() {
   const hasCustomHeader = viewContent.includes("data-page-header");
   viewRoot.innerHTML = `${hasCustomHeader ? "" : `<h1 class="page-title">${item[1]}</h1>`}${viewContent}`;
   bindViewEvents();
+  initColumnResize();
   drawCharts();
 }
 
@@ -3309,6 +3310,23 @@ function badge(status) {
   return `<span class="status ${normalizeStatus(status)}">${status}</span>`;
 }
 
+// Anchos de columna ajustados a mano por el usuario (estilo Excel), guardados por tabla —
+// cada tabla es independiente y el ajuste persiste entre recargas. Es una preferencia visual
+// de este navegador, no un dato del negocio, así que vive en localStorage, no en Supabase.
+const COL_WIDTHS_KEY = "bandu-panel-col-widths";
+function getColWidths(key) {
+  if (!key) return null;
+  try { return (JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)) || {})[key] || null; } catch { return null; }
+}
+function setColWidths(key, widths) {
+  if (!key) return;
+  try {
+    const all = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY)) || {};
+    all[key] = widths;
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(all));
+  } catch {}
+}
+
 function table(headers, rows, key = null) {
   if (!rows.length) return `<div class="empty-state">Sin registros todavia.</div>`;
   let displayRows = rows;
@@ -3321,13 +3339,58 @@ function table(headers, rows, key = null) {
     paginatorHtml = renderPaginator(key, pg.page, totalPages, pg.pageSize, rows.length);
   }
   const cls = key ? ` class="table-${key}"` : "";
-  return `<div class="table-wrap"><table${cls}><thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
+  const savedWidths = getColWidths(key);
+  const colgroup = `<colgroup>${headers.map((_, i) => `<col${savedWidths && savedWidths[i] ? ` style="width:${savedWidths[i]}px"` : ""}>`).join("")}</colgroup>`;
+  const theadRow = headers.map((h, i) => `<th>${h}<span class="col-resize-handle" data-col-idx="${i}"></span></th>`).join("");
+  const wrapCls = savedWidths ? " table-resized" : "";
+  return `<div class="table-wrap${wrapCls}" data-table-key="${escapeAttr(key || "")}"><table${cls}>${colgroup}<thead><tr>${theadRow}</tr></thead><tbody>${displayRows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>${paginatorHtml}`;
+}
+
+function initColumnResize() {
+  document.querySelectorAll(".table-wrap[data-table-key]").forEach(wrap => {
+    const key = wrap.dataset.tableKey;
+    const tableEl = wrap.querySelector("table");
+    if (!key || !tableEl) return;
+    wrap.querySelectorAll(".col-resize-handle").forEach(handle => {
+      if (handle.dataset.bound) return;
+      handle.dataset.bound = "1";
+      handle.addEventListener("mousedown", e => {
+        e.preventDefault();
+        const ths = [...tableEl.querySelectorAll("thead th")];
+        const idx = ths.indexOf(handle.closest("th"));
+        const cols = tableEl.querySelector("colgroup")?.children;
+        if (!cols || !cols.length || idx < 0) return;
+        // Primer ajuste en esta tabla: fija el ancho actual de TODAS las columnas como punto
+        // de partida (así no salta nada), y de ahí en más solo cambia table-layout a fixed.
+        let widths = getColWidths(key) || ths.map(t => t.getBoundingClientRect().width);
+        widths.forEach((w, i) => { if (cols[i]) cols[i].style.width = w + "px"; });
+        tableEl.style.tableLayout = "fixed";
+        wrap.classList.add("table-resized");
+        const startX = e.clientX;
+        const startWidth = widths[idx];
+        document.body.classList.add("col-resizing");
+        const onMove = moveEvt => {
+          const newWidth = Math.max(50, startWidth + (moveEvt.clientX - startX));
+          widths[idx] = newWidth;
+          cols[idx].style.width = newWidth + "px";
+        };
+        const onUp = () => {
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+          document.body.classList.remove("col-resizing");
+          setColWidths(key, widths);
+        };
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
+      });
+    });
+  });
 }
 
 function leadsTable(rows) {
   return table(["Fecha", "Cliente", "Fuente", "Servicio", "Valor", "Estado", "Acciones"], rows.map(l => [
     l.date, l.client, `${l.source}<br><span class="muted">${l.channel}</span>`, l.service, fmt(l.estimatedValue, l.currency || "PEN"), badge(l.status), leadActions(l)
-  ]));
+  ]), "leads");
 }
 
 function leadActions(l) {

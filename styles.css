@@ -1360,10 +1360,19 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); }
 table { width: 100%; border-collapse: collapse; min-width: 860px; background: var(--panel); table-layout: auto; }
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; font-size: 13px; vertical-align: middle; white-space: nowrap; }
-th { color: var(--ink); font-size: 11px; font-weight: 550; text-transform: uppercase; background: var(--panel); }
+th { color: var(--ink); font-size: 11px; font-weight: 550; text-transform: uppercase; background: var(--panel); position: relative; }
 tr:last-child td { border-bottom: 0; }
 .table-wrap table th:last-child { width: 90px; }
 .table-wrap table td:last-child { text-align: right; }
+
+/* Ajuste de ancho de columna estilo Excel: manija invisible en el borde derecho de cada
+   encabezado; una vez que la tabla tiene anchos guardados, pasa a table-layout fixed y las
+   celdas recortan el contenido que no quepa (en vez de estirar la tabla). */
+.col-resize-handle { position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 2; }
+.col-resize-handle:hover, .col-resizing .col-resize-handle { background: rgba(255,81,0,.25); }
+.col-resizing, .col-resizing * { cursor: col-resize !important; user-select: none !important; }
+.table-resized table { table-layout: fixed; }
+.table-resized th, .table-resized td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Cells that should wrap (service/concept descriptions) */
 td.cell-wrap { white-space: normal; word-break: break-word; }
 .cell-clamp2 { white-space: normal; overflow-wrap: break-word; line-height: 1.45; min-width: 220px; max-width: 320px; }
