@@ -2409,8 +2409,8 @@ const views = {
         const netAmount  = _dm.montoReal != null ? _dm.montoReal : (r.currency === "PEN" ? r.amount - detActual : r.amount);
         const collRepo   = r.repo || r.quote?.repo || "";
         const repoIcon   = collRepo
-          ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
-          : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+          ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+          : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
         return [
           displayCode(r.code),
           fmtDate(r.wonDate),
@@ -2581,8 +2581,8 @@ const views = {
     const cajaRepoIcon = r => {
       const repo = r.repo || "";
       return repo
-        ? `<a href="${escapeAttr(repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
-        : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+        ? `<a href="${escapeAttr(repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+        : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
     };
     const cajaTable = (rows, emptyMsg, tableKey) => rows.length
       ? table(
@@ -2807,8 +2807,8 @@ const views = {
           const declaredStatus = s.declared || "Sin declarar";
           const sRepo = s.repo || s.quote?.repo || "";
           const sRepoIcon = sRepo
-            ? `<a href="${escapeAttr(sRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
-            : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+            ? `<a href="${escapeAttr(sRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+            : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
           return [
             fmtDate(s.dueDate || s.wonDate),
             `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
@@ -2833,8 +2833,8 @@ const views = {
           const netAmount = p.total - (p.detraction || 0);
           const declaredStatus = p.declared || "Sin declarar";
           const repoIcon = p.repo
-            ? `<a href="${escapeAttr(p.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
-            : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+            ? `<a href="${escapeAttr(p.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+            : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
           return [
             fmtDate(p.date),
             `<div class="cell-clamp2">${escapeHtml(p.concept)}</div>`,
@@ -3429,8 +3429,8 @@ function quotesTable(rows) {
       const c = calcQuote(q);
       const cur = q.currency || "PEN";
       const repoIcon = q.repo
-        ? `<a href="${escapeAttr(q.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:inline-flex">${icon("fileText")}</a>`
-        : `<span style="color:var(--line);display:inline-flex">${icon("fileText")}</span>`;
+        ? `<a href="${escapeAttr(q.repo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+        : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
       return [
         displayCode(q.code),
         fmtDate(q.date || q.month),
