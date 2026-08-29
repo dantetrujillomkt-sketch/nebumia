@@ -2272,18 +2272,6 @@ const views = {
     const allClients = sortByDateDesc(state.clients);
     const tipos = [...new Set(allClients.map(c => c.clientType).filter(Boolean))].sort();
     const paises = [...new Set(allClients.map(c => c.country).filter(Boolean))].sort();
-    const rows = allClients.map(client => [
-      escapeHtml(client.name),
-      escapeHtml(client.ruc || "—"),
-      fmtDate(client.date) || "—",
-      escapeHtml(client.contact || "—"),
-      client.email ? `<a href="mailto:${escapeAttr(client.email)}" class="action-link">${escapeHtml(client.email)}</a>` : "—",
-      escapeHtml(client.phone || "—"),
-      escapeHtml(client.clientType || "—"),
-      escapeHtml(client.country || "—"),
-      escapeHtml(client.owner || "—"),
-      clientActions(client.id)
-    ]);
     const clientFilters = `
       <select data-table-filter><option value="">Todos los tipos</option>${tipos.map(t => `<option>${escapeHtml(t)}</option>`).join("")}</select>
       <select data-table-filter><option value="">Todos los países</option>${paises.map(p => `<option>${escapeHtml(p)}</option>`).join("")}</select>
@@ -2299,7 +2287,7 @@ const views = {
         ${metric("Países activos", activeCountries, `De ${allClients.length} clientes registrados`, "", "", "blue")}
       </section>
       ${moduleToolbar({ search: "Buscar cliente, contacto o correo", filters: clientFilters, action: "client", metricsToggle: true })}
-      ${table(["Cliente", "RUC / DNI", "Fecha", "Contacto principal", "Correo electrónico", "Teléfono", "Tipo", "País", "Comercial", "Acciones"], rows, "clients")}`;
+      <div id="clientsTable">${clientsTable(allClients)}</div>`;
 
   },
   sales() {
@@ -2344,22 +2332,7 @@ const views = {
         action: "sale",
         metricsToggle: true
       })}
-      ${table(["PPTO","Fecha cobro","Servicio","Cliente","Moneda","Sin IGV","Con IGV","IGV","Detracción","Comisión","Cuenta","Nro pago","Estado","Acciones"], sales.map(s => {
-        const cur     = s.currency || "PEN";
-        const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
-        return [
-          displayCode(s.code), fmtDate(s.date),
-          `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
-          escapeHtml(s.client),
-          cur,
-          fmt(s.subtotal, cur), fmt(s.total, cur), fmt(s.igv, cur),
-          fmt(s.detraction, cur), fmt(s.commission, cur),
-          escapeHtml(s.bankAccount || "—"),
-          nroPago,
-          badge(s.status),
-          `<div class="row-actions"><button class="action-link" data-edit-sale="${s.quoteId}" type="button">${icon("edit")}</button></div>`
-        ];
-      }), "sales")}`;
+      <div id="salesTable">${salesTable(sales)}</div>`;
 
   },
   collections() {
@@ -2400,36 +2373,7 @@ const views = {
         `,
         metricsToggle: true
       })}
-      ${table(["PPTO","Fecha venta","Servicio","Cliente","Factura","Fecha PP","Fecha RP","Moneda","Total","Detracción","Monto recibir","Cuenta","Nro pago","Repositorio","Estado","Acciones"], allColls.map(r => {
-        const nroPago    = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
-        const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
-        const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
-        const _dm = (state.settings.collectionDetModes || {})[r.id] || {};
-        const detActual = autoDetraction(r, _dm);
-        const netAmount  = _dm.montoReal != null ? _dm.montoReal : (r.currency === "PEN" ? r.amount - detActual : r.amount);
-        const collRepo   = r.repo || r.quote?.repo || "";
-        const repoIcon   = collRepo
-          ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
-          : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
-        return [
-          displayCode(r.code),
-          fmtDate(r.wonDate),
-          `<div class="cell-clamp2">${escapeHtml(r.service)}</div>`,
-          escapeHtml(r.client),
-          escapeHtml(r.invoice || "—"),
-          r.dueDate ? fmtDate(r.dueDate) : "—",
-          r.paidDate ? fmtDate(r.paidDate) : "—",
-          r.currency || "PEN",
-          fmt(r.amount, r.currency),
-          detActual > 0 ? fmt(detActual, "PEN") : "—",
-          fmt(netAmount, r.currency),
-          escapeHtml(r.bankAccount || "—"),
-          `${nroPago}<span style="display:none"> ${tipoPago}</span>`,
-          repoIcon,
-          badge(r.status),
-          collectionActions(r)
-        ];
-      }), "collections")}`;
+      <div id="collectionsTable">${collectionsTable(allColls)}</div>`;
 
   },
   finance() {
@@ -2730,20 +2674,7 @@ const views = {
         action: "payment",
         metricsToggle: true
       })}
-      ${table(["Fecha de pago", "Tipo de pago", "Nombre completo", "Moneda", "Monto", "Comisión", "Banco", "Nro de cuenta", "CCI", "RHE", "Estado", "Acciones"], team.map(t => {
-        const comm = profileHasCommission(t.role) ? calcTeamCommission(t.name) : null;
-        return [
-          fmtDate(t.dueDate || t.month), t.role, t.name,
-          t.currency || "PEN", fmt(t.amount, t.currency),
-          comm !== null ? `<strong style="color:var(--brand)">${fmt(comm, t.currency)}</strong>` : `<span style="color:var(--muted)">—</span>`,
-          t.bankName || "—", t.accountNumber || "—", t.cci || "—",
-          t.receipt
-            ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" title="Ver RHE" style="color:var(--brand)">${icon("link")}</a>`
-            : `<span style="color:var(--muted)">${icon("link")}</span>`,
-          badge(t.status),
-          `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}</button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
-        ];
-      }), "team")}`;
+      <div id="teamTable">${teamTable(team)}</div>`;
   },
   comprobantes() {
     const purchases = sortByDateDesc((state.purchases || []).filter(p => dateInRange(p.date)));
@@ -3448,6 +3379,90 @@ function quotesTable(rows) {
     }),
     "quotes"
   );
+}
+
+function salesTable(rows) {
+  return table(["PPTO","Fecha cobro","Servicio","Cliente","Moneda","Sin IGV","Con IGV","IGV","Detracción","Comisión","Cuenta","Nro pago","Estado","Acciones"], rows.map(s => {
+    const cur     = s.currency || "PEN";
+    const nroPago = s.label === "Pago 100%" ? "1/1" : (s.label || "").replace("Pago ", "");
+    return [
+      displayCode(s.code), fmtDate(s.date),
+      `<div class="cell-clamp2">${escapeHtml(s.service)}</div>`,
+      escapeHtml(s.client),
+      cur,
+      fmt(s.subtotal, cur), fmt(s.total, cur), fmt(s.igv, cur),
+      fmt(s.detraction, cur), fmt(s.commission, cur),
+      escapeHtml(s.bankAccount || "—"),
+      nroPago,
+      badge(s.status),
+      `<div class="row-actions"><button class="action-link" data-edit-sale="${s.quoteId}" type="button">${icon("edit")}</button></div>`
+    ];
+  }), "sales");
+}
+
+function collectionsTable(rows) {
+  return table(["PPTO","Fecha venta","Servicio","Cliente","Factura","Fecha PP","Fecha RP","Moneda","Total","Detracción","Monto recibir","Cuenta","Nro pago","Repositorio","Estado","Acciones"], rows.map(r => {
+    const nroPago    = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
+    const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
+    const tipoPago   = totalParts === 1 ? "1 pago" : totalParts + " pagos";
+    const _dm = (state.settings.collectionDetModes || {})[r.id] || {};
+    const detActual = autoDetraction(r, _dm);
+    const netAmount  = _dm.montoReal != null ? _dm.montoReal : (r.currency === "PEN" ? r.amount - detActual : r.amount);
+    const collRepo   = r.repo || r.quote?.repo || "";
+    const repoIcon   = collRepo
+      ? `<a href="${escapeAttr(collRepo)}" target="_blank" rel="noopener" title="Ver repositorio" style="color:var(--brand);display:flex;justify-content:center;width:100%">${icon("fileText")}</a>`
+      : `<span style="color:var(--line);display:flex;justify-content:center;width:100%">${icon("fileText")}</span>`;
+    return [
+      displayCode(r.code),
+      fmtDate(r.wonDate),
+      `<div class="cell-clamp2">${escapeHtml(r.service)}</div>`,
+      escapeHtml(r.client),
+      escapeHtml(r.invoice || "—"),
+      r.dueDate ? fmtDate(r.dueDate) : "—",
+      r.paidDate ? fmtDate(r.paidDate) : "—",
+      r.currency || "PEN",
+      fmt(r.amount, r.currency),
+      detActual > 0 ? fmt(detActual, "PEN") : "—",
+      fmt(netAmount, r.currency),
+      escapeHtml(r.bankAccount || "—"),
+      `${nroPago}<span style="display:none"> ${tipoPago}</span>`,
+      repoIcon,
+      badge(r.status),
+      collectionActions(r)
+    ];
+  }), "collections");
+}
+
+function clientsTable(clients) {
+  return table(["Cliente", "RUC / DNI", "Fecha", "Contacto principal", "Correo electrónico", "Teléfono", "Tipo", "País", "Comercial", "Acciones"], clients.map(client => [
+    escapeHtml(client.name),
+    escapeHtml(client.ruc || "—"),
+    fmtDate(client.date) || "—",
+    escapeHtml(client.contact || "—"),
+    client.email ? `<a href="mailto:${escapeAttr(client.email)}" class="action-link">${escapeHtml(client.email)}</a>` : "—",
+    escapeHtml(client.phone || "—"),
+    escapeHtml(client.clientType || "—"),
+    escapeHtml(client.country || "—"),
+    escapeHtml(client.owner || "—"),
+    clientActions(client.id)
+  ]), "clients");
+}
+
+function teamTable(rows) {
+  return table(["Fecha de pago", "Tipo de pago", "Nombre completo", "Moneda", "Monto", "Comisión", "Banco", "Nro de cuenta", "CCI", "RHE", "Estado", "Acciones"], rows.map(t => {
+    const comm = profileHasCommission(t.role) ? calcTeamCommission(t.name) : null;
+    return [
+      fmtDate(t.dueDate || t.month), t.role, t.name,
+      t.currency || "PEN", fmt(t.amount, t.currency),
+      comm !== null ? `<strong style="color:var(--brand)">${fmt(comm, t.currency)}</strong>` : `<span style="color:var(--muted)">—</span>`,
+      t.bankName || "—", t.accountNumber || "—", t.cci || "—",
+      t.receipt
+        ? `<a href="${escapeAttr(t.receipt)}" target="_blank" rel="noopener" title="Ver RHE" style="color:var(--brand)">${icon("link")}</a>`
+        : `<span style="color:var(--muted)">${icon("link")}</span>`,
+      badge(t.status),
+      `<div class="row-actions"><button class="action-link" data-edit-team="${t.id}" type="button">${icon("edit")}</button><button class="action-link" data-copy-team="${t.id}" type="button" title="Duplicar pago">${icon("copy")}</button><button class="action-link danger" data-delete-team="${t.id}" type="button">${icon("trash")}</button></div>`
+    ];
+  }), "team");
 }
 
 function quoteActions(q) {
@@ -4423,6 +4438,44 @@ function bindQuoteTableActions() {
   bindActions("[data-lose]", id => updateQuoteStatus(id, "Perdido"));
 }
 
+function bindSalesTableActions() {
+  bindActions("[data-edit-sale]", id => openSaleDialog(state.quotes.find(x => x.id === id)));
+}
+function bindCollectionsTableActions() {
+  bindActions("[data-edit-collection]", id => openCollectionDialog(state.collections.find(x => x.id === id)));
+  bindActions("[data-toggle-detstatus]", id => {
+    const modes = state.settings.collectionDetModes || {};
+    const dm = modes[id] || {};
+    const current = dm.detStatus || "Completado";
+    const next = current === "Completado" ? "Pendiente" : "Completado";
+    const detPaidDate = next === "Completado" ? (dm.detPaidDate || today()) : dm.detPaidDate;
+    modes[id] = { ...dm, mode: dm.mode || "bandu", detStatus: next, detPaidDate };
+    state.settings.collectionDetModes = modes;
+    saveState(); render();
+    showToast(next === "Completado" ? "Detracción marcada como pagada" : "Detracción marcada como pendiente");
+  });
+}
+function bindClientsTableActions() {
+  bindActions("[data-edit-client]", id => openClientDialog(state.clients.find(x => x.id === id)));
+  bindActions("[data-delete-client]", id => {
+    if (!confirm("¿Eliminar este cliente? Esta acción no se puede deshacer.")) return;
+    markDeleted("clients", id);
+    state.clients = state.clients.filter(c => c.id !== id);
+    saveState(); render(); showToast("Cliente eliminado");
+  });
+}
+function bindTeamTableActions() {
+  bindActions("[data-edit-team]", id => openTeamDialog(state.team.find(x => x.id === id)));
+  bindActions("[data-copy-team]", id => duplicateTeamPayment(id));
+  bindActions("[data-delete-team]", id => {
+    confirmDelete("Este pago será eliminado permanentemente y no se podrá restablecer.", () => {
+      markDeleted("team_payments", id);
+      state.team = state.team.filter(t => t.id !== id);
+      saveState(); render();
+    });
+  });
+}
+
 function bindFilters() {
   const quoteSearch = activeView === "quotes" ? document.querySelector("#moduleSearch") : null;
   const quoteStatus = document.querySelector("#quoteStatus");
@@ -4461,6 +4514,90 @@ function bindFilters() {
     leadSearch.addEventListener("input", filter);
     leadStatus.addEventListener("change", filter);
   }
+
+  // Ventas, Cobranzas, Clientes y Pago personal: la búsqueda debe filtrar TODOS los datos
+  // antes de paginar (no solo esconder filas de la página ya cargada) — igual que arriba.
+  const salesSearch = activeView === "sales" ? document.querySelector("#moduleSearch") : null;
+  if (salesSearch && !salesSearch.dataset.bound) {
+    salesSearch.dataset.bound = "1";
+    const salesCur = document.querySelector("[data-table-filter]");
+    const filter = () => {
+      const term = salesSearch.value.toLowerCase();
+      const cur = salesCur?.value || "";
+      const rows = sortByDateDesc(recognizedSales().filter(s => dateInRange(s.date)), s => s.date).filter(s =>
+        (!cur || (s.currency || "PEN") === cur) &&
+        [s.code, s.client, s.service].join(" ").toLowerCase().includes(term)
+      );
+      document.querySelector("#salesTable").innerHTML = salesTable(rows);
+      bindSalesTableActions();
+      initColumnResize();
+    };
+    salesSearch.addEventListener("input", filter);
+    salesCur?.addEventListener("change", filter);
+  }
+
+  const collSearch = activeView === "collections" ? document.querySelector("#moduleSearch") : null;
+  if (collSearch && !collSearch.dataset.bound) {
+    collSearch.dataset.bound = "1";
+    const [collStatus, collCur, collAccount, collNroPago, collTipo] = document.querySelectorAll("[data-table-filter]");
+    const filter = () => {
+      const term = collSearch.value.toLowerCase();
+      const rows = sortByDateDesc(collectionRows().filter(row => dateInRange(row.dueDate || row.wonDate)), r => r.dueDate || r.wonDate).filter(r => {
+        const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
+        const totalParts = nroPago === "1/1" ? 1 : (parseInt(nroPago.split("/")[1]) || 1);
+        const tipoPago = totalParts === 1 ? "1 pago" : totalParts + " pagos";
+        return (!collStatus?.value || r.status === collStatus.value) &&
+          (!collCur?.value || (r.currency || "PEN") === collCur.value) &&
+          (!collAccount?.value || r.bankAccount === collAccount.value) &&
+          (!collNroPago?.value || nroPago === collNroPago.value) &&
+          (!collTipo?.value || tipoPago === collTipo.value) &&
+          [r.code, r.client, r.service, r.invoice].join(" ").toLowerCase().includes(term);
+      });
+      document.querySelector("#collectionsTable").innerHTML = collectionsTable(rows);
+      bindCollectionsTableActions();
+      initColumnResize();
+    };
+    collSearch.addEventListener("input", filter);
+    [collStatus, collCur, collAccount, collNroPago, collTipo].forEach(el => el?.addEventListener("change", filter));
+  }
+
+  const clientSearch = activeView === "clients" ? document.querySelector("#moduleSearch") : null;
+  if (clientSearch && !clientSearch.dataset.bound) {
+    clientSearch.dataset.bound = "1";
+    const [clientTipo, clientPais] = document.querySelectorAll("[data-table-filter]");
+    const filter = () => {
+      const term = clientSearch.value.toLowerCase();
+      const rows = sortByDateDesc(state.clients).filter(c =>
+        (!clientTipo?.value || c.clientType === clientTipo.value) &&
+        (!clientPais?.value || c.country === clientPais.value) &&
+        [c.name, c.ruc, c.contact, c.email, c.phone].join(" ").toLowerCase().includes(term)
+      );
+      document.querySelector("#clientsTable").innerHTML = clientsTable(rows);
+      bindClientsTableActions();
+      initColumnResize();
+    };
+    clientSearch.addEventListener("input", filter);
+    [clientTipo, clientPais].forEach(el => el?.addEventListener("change", filter));
+  }
+
+  const teamSearch = activeView === "team" ? document.querySelector("#moduleSearch") : null;
+  if (teamSearch && !teamSearch.dataset.bound) {
+    teamSearch.dataset.bound = "1";
+    const [teamStatus, teamCur] = document.querySelectorAll("[data-table-filter]");
+    const filter = () => {
+      const term = teamSearch.value.toLowerCase();
+      const rows = sortByDateDesc(state.team.filter(item => dateInRange(item.dueDate || monthDate(item.month))), t => t.dueDate || monthDate(t.month)).filter(t =>
+        (!teamStatus?.value || t.status === teamStatus.value) &&
+        (!teamCur?.value || (t.currency || "PEN") === teamCur.value) &&
+        [t.name, t.role, t.status].join(" ").toLowerCase().includes(term)
+      );
+      document.querySelector("#teamTable").innerHTML = teamTable(rows);
+      bindTeamTableActions();
+      initColumnResize();
+    };
+    teamSearch.addEventListener("input", filter);
+    [teamStatus, teamCur].forEach(el => el?.addEventListener("change", filter));
+  }
 }
 
 function bindModuleToolbar() {
@@ -4475,7 +4612,11 @@ function bindModuleToolbar() {
     });
   };
 
-  if (search && !["leads", "quotes"].includes(activeView) && !search.dataset.bound) {
+  // sales/collections/clients/team ya tienen su propio filtro en bindFilters() que re-filtra
+  // TODOS los datos antes de paginar — no deben pasar también por este esconde-filas genérico,
+  // que solo actúa sobre lo que ya está en pantalla y por eso no encontraba todos los resultados.
+  const hasOwnFilter = ["leads", "quotes", "sales", "collections", "clients", "team"].includes(activeView);
+  if (search && !hasOwnFilter && !search.dataset.bound) {
     search.dataset.bound = "1";
     search.addEventListener("input", () => {
       if (activeView !== "dashboard") return filterTableRows();
@@ -4485,7 +4626,7 @@ function bindModuleToolbar() {
       });
     });
   }
-  tableFilters.forEach(f => { if (f.dataset.bound) return; f.dataset.bound = "1"; f.addEventListener("change", filterTableRows); });
+  if (!hasOwnFilter) tableFilters.forEach(f => { if (f.dataset.bound) return; f.dataset.bound = "1"; f.addEventListener("change", filterTableRows); });
 
   document.querySelectorAll("[data-module-action]").forEach(btn => {
     if (btn.dataset.bound) return;
