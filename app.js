@@ -658,6 +658,29 @@ const VIEW_SLUGS = {
 };
 const SLUG_TO_VIEW = Object.fromEntries(Object.entries(VIEW_SLUGS).map(([k, v]) => [v, k]));
 
+// Diálogos de un registro específico (Editar cliente, Editar cobranza, etc.) — cada uno
+// también obtiene su propio tramo de URL mientras está abierto. Mapea el "tipo" de diálogo
+// (mismo valor que editingType) a cómo encontrar el registro y cómo volver a abrirlo.
+const DIALOG_ENTITY_CONFIG = {
+  lead:         { find: id => state.leads.find(x => x.id === id),                 open: r => openLeadDialog(r) },
+  quote:        { find: id => state.quotes.find(x => x.id === id),                open: r => openQuoteDialog(r) },
+  sale:         { find: id => state.quotes.find(x => x.id === id),                open: r => openSaleDialog(r) },
+  client:       { find: id => state.clients.find(x => x.id === id),               open: r => openClientDialog(r) },
+  collection:   { find: id => state.collections.find(x => x.id === id),           open: r => openCollectionDialog(r) },
+  expense:      { find: id => state.expenses.find(x => x.id === id),              open: r => openExpenseDialog(r) },
+  taxPayment:   { find: id => (state.taxPayments || []).find(x => x.id === id),   open: r => openTaxPaymentDialog(r) },
+  team:         { find: id => state.team.find(x => x.id === id),                  open: r => openTeamDialog(r) },
+  declaracion:  { find: id => (state.declaraciones || []).find(x => x.id === id), open: r => openDeclaracionDialog(r) },
+  purchase:     { find: id => (state.purchases || []).find(x => x.id === id),     open: r => openPurchaseDialog(r) },
+  invoicedSale: { find: id => (state.invoicedSales || []).find(x => x.id === id), open: r => openInvoicedSaleDialog(r) },
+  cashEntry:    { find: id => (state.cashEntries || []).find(x => x.id === id),   open: r => openCashEntryDialog(r ? r.type : "egreso", r) }
+};
+// Cuando el "close" del <dialog> se dispara por navegación (atrás/adelante) en vez de por el
+// usuario cerrando a mano, se salta el pushState correspondiente para no duplicar el historial.
+let _suppressDialogCloseRoute = false;
+// Ruta de diálogo pendiente de abrir tras aplicar una URL (se abre después de render()).
+let pendingDialogRoute = null;
+
 function currentRouteHash() {
   let hash = "#/" + (VIEW_SLUGS[activeView] || activeView);
   if (activeView === "finance" && activeCajaTab && activeCajaTab !== "general") {
@@ -665,25 +688,48 @@ function currentRouteHash() {
   } else if (activeView === "settings" && activeSettingsTab) {
     hash += "/" + activeSettingsTab;
   }
+  if (quoteDialog && quoteDialog.open && DIALOG_ENTITY_CONFIG[editingType]) {
+    hash += "/" + editingType + "/" + (editingId ? encodeURIComponent(editingId) : "nuevo");
+  }
   return hash;
 }
 
-// Lee la URL actual y ajusta activeView/pestaña si hay una ruta reconocible. Devuelve true si
-// aplicó algo (para saber si hace falta re-renderizar).
+// Lee la URL actual y ajusta activeView/pestaña (y qué diálogo abrir, si corresponde) si hay
+// una ruta reconocible. Devuelve true si aplicó algo (para saber si hace falta re-renderizar).
 function applyRouteFromHash() {
   const raw = location.hash.replace(/^#\/?/, "");
   if (!raw) return false;
-  const [slug, sub] = raw.split("/");
-  const view = SLUG_TO_VIEW[slug];
+  const parts = raw.split("/");
+  const view = SLUG_TO_VIEW[parts[0]];
   if (!view || !views[view]) return false;
   activeView = view;
-  if (view === "finance" && sub) activeCajaTab = decodeURIComponent(sub);
-  else if (view === "settings" && sub) activeSettingsTab = sub;
+  let idx = 1;
+  if (view === "finance" && parts[idx] && !DIALOG_ENTITY_CONFIG[parts[idx]]) {
+    activeCajaTab = decodeURIComponent(parts[idx]); idx++;
+  } else if (view === "settings" && parts[idx] && !DIALOG_ENTITY_CONFIG[parts[idx]]) {
+    activeSettingsTab = parts[idx]; idx++;
+  }
+  pendingDialogRoute = (parts[idx] && DIALOG_ENTITY_CONFIG[parts[idx]])
+    ? { type: parts[idx], id: parts[idx + 1] && parts[idx + 1] !== "nuevo" ? decodeURIComponent(parts[idx + 1]) : null }
+    : null;
   return true;
 }
 
-// Mantiene la URL sincronizada con la vista/pestaña actual sin llenar el historial — cada
-// render() llama a esto. La navegación real (clic en menú/pestaña) usa pushState aparte.
+// Abre el diálogo indicado por la URL (si hay uno pendiente) — se llama después de render().
+function openPendingDialogFromRoute() {
+  if (!pendingDialogRoute) return;
+  const { type, id } = pendingDialogRoute;
+  pendingDialogRoute = null;
+  const cfg = DIALOG_ENTITY_CONFIG[type];
+  if (!cfg) return;
+  const record = id ? cfg.find(id) : null;
+  if (id && !record) return; // registro no encontrado (quizás se eliminó) — no abrir nada
+  cfg.open(record);
+}
+
+// Mantiene la URL sincronizada con la vista/pestaña/diálogo actual sin llenar el historial —
+// cada render() llama a esto. La navegación real (clic en menú/pestaña/abrir diálogo) usa
+// pushState aparte.
 function syncUrlHash() {
   const target = currentRouteHash();
   if (location.hash !== target) history.replaceState(null, "", target);
@@ -4983,6 +5029,7 @@ function dialogShell(type, title, body, submitText = "Guardar") {
   bindDialogCloseControls(quoteDialog);
   attachFormValidation(quoteForm);
   quoteDialog.showModal();
+  if (DIALOG_ENTITY_CONFIG[type]) history.pushState(null, "", currentRouteHash());
 }
 
 function bindDialogCloseControls(dialog) {
@@ -4998,6 +5045,20 @@ function setupDialogs() {
       if (event.target === dialog) dialog.close();
     });
   });
+  // El evento nativo "close" del <dialog> no siempre se dispara de forma confiable, así que
+  // se engancha el propio método .close() — cubre Cancelar, X, clic afuera y guardar, que en
+  // este código siempre pasan por quoteDialog.close() (nunca por Escape, que además cierra
+  // el <dialog> sin pasar por aquí, así que también queda cubierto vía "cancel").
+  if (quoteDialog && !quoteDialog._routedClose) {
+    quoteDialog._routedClose = true;
+    const originalClose = quoteDialog.close.bind(quoteDialog);
+    quoteDialog.close = (...args) => {
+      originalClose(...args);
+      if (_suppressDialogCloseRoute) { _suppressDialogCloseRoute = false; return; }
+      history.pushState(null, "", currentRouteHash());
+    };
+    quoteDialog.addEventListener("cancel", () => quoteDialog.close());
+  }
 }
 
 function clientSelect(selected, attrs = "") {
@@ -6463,6 +6524,7 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
     await sbLoad();
     applyRouteFromHash();
     render();
+    openPendingDialogFromRoute();
     hideSkeleton(2000);
     setTimeout(initOnboarding, 400);
   } catch (err) {
@@ -7515,9 +7577,12 @@ function updateMobileMenuBtn() {
 }
 updateMobileMenuBtn();
 window.addEventListener("resize", updateMobileMenuBtn);
-// Atrás/adelante del navegador: vuelve a leer la URL y re-renderiza esa vista/pestaña.
+// Atrás/adelante del navegador: vuelve a leer la URL, cierra/abre el diálogo que corresponda
+// y re-renderiza esa vista/pestaña.
 window.addEventListener("popstate", () => {
-  if (!appShell.classList.contains("hidden") && applyRouteFromHash()) render();
+  if (appShell.classList.contains("hidden")) return;
+  if (quoteDialog.open) { _suppressDialogCloseRoute = true; quoteDialog.close(); }
+  if (applyRouteFromHash()) { render(); openPendingDialogFromRoute(); }
 });
 document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
   appShell.classList.toggle("sidebar-open");
@@ -7541,6 +7606,7 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
       await sbLoad();
       applyRouteFromHash();
       render();
+      openPendingDialogFromRoute();
       hideSkeleton(2000);
       setTimeout(initOnboarding, 400);
     } catch (err) {
