@@ -1690,15 +1690,14 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
   }
 
-  // Desde el mes de hoy en adelante: el saldo de un mes es literalmente el Balance Neto del
-  // mes anterior (mismo número que verías filtrando el panel a ese mes) — arrastre simple, no
-  // una re-derivación de todo el historial. Los meses antes de hoy no se tocan.
+  // El mes de HOY (incluido) nunca se toca — sigue con el cálculo de siempre. Recién el mes
+  // SIGUIENTE al de hoy en adelante usa el arrastre nuevo: saldo = Balance Neto del mes
+  // anterior (mismo número que verías filtrando el panel a ese mes), literal, mes a mes.
   const todayMonthKey = today().substring(0, 7);
-  const prevOfToday = shiftMonthKey(todayMonthKey, -1);
   let carried = tab !== "general"
-    ? oldSaldoAnterior(prevOfToday) + accountBalanceNetoForMonth(tab, prevOfToday)
+    ? oldSaldoAnterior(todayMonthKey) + accountBalanceNetoForMonth(tab, todayMonthKey)
     : null;
-  let carriedMonth = prevOfToday;
+  let carriedMonth = todayMonthKey;
 
   const rows = [];
   let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
@@ -1709,7 +1708,7 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
     const monthKey = firstDay.substring(0, 7);
     let saldo;
 
-    if (tab !== "general" && monthKey >= todayMonthKey) {
+    if (tab !== "general" && monthKey > todayMonthKey) {
       while (carriedMonth < shiftMonthKey(monthKey, -1)) {
         const nextMonth = shiftMonthKey(carriedMonth, 1);
         carried += accountBalanceNetoForMonth(tab, nextMonth);
