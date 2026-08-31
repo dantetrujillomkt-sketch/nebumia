@@ -647,6 +647,47 @@ let activeCajaTab = "general";
 let activeSettingsTab = "financiero";
 let salesTargetsYear = new Date().getFullYear();
 let authMode = "login";
+
+// ── Rutas por URL (hash) ─────────────────────────────────────────
+// Cada página/módulo y sus pestañas internas (cuentas de Caja financiera, secciones de
+// Configuración) tienen su propia URL compartible/guardable, sin tocar ningún dato.
+const VIEW_SLUGS = {
+  dashboard: "dashboard", clients: "clientes", quotes: "cotizaciones", sales: "ventas",
+  collections: "cobranzas", finance: "caja-financiera", comprobantes: "contabilidad",
+  team: "pago-personal", settings: "configuracion"
+};
+const SLUG_TO_VIEW = Object.fromEntries(Object.entries(VIEW_SLUGS).map(([k, v]) => [v, k]));
+
+function currentRouteHash() {
+  let hash = "#/" + (VIEW_SLUGS[activeView] || activeView);
+  if (activeView === "finance" && activeCajaTab && activeCajaTab !== "general") {
+    hash += "/" + encodeURIComponent(activeCajaTab);
+  } else if (activeView === "settings" && activeSettingsTab) {
+    hash += "/" + activeSettingsTab;
+  }
+  return hash;
+}
+
+// Lee la URL actual y ajusta activeView/pestaña si hay una ruta reconocible. Devuelve true si
+// aplicó algo (para saber si hace falta re-renderizar).
+function applyRouteFromHash() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  if (!raw) return false;
+  const [slug, sub] = raw.split("/");
+  const view = SLUG_TO_VIEW[slug];
+  if (!view || !views[view]) return false;
+  activeView = view;
+  if (view === "finance" && sub) activeCajaTab = decodeURIComponent(sub);
+  else if (view === "settings" && sub) activeSettingsTab = sub;
+  return true;
+}
+
+// Mantiene la URL sincronizada con la vista/pestaña actual sin llenar el historial — cada
+// render() llama a esto. La navegación real (clic en menú/pestaña) usa pushState aparte.
+function syncUrlHash() {
+  const target = currentRouteHash();
+  if (location.hash !== target) history.replaceState(null, "", target);
+}
 const VIEW_RANGES_KEY = "nebumia-view-ranges";
 let viewRanges = (() => { try { return JSON.parse(localStorage.getItem(VIEW_RANGES_KEY) || "{}"); } catch { return {}; } })();
 function getCurrentRange() { return viewRanges[activeView] || getDashboardPreset("thisMonth"); }
@@ -1957,6 +1998,7 @@ function renderNav() {
   if (settingsEl && settingsItem) settingsEl.innerHTML = btnHtml(settingsItem);
   document.querySelectorAll(".nav-btn").forEach(btn => btn.addEventListener("click", () => {
     activeView = btn.dataset.view;
+    history.pushState(null, "", currentRouteHash());
     showContentLoader();
     render();
     hideContentLoader(50);
@@ -1975,6 +2017,7 @@ function render() {
   bindViewEvents();
   initColumnResize();
   drawCharts();
+  syncUrlHash();
 }
 
 const views = {
@@ -3862,10 +3905,10 @@ function bindViewEvents() {
     });
   });
   document.querySelectorAll("[data-caja-tab]").forEach(btn => {
-    btn.addEventListener("click", () => { activeCajaTab = btn.dataset.cajaTab; render(); });
+    btn.addEventListener("click", () => { activeCajaTab = btn.dataset.cajaTab; history.pushState(null, "", currentRouteHash()); render(); });
   });
   document.querySelectorAll("[data-settings-tab]").forEach(btn => {
-    btn.addEventListener("click", () => { activeSettingsTab = btn.dataset.settingsTab; render(); });
+    btn.addEventListener("click", () => { activeSettingsTab = btn.dataset.settingsTab; history.pushState(null, "", currentRouteHash()); render(); });
   });
 
   // Sales targets handlers
@@ -6418,6 +6461,7 @@ document.querySelector("#loginForm").addEventListener("submit", async event => {
   if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
   try {
     await sbLoad();
+    applyRouteFromHash();
     render();
     hideSkeleton(2000);
     setTimeout(initOnboarding, 400);
@@ -7471,6 +7515,10 @@ function updateMobileMenuBtn() {
 }
 updateMobileMenuBtn();
 window.addEventListener("resize", updateMobileMenuBtn);
+// Atrás/adelante del navegador: vuelve a leer la URL y re-renderiza esa vista/pestaña.
+window.addEventListener("popstate", () => {
+  if (!appShell.classList.contains("hidden") && applyRouteFromHash()) render();
+});
 document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
   appShell.classList.toggle("sidebar-open");
 });
@@ -7491,6 +7539,7 @@ document.getElementById("mainNav")?.addEventListener("click", e => {
     if (isMobileDevice()) { showMobileGate(); } else { showSkeleton(activeView); appShell.classList.remove("hidden"); }
     try {
       await sbLoad();
+      applyRouteFromHash();
       render();
       hideSkeleton(2000);
       setTimeout(initOnboarding, 400);
