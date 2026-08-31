@@ -1540,82 +1540,6 @@ function buildCajaRows() {
 // descontar/sumar al saldo real de caja — solo "Pagado"/"Confirmado" se cuentan.
 function isCountedRow(r) { return r.status !== "Pendiente" && r.status !== "Exonerado"; }
 
-// Genera las filas virtuales de gastos fijos + recurrentes para un rango de fechas — extraído
-// de finance() para que el arrastre de saldo de caja use EXACTAMENTE el mismo cálculo que la
-// tarjeta "Balance Neto" (nunca dos fórmulas separadas que puedan desincronizarse).
-function buildFixedAndRecurringRows(rangeStart, rangeEnd) {
-  const assignedFixed = assignFixedExpenses();
-  const fixedRows = [];
-  if (assignedFixed.length) {
-    let cursor = new Date(rangeStart + "T00:00:00");
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-    const rEnd = new Date(rangeEnd + "T00:00:00");
-    while (cursor <= rEnd) {
-      const monthStr = isoDate(cursor);
-      assignedFixed.forEach(f => {
-        const monthKey = monthStr.substring(0, 7);
-        const ov = readFixedOverride(`${f.id}-${monthKey}`);
-        const account = ov.bankAccount !== undefined ? ov.bankAccount : (f.assignedAccount || "");
-        const amount = ov.amount !== undefined ? ov.amount : f.amount;
-        const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
-        fixedRows.push({
-          id: `fixed-${f.id}-${monthStr}`,
-          date: monthStr, type: "egreso", concept: f.concept, category: f.category || "Gasto fijo",
-          amount, currency: f.currency, status, source: "Fijo", sourceType: "fixedExpense",
-          sourceId: f.id, bankAccount: account
-        });
-      });
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-  }
-
-  const recurringEntries = (state.cashEntries || []).filter(e => e.type === "egreso" && e.category === "Gasto fijo" && e.date);
-  if (recurringEntries.length) {
-    let cur = new Date(rangeStart + "T00:00:00");
-    cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
-    const rEnd2 = new Date(rangeEnd + "T00:00:00");
-    while (cur <= rEnd2) {
-      const monthKey = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, "0");
-      recurringEntries.forEach(e => {
-        if (monthKey <= e.date.substring(0, 7)) return;
-        const ov = readFixedOverride(`expense-${e.id}-${monthKey}`);
-        const account = ov.bankAccount !== undefined ? ov.bankAccount : (e.bankAccount || "");
-        const amount = ov.amount !== undefined ? ov.amount : e.amount;
-        const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
-        const origDay = new Date(e.date + "T00:00:00").getDate();
-        const daysInMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
-        const day = String(Math.min(origDay, daysInMonth)).padStart(2, "0");
-        fixedRows.push({
-          id: `expense-recur-${e.id}-${monthKey}`,
-          date: `${monthKey}-${day}`, type: "egreso", concept: e.concept, category: "Gasto fijo",
-          amount, currency: e.currency, status, source: "Fijo", sourceType: "expenseRecurring",
-          sourceId: e.id, bankAccount: account
-        });
-      });
-      cur.setMonth(cur.getMonth() + 1);
-    }
-  }
-  return fixedRows;
-}
-
-// Balance Neto real de UNA cuenta en UN mes específico — misma fórmula exacta que la tarjeta
-// "Balance Neto" de Caja financiera (Ingresos sin filtrar por Pendiente, menos Egresos ya
-// confirmados), para poder arrastrarlo tal cual al mes siguiente sin recalcularlo distinto.
-function accountBalanceNetoForMonth(accountName, monthKey) {
-  const rangeStart = monthKey + "-01";
-  const rangeEnd = isoDate(new Date(Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7)), 0));
-  const allCajaRows = buildCajaRows();
-  const fixedRows = buildFixedAndRecurringRows(rangeStart, rangeEnd);
-  const rows = [...allCajaRows, ...fixedRows].filter(r => {
-    if (r.bankAccount !== accountName) return false;
-    if (r.sourceType === "collection") return (r.date || "") >= rangeStart;
-    return r.date >= rangeStart && r.date <= rangeEnd;
-  });
-  const ingresos = rows.filter(r => r.type === "ingreso").reduce((s, r) => s + r.amount, 0);
-  const egresos  = rows.filter(r => r.type === "egreso" && isCountedRow(r)).reduce((s, r) => s + r.amount, 0);
-  return ingresos - egresos;
-}
-
 function getAccountBalance(accountName) {
   const rows = buildCajaRows().filter(r => r.bankAccount === accountName && isCountedRow(r));
   const ingresos = rows.filter(r => r.type === "ingreso").reduce((s, r) => s + r.amount, 0);
@@ -1656,12 +1580,20 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
 
   const saldosIniciales = state.settings.saldosIniciales || [];
 
-  function oldSaldoAnterior(monthKey) {
+  const rows = [];
+  let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
+  const endDate = new Date(rangeEnd + "T00:00:00");
+
+  while (cursor <= endDate) {
+    const firstDay = isoDate(cursor);
+    const monthKey = firstDay.substring(0, 7);
     let saldo = 0;
+
     const override = tab !== "general"
       ? saldosIniciales.filter(s => s.bankAccount === tab && s.date <= monthKey)
                        .sort((a, b) => b.date.localeCompare(a.date))[0]
       : null;
+
     if (override) {
       saldo = override.amount;
       const postFixed = genFixedRows(override.date, monthKey);
@@ -1680,46 +1612,6 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
         if (r.date.substring(0, 7) >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
       });
-    }
-    return saldo;
-  }
-
-  function shiftMonthKey(mk, delta) {
-    const [y, m] = mk.split("-").map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }
-
-  // Prueba controlada: por ahora solo esta cuenta usa el arrastre "mes siguiente = Balance
-  // Neto literal del mes anterior" (misma fórmula que la tarjeta, vía accountBalanceNetoForMonth).
-  // El resto de cuentas sigue con el cálculo de siempre, sin cambios, hasta validar este.
-  const FORWARD_CARRY_ACCOUNTS = ["C. Personal Interbank $"];
-  const useForwardCarry = FORWARD_CARRY_ACCOUNTS.includes(tab);
-  const todayMonthKey = today().substring(0, 7);
-  const prevOfToday = shiftMonthKey(todayMonthKey, -1);
-  let carried = useForwardCarry
-    ? oldSaldoAnterior(prevOfToday) + accountBalanceNetoForMonth(tab, prevOfToday)
-    : null;
-  let carriedMonth = prevOfToday;
-
-  const rows = [];
-  let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
-  const endDate = new Date(rangeEnd + "T00:00:00");
-
-  while (cursor <= endDate) {
-    const firstDay = isoDate(cursor);
-    const monthKey = firstDay.substring(0, 7);
-    let saldo;
-
-    if (useForwardCarry && monthKey >= todayMonthKey) {
-      while (carriedMonth < shiftMonthKey(monthKey, -1)) {
-        const nextMonth = shiftMonthKey(carriedMonth, 1);
-        carried += accountBalanceNetoForMonth(tab, nextMonth);
-        carriedMonth = nextMonth;
-      }
-      saldo = carried;
-    } else {
-      saldo = oldSaldoAnterior(monthKey);
     }
 
     rows.push({
@@ -2494,10 +2386,77 @@ const views = {
 
     const detAccount = state.settings.detractionAccount || "Detracciones";
 
-    // Filas virtuales de gastos fijos + recurrentes del rango visible (extraído a
-    // buildFixedAndRecurringRows para poder reusar exactamente el mismo cálculo desde el
-    // arrastre de saldo de caja — así nunca pueden desincronizarse entre sí).
-    const fixedRows = buildFixedAndRecurringRows(dashboardRange.start, dashboardRange.end);
+    // Generate virtual fixed expense rows for each month in the selected range
+    const assignedFixed = assignFixedExpenses();
+    const fixedRows = [];
+    if (assignedFixed.length) {
+      let cursor = new Date(dashboardRange.start + "T00:00:00");
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+      const rangeEnd = new Date(dashboardRange.end + "T00:00:00");
+      while (cursor <= rangeEnd) {
+        const monthStr = isoDate(cursor);
+        assignedFixed.forEach(f => {
+          const monthKey = monthStr.substring(0, 7);
+          const ov = readFixedOverride(`${f.id}-${monthKey}`);
+          const account = ov.bankAccount !== undefined ? ov.bankAccount : (f.assignedAccount || "");
+          const amount = ov.amount !== undefined ? ov.amount : f.amount;
+          // Los meses cerrados mantienen el comportamiento histórico (contados); el mes
+          // actual y futuros arrancan "Pendiente" hasta que se marquen como Pagado.
+          const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
+          fixedRows.push({
+            id: `fixed-${f.id}-${monthStr}`,
+            date: monthStr,
+            type: "egreso",
+            concept: f.concept,
+            category: f.category || "Gasto fijo",
+            amount,
+            currency: f.currency,
+            status,
+            source: "Fijo",
+            sourceType: "fixedExpense",
+            sourceId: f.id,
+            bankAccount: account
+          });
+        });
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+    }
+
+    // Generate recurring rows for cash entries with category "Gasto fijo" (for months AFTER the original)
+    const recurringEntries = (state.cashEntries || []).filter(e => e.type === "egreso" && e.category === "Gasto fijo" && e.date);
+    if (recurringEntries.length) {
+      let cur = new Date(dashboardRange.start + "T00:00:00");
+      cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
+      const rangeEnd2 = new Date(dashboardRange.end + "T00:00:00");
+      while (cur <= rangeEnd2) {
+        const monthKey = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, "0");
+        recurringEntries.forEach(e => {
+          if (monthKey <= e.date.substring(0, 7)) return; // skip original month and prior
+          const ov = readFixedOverride(`expense-${e.id}-${monthKey}`);
+          const account = ov.bankAccount !== undefined ? ov.bankAccount : (e.bankAccount || "");
+          const amount = ov.amount !== undefined ? ov.amount : e.amount;
+          const status = ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente");
+          const origDay = new Date(e.date + "T00:00:00").getDate();
+          const daysInMonth = new Date(cur.getFullYear(), cur.getMonth() + 1, 0).getDate();
+          const day = String(Math.min(origDay, daysInMonth)).padStart(2, "0");
+          fixedRows.push({
+            id: `expense-recur-${e.id}-${monthKey}`,
+            date: `${monthKey}-${day}`,
+            type: "egreso",
+            concept: e.concept,
+            category: "Gasto fijo",
+            amount,
+            currency: e.currency,
+            status,
+            source: "Fijo",
+            sourceType: "expenseRecurring",
+            sourceId: e.id,
+            bankAccount: account
+          });
+        });
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
 
     const allCajaRows = buildCajaRows();
     const saldoRows = buildSaldoAnteriorRows(allCajaRows, tab, dashboardRange.start, dashboardRange.end);
