@@ -690,6 +690,8 @@ function currentRouteHash() {
   }
   if (quoteDialog && quoteDialog.open && DIALOG_ENTITY_CONFIG[editingType]) {
     hash += "/" + editingType + "/" + (editingId ? encodeURIComponent(editingId) : "nuevo");
+  } else if (profileDialog && profileDialog.open) {
+    hash += "/perfil";
   }
   return hash;
 }
@@ -709,9 +711,13 @@ function applyRouteFromHash() {
   } else if (view === "settings" && parts[idx] && !DIALOG_ENTITY_CONFIG[parts[idx]]) {
     activeSettingsTab = parts[idx]; idx++;
   }
-  pendingDialogRoute = (parts[idx] && DIALOG_ENTITY_CONFIG[parts[idx]])
-    ? { type: parts[idx], id: parts[idx + 1] && parts[idx + 1] !== "nuevo" ? decodeURIComponent(parts[idx + 1]) : null }
-    : null;
+  if (parts[idx] === "perfil") {
+    pendingDialogRoute = { type: "profile", id: null };
+  } else {
+    pendingDialogRoute = (parts[idx] && DIALOG_ENTITY_CONFIG[parts[idx]])
+      ? { type: parts[idx], id: parts[idx + 1] && parts[idx + 1] !== "nuevo" ? decodeURIComponent(parts[idx + 1]) : null }
+      : null;
+  }
   return true;
 }
 
@@ -720,6 +726,7 @@ function openPendingDialogFromRoute() {
   if (!pendingDialogRoute) return;
   const { type, id } = pendingDialogRoute;
   pendingDialogRoute = null;
+  if (type === "profile") { openProfileDialog(); return; }
   const cfg = DIALOG_ENTITY_CONFIG[type];
   if (!cfg) return;
   const record = id ? cfg.find(id) : null;
@@ -5047,18 +5054,21 @@ function setupDialogs() {
   });
   // El evento nativo "close" del <dialog> no siempre se dispara de forma confiable, así que
   // se engancha el propio método .close() — cubre Cancelar, X, clic afuera y guardar, que en
-  // este código siempre pasan por quoteDialog.close() (nunca por Escape, que además cierra
-  // el <dialog> sin pasar por aquí, así que también queda cubierto vía "cancel").
-  if (quoteDialog && !quoteDialog._routedClose) {
-    quoteDialog._routedClose = true;
-    const originalClose = quoteDialog.close.bind(quoteDialog);
-    quoteDialog.close = (...args) => {
-      originalClose(...args);
-      if (_suppressDialogCloseRoute) { _suppressDialogCloseRoute = false; return; }
-      history.pushState(null, "", currentRouteHash());
-    };
-    quoteDialog.addEventListener("cancel", () => quoteDialog.close());
-  }
+  // este código siempre pasan por dialog.close() (Escape también queda cubierto vía "cancel").
+  patchDialogClose(quoteDialog);
+  patchDialogClose(profileDialog);
+}
+
+function patchDialogClose(dialog) {
+  if (!dialog || dialog._routedClose) return;
+  dialog._routedClose = true;
+  const originalClose = dialog.close.bind(dialog);
+  dialog.close = (...args) => {
+    originalClose(...args);
+    if (_suppressDialogCloseRoute) { _suppressDialogCloseRoute = false; return; }
+    history.pushState(null, "", currentRouteHash());
+  };
+  dialog.addEventListener("cancel", () => dialog.close());
 }
 
 function clientSelect(selected, attrs = "") {
@@ -6539,7 +6549,7 @@ profileMenuBtn.addEventListener("click", () => {
   profileDropdown.classList.toggle("hidden", isOpen);
   profileMenuBtn.setAttribute("aria-expanded", String(!isOpen));
 });
-editProfileBtn.addEventListener("click", () => {
+function openProfileDialog() {
   const current = auth();
   profileForm.elements.profileName.value = current.name || "Administrador";
   profileForm.elements.profileEmail.value = current.email || "admin@bandu.pe";
@@ -6555,7 +6565,9 @@ editProfileBtn.addEventListener("click", () => {
   else if (img) { img.src = ""; img.style.display = "none"; ini.style.display = ""; ini.textContent = (current.name||"N").charAt(0).toUpperCase(); }
   profileDropdown.classList.add("hidden");
   profileDialog.showModal();
-});
+  history.pushState(null, "", currentRouteHash());
+}
+editProfileBtn.addEventListener("click", openProfileDialog);
 // photo upload preview
 document.getElementById("profilePhotoInput")?.addEventListener("change", e => {
   const file = e.target.files[0];
@@ -7582,6 +7594,7 @@ window.addEventListener("resize", updateMobileMenuBtn);
 window.addEventListener("popstate", () => {
   if (appShell.classList.contains("hidden")) return;
   if (quoteDialog.open) { _suppressDialogCloseRoute = true; quoteDialog.close(); }
+  if (profileDialog.open) { _suppressDialogCloseRoute = true; profileDialog.close(); }
   if (applyRouteFromHash()) { render(); openPendingDialogFromRoute(); }
 });
 document.getElementById("mobileMenuBtn")?.addEventListener("click", () => {
