@@ -1547,30 +1547,6 @@ function getAccountBalance(accountName) {
   return ingresos - egresos;
 }
 
-// Movimiento REAL de una cuenta en un mes específico (ingresos - egresos de ESE mes, sin
-// contar el saldo que arrastró) — misma regla que usa la tarjeta "Balance Neto": excluye
-// Pendiente/Exonerado, e incluye los gastos fijos de ese mes con su estado real.
-function monthNetForAccount(tab, monthKey, tabCurrency, allCajaRows, fixedAssigned) {
-  const monthFixed = fixedAssigned.map(f => {
-    const ov = readFixedOverride(`${f.id}-${monthKey}`);
-    return {
-      date: monthKey + "-01", type: "egreso",
-      amount: ov.amount !== undefined ? ov.amount : f.amount,
-      currency: f.currency,
-      bankAccount: ov.bankAccount !== undefined ? ov.bankAccount : (f.assignedAccount || ""),
-      status: ov.status || (isPastMonth(monthKey) ? "Confirmado" : "Pendiente")
-    };
-  });
-  let net = 0;
-  [...allCajaRows, ...monthFixed].forEach(r => {
-    if (!r.date || r.currency !== tabCurrency || r.bankAccount !== tab) return;
-    if (r.status === "Pendiente" || r.status === "Exonerado") return;
-    if (r.date.substring(0, 7) !== monthKey) return;
-    net += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
-  });
-  return net;
-}
-
 function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
   const fixedAssigned = assignFixedExpenses();
   const tabCurrency = tab !== "general" && /\$|USD/i.test(tab) ? "USD" : "PEN";
@@ -1604,14 +1580,20 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
 
   const saldosIniciales = state.settings.saldosIniciales || [];
 
-  // Cálculo histórico (sin tocar): saldo del mes = override más cercano (o suma de todo el
-  // historial) más los movimientos hasta ese mes. Se deja intacto para meses ya pasados.
-  function oldSaldoAnterior(monthKey) {
+  const rows = [];
+  let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
+  const endDate = new Date(rangeEnd + "T00:00:00");
+
+  while (cursor <= endDate) {
+    const firstDay = isoDate(cursor);
+    const monthKey = firstDay.substring(0, 7);
     let saldo = 0;
+
     const override = tab !== "general"
       ? saldosIniciales.filter(s => s.bankAccount === tab && s.date <= monthKey)
                        .sort((a, b) => b.date.localeCompare(a.date))[0]
       : null;
+
     if (override) {
       saldo = override.amount;
       const postFixed = genFixedRows(override.date, monthKey);
@@ -1630,45 +1612,6 @@ function buildSaldoAnteriorRows(allCajaRows, tab, rangeStart, rangeEnd) {
         if (r.date.substring(0, 7) >= monthKey) return;
         saldo += (r.type === "ingreso" ? 1 : -1) * (r.amount || 0);
       });
-    }
-    return saldo;
-  }
-
-  function shiftMonthKey(mk, delta) {
-    const [y, m] = mk.split("-").map(Number);
-    const d = new Date(y, m - 1 + delta, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  }
-
-  // De hoy en adelante: el saldo de un mes es literalmente el Balance Neto (mismo número que
-  // la tarjeta) del mes anterior — arrastre simple mes a mes, sin re-sumar todo el historial.
-  // El mes justo antes de hoy se calcula UNA vez con la lógica histórica (no se toca el
-  // pasado) y desde ahí se va sumando el movimiento real de cada mes siguiente.
-  const todayMonthKey = today().substring(0, 7);
-  const prevOfToday = shiftMonthKey(todayMonthKey, -1);
-  let carried = tab !== "general"
-    ? oldSaldoAnterior(prevOfToday) + monthNetForAccount(tab, prevOfToday, tabCurrency, allCajaRows, fixedAssigned)
-    : null;
-  let carriedMonth = prevOfToday;
-
-  const rows = [];
-  let cursor = new Date(rs.getFullYear(), rs.getMonth(), 1);
-  const endDate = new Date(rangeEnd + "T00:00:00");
-
-  while (cursor <= endDate) {
-    const firstDay = isoDate(cursor);
-    const monthKey = firstDay.substring(0, 7);
-    let saldo;
-
-    if (tab !== "general" && monthKey >= todayMonthKey) {
-      while (carriedMonth < shiftMonthKey(monthKey, -1)) {
-        const nextMonth = shiftMonthKey(carriedMonth, 1);
-        carried += monthNetForAccount(tab, nextMonth, tabCurrency, allCajaRows, fixedAssigned);
-        carriedMonth = nextMonth;
-      }
-      saldo = carried;
-    } else {
-      saldo = oldSaldoAnterior(monthKey);
     }
 
     rows.push({
