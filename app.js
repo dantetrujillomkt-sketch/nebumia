@@ -3197,9 +3197,13 @@ const views = {
       tabContent = `
         <section class="panel settings-panel">
           <div class="panel-head"><div><h3>Categorías de servicios</h3><p>Categorías para clasificar cotizaciones y ventas.</p></div></div>
-          <ul class="bank-accounts-list">
+          <ul class="bank-accounts-list" id="categoriesList">
             ${cats.map((c, i) => `
               <li class="bank-account-item" data-cat-idx="${i}">
+                <div class="bank-account-order">
+                  <button class="action-link" data-move-cat="${i}" data-dir="-1" type="button" ${i === 0 ? "disabled" : ""}>${icon("chevron-up")}</button>
+                  <button class="action-link" data-move-cat="${i}" data-dir="1" type="button" ${i === cats.length - 1 ? "disabled" : ""}>${icon("chevron-down")}</button>
+                </div>
                 <span class="bank-account-name">${escapeHtml(c)}</span>
                 <input class="bank-account-edit-input" style="display:none" value="${escapeAttr(c)}" data-cat-idx="${i}">
                 <div class="bank-account-actions">
@@ -4204,7 +4208,7 @@ function bindViewEvents() {
     const name = new FormData(e.currentTarget).get("categoryName").trim();
     if (!name) return;
     if (!(state.categories || []).includes(name)) {
-      state.categories = [...(state.categories || []), name].sort();
+      state.categories = [...(state.categories || []), name];
       saveState(); render();
       showToast("Categoría agregada");
     }
@@ -4226,7 +4230,7 @@ function bindViewEvents() {
       const newName = li.querySelector(".bank-account-edit-input").value.trim();
       if (!newName) return;
       state.categories[i] = newName;
-      state.categories = [...state.categories].sort();
+      state.categories = [...state.categories];
       saveState(); render();
       showToast("Categoría actualizada");
     });
@@ -4237,6 +4241,16 @@ function bindViewEvents() {
       state.categories = state.categories.filter((_, idx) => idx !== i);
       saveState(); render();
     });
+  }));
+  document.querySelectorAll("[data-move-cat]").forEach(btn => btn.addEventListener("click", () => {
+    const i = Number(btn.dataset.moveCat);
+    const dir = Number(btn.dataset.dir);
+    const arr = [...state.categories];
+    const j = i + dir;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    state.categories = arr;
+    saveState(); render();
   }));
   const addServiceForm = document.querySelector("#addServiceForm");
   if (addServiceForm) addServiceForm.addEventListener("submit", e => {
