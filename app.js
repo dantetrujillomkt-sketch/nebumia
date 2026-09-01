@@ -1263,7 +1263,18 @@ function fmt(amount, currency = "PEN") {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency }).format(amount || 0);
 }
 
-function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMonthName()) {
+// Mini gráfica de línea (6 puntos) usada tanto en las tarjetas KPI normales como en los gauges
+// de meta — un solo dibujo para que todas las tarjetas del dashboard luzcan consistentes.
+function sparkline(values, colorVar) {
+  const w = 60, h = 24, pad = 3;
+  const max = Math.max(...values, 0.0001), min = Math.min(...values, 0);
+  const range = (max - min) || 1;
+  const step = (w - pad * 2) / (values.length - 1 || 1);
+  const pts = values.map((v, i) => `${(pad + i * step).toFixed(1)},${(h - pad - ((v - min) / range) * (h - pad * 2)).toFixed(1)}`).join(" ");
+  return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMonthName(), sparkValues = null) {
   const R = 82, SW = 13, cx = 100, cy = 118;
   const total = Math.PI * R;
   const filled = (Math.min(Math.max(pct, 0), 100) / 100 * total).toFixed(1);
@@ -1286,7 +1297,8 @@ function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMont
         <text x="${cx}" y="90" text-anchor="middle" font-family="inherit" font-size="21" font-weight="600" fill="var(--ink)">${fmtS(current)}</text>
         <text x="${cx}" y="112" text-anchor="middle" font-family="inherit" font-size="10.5" fill="var(--muted)">${goalText}</text>
       </svg>
-    </div>`;
+    </div>
+    ${sparkValues ? `<div class="kpi-bottom-row kpi-bottom-row--center">${sparkline(sparkValues, color.replace("var(","").replace(")",""))}</div>` : ""}`;
 }
 
 function fmtMixed(rows, valueFn, currencyFn = r => r.currency || "PEN") {
@@ -2157,14 +2169,6 @@ const views = {
       const won = closed.filter(q => q.status === "Ganado").length;
       return closed.length > 0 ? Math.round(won / closed.length * 100) : 0;
     });
-    const sparkline = (values, colorVar) => {
-      const w = 60, h = 24, pad = 3;
-      const max = Math.max(...values, 0.0001), min = Math.min(...values, 0);
-      const range = (max - min) || 1;
-      const step = (w - pad * 2) / (values.length - 1 || 1);
-      const pts = values.map((v, i) => `${(pad + i * step).toFixed(1)},${(h - pad - ((v - min) / range) * (h - pad * 2)).toFixed(1)}`).join(" ");
-      return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    };
 
     return `
       ${onboardingBannerHTML()}
@@ -2173,7 +2177,7 @@ const views = {
       <!-- KPIs -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goal > 0 ? Math.min(100, Math.round(_recogPENTotal / s.goal * 100)) : 0, _recogPENTotal, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel)}
+          ${gaugeKpi(s.goal > 0 ? Math.min(100, Math.round(_recogPENTotal / s.goal * 100)) : 0, _recogPENTotal, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel, cobradaSpark("PEN"))}
         </div>
         <div class="kpi-card">
           ${(() => {
@@ -2216,7 +2220,7 @@ const views = {
       <!-- KPIs USD -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
         <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalUSD > 0 ? Math.min(100, Math.round(_recogUSDTotal / s.goalUSD * 100)) : 0, _recogUSDTotal, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel)}
+          ${gaugeKpi(s.goalUSD > 0 ? Math.min(100, Math.round(_recogUSDTotal / s.goalUSD * 100)) : 0, _recogUSDTotal, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel, cobradaSpark("USD"))}
         </div>
         <div class="kpi-card">
           ${(() => {
