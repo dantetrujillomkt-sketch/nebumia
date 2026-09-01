@@ -3708,7 +3708,7 @@ function buildDashAlertItems() {
   }
   if (s.pendingDetracciones.length > 0) {
     const totalDet = s.pendingDetracciones.reduce((sum, x) => sum + x.detActual, 0);
-    const subItems = s.pendingDetracciones.map(x => ({ title: x.c.client, sub: `Detracción ${fmt(x.detActual, "PEN")} · cobro ${fmt(x.c.amount, x.c.currency)}`, nav: "finance", entityType: "collection", id: x.c.id }));
+    const subItems = s.pendingDetracciones.map(x => ({ title: x.c.client, sub: `Detracción ${fmt(x.detActual, "PEN")} · cobro ${fmt(x.c.amount, x.c.currency)}`, payer: x.mode === "cliente" ? "Cliente" : "Bandu", nav: "finance", entityType: "collection", id: x.c.id }));
     items.push({ type: "amber", icon: "creditCard", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel, subItems });
   }
   return items;
@@ -6785,7 +6785,7 @@ function showNotifSubPopup(title, subItems) {
       </div>
       <div class="notif-subpopup-body">
         ${subItems.map(si => `<div class="notif-subitem notif-item--clickable" data-notif-nav="${si.nav}" data-notif-entity="${si.entityType}" data-notif-id="${escapeAttr(si.id)}" role="button" tabindex="0">
-          <div class="notif-subitem-text"><strong>${escapeHtml(si.title)}</strong><span>${escapeHtml(si.sub)}</span></div>
+          <div class="notif-subitem-text"><strong>${escapeHtml(si.title)}${si.payer ? ` <span class="notif-subitem-payer notif-subitem-payer--${si.payer === "Cliente" ? "cliente" : "bandu"}">${escapeHtml(si.payer)}</span>` : ""}</strong><span>${escapeHtml(si.sub)}</span></div>
           <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
         </div>`).join("")}
       </div>
