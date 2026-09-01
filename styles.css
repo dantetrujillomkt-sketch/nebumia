@@ -1662,8 +1662,35 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 .status.pendiente, .status.por-cotizar, .status.nuevo, .status.contactado, .status.reunion { background: #e7edff; color: var(--blue); }
 .status.declarado { background: #dcfaf3; color: var(--ok); }
 .status.sin-declarar { background: #ffe9d1; color: #c2660a; }
-.detstatus-toggle { background: none; border: 0; padding: 0; cursor: pointer; }
+.detstatus-toggle { background: none; border: 0; padding: 0; cursor: pointer; position: relative; }
 .detstatus-toggle:hover .status { filter: brightness(0.95); }
+.detstatus-toggle[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20,20,30,.92);
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 300;
+  font-weight: 500;
+}
+.detstatus-toggle[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(20,20,30,.92);
+  pointer-events: none;
+  z-index: 300;
+}
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
 .toolbar input, .toolbar select { max-width: 230px; }
 .split-list { display: grid; gap: 10px; }

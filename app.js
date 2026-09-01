@@ -2907,9 +2907,8 @@ const views = {
             const igv = hasIgv ? r.amount - subtotal : 0;
             const nroPago = r.label === "Pago 100%" ? "1/1" : (r.label || "").replace("Pago ", "");
             const invoiceDate = r.dueDate || r.wonDate;
-            const estadoBadge = mode === "cliente"
-              ? `<span class="status cliente"><i class="status-dot"></i>Cliente</span>`
-              : `<button class="detstatus-toggle" data-toggle-detstatus="${r.id}" type="button" title="Clic para marcar como ${detStatus === "Completado" ? "Pendiente" : "Pagada"}">${badge(detStatus === "Completado" ? "Pagado" : "Pendiente")}</button>`;
+            const payerLabel = mode === "cliente" ? "Cliente" : "Bandu";
+            const estadoBadge = `<button class="detstatus-toggle" data-toggle-detstatus="${r.id}" data-tooltip="${payerLabel}" type="button">${badge(detStatus === "Completado" ? "Pagado" : "Pendiente")}</button>`;
             return [
               fmtDate(invoiceDate), nroPago,
               escapeHtml(r.client), escapeHtml(r.invoice || "—"),
