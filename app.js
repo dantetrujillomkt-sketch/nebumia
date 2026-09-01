@@ -3685,13 +3685,13 @@ function buildDashAlertItems() {
   const nowLabel = nowTs.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + nowTs.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   const items = [];
   s.overdueCollections.forEach(c => {
-    items.push({ type: "red", icon: "clock", section: "Cobro vencido", nav: "collections", title: "Cobro vencido", sub: `${c.client} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}`, createdAt: nowLabel });
+    items.push({ type: "red", icon: "clock", section: "Cobro vencido", nav: "collections", entityType: "collection", id: c.id, title: "Cobro vencido", sub: `${c.client} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}`, createdAt: nowLabel });
   });
   s.pendingSunat.forEach(t => {
-    items.push({ type: "amber", icon: "package", section: "SUNAT pendiente", nav: "comprobantes", title: "SUNAT pendiente", sub: `${t.type} · ${t.period} · ${fmt(t.amount)}`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "package", section: "SUNAT pendiente", nav: "comprobantes", entityType: "taxPayment", id: t.id, title: "SUNAT pendiente", sub: `${t.type} · ${t.period} · ${fmt(t.amount)}`, createdAt: nowLabel });
   });
   s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).forEach(t => {
-    items.push({ type: "amber", icon: "users", section: "Pago personal vencido", nav: "team", title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "users", section: "Pago personal vencido", nav: "team", entityType: "team", id: t.id, title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
   });
   if (s.undeclaredCount > 0) {
     items.push({ type: "amber", icon: "fileText", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel });
@@ -6694,18 +6694,15 @@ function buildNotifAlerts() {
   const nowLabel = nowTs.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + nowTs.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
 
   // Cobros vencidos
-  const allCollections = [
-    ...(state.quotes || []).flatMap(q => (q.collections || []).map(c => ({ ...c, ref: q.client }))),
-    ...(state.cashEntries || []).filter(e => e.type === "cobro"),
-  ];
+  const allCollections = collectionRows();
   allCollections
     .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < t)
-    .forEach(c => items.push({ type: "red", icon: "clock", section: "Cobros vencidos", nav: "collections", title: `Cobro vencido: ${c.ref || c.description || "Sin descripción"}`, sub: `Venció el ${c.dueDate}`, createdAt: nowLabel }));
+    .forEach(c => items.push({ type: "red", icon: "clock", section: "Cobros vencidos", nav: "collections", entityType: "collection", id: c.id, title: `Cobro vencido: ${c.client}`, sub: `Venció el ${c.dueDate}`, createdAt: nowLabel }));
 
   // Cobros próximos (próximos 7 días)
   allCollections
     .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate >= t && c.dueDate <= soonStr)
-    .forEach(c => items.push({ type: "amber", icon: "clock", section: "Cobros próximos", nav: "collections", title: `Cobro próximo: ${c.ref || c.description || "Sin descripción"}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
+    .forEach(c => items.push({ type: "amber", icon: "clock", section: "Cobros próximos", nav: "collections", entityType: "collection", id: c.id, title: `Cobro próximo: ${c.client}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
 
   // Pagos de equipo pendientes — sólo cuando la fecha de pago ya llegó o es en los próximos 7 días
   const _lastDayOf = monthName => {
@@ -6723,7 +6720,7 @@ function buildNotifAlerts() {
     .forEach(m => {
       const d = m.dueDate || _lastDayOf(m.month);
       const overdue = d < t;
-      items.push({ type: overdue ? "red" : "amber", icon: "users", section: overdue ? "Pagos equipo vencidos" : "Pagos equipo próximos", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0, m.currency)} · ${m.role || ""} · vence ${fmtDate(d)}`, createdAt: nowLabel });
+      items.push({ type: overdue ? "red" : "amber", icon: "users", section: overdue ? "Pagos equipo vencidos" : "Pagos equipo próximos", nav: "team", entityType: "team", id: m.id, title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0, m.currency)} · ${m.role || ""} · vence ${fmtDate(d)}`, createdAt: nowLabel });
     });
 
   // SUNAT pendiente — sólo cuando el período ya terminó o vence en los próximos 7 días
@@ -6742,13 +6739,12 @@ function buildNotifAlerts() {
     .forEach(tp => {
       const d = _periodEnd(tp);
       const overdue = d < t;
-      items.push({ type: overdue ? "red" : "amber", icon: "package", section: overdue ? "SUNAT vencido" : "SUNAT próximo", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)} · ${overdue ? "período cerrado" : `cierra ${fmtDate(d)}`}`, createdAt: nowLabel });
+      items.push({ type: overdue ? "red" : "amber", icon: "package", section: overdue ? "SUNAT vencido" : "SUNAT próximo", nav: "comprobantes", entityType: "taxPayment", id: tp.id, title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)} · ${overdue ? "período cerrado" : `cierra ${fmtDate(d)}`}`, createdAt: nowLabel });
     });
 
   return items;
 }
 
-const NOTIF_SECTION_LIMIT = 5;
 let activeNotifTab = "notif";
 // null = nunca se marcó como leído; si no, guarda el total que había al marcar, para
 // volver a mostrar el badge solo cuando aparecen alertas/notificaciones nuevas.
@@ -6757,14 +6753,14 @@ let notifDismissedCount = null;
 function renderNotifItem(it) {
   const iconBg = it.type === "red" ? "#ffe0ec" : "#f1edfe";
   const iconColor = it.type === "red" ? "var(--danger)" : "var(--brand)";
-  return `<div class="notif-item notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
+  return `<div class="notif-item notif-item--clickable" data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""} role="button" tabindex="0">
       <div class="notif-icon-circle" style="background:${iconBg};color:${iconColor}">${icon(it.icon || "clock")}</div>
       <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
       <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
     </div>`;
 }
 
-function renderNotifItemsList(items, emptyText, groupKey) {
+function renderNotifItemsList(items, emptyText) {
   if (!items.length) return `<div class="notif-empty">${emptyText}</div>`;
   // Group items by section keeping original order
   const groups = [];
@@ -6773,16 +6769,7 @@ function renderNotifItemsList(items, emptyText, groupKey) {
     if (!bySection.has(it.section)) { bySection.set(it.section, []); groups.push(it.section); }
     bySection.get(it.section).push(it);
   });
-  let visibleHtml = "", hiddenHtml = "", count = 0;
-  groups.forEach(sec => {
-    const its = bySection.get(sec);
-    const block = `<div class="notif-section-label">${escapeHtml(sec)}</div>` + its.map(it => renderNotifItem(it)).join("");
-    if (count < NOTIF_SECTION_LIMIT) visibleHtml += block; else hiddenHtml += block;
-    count += its.length;
-  });
-  if (!hiddenHtml) return visibleHtml;
-  return `${visibleHtml}<div class="notif-collapsed hidden" data-notif-collapsed="${groupKey}">${hiddenHtml}</div>
-    <button type="button" class="notif-more-btn" data-notif-expand="${groupKey}">Ver más (${items.length - Math.min(items.length, NOTIF_SECTION_LIMIT)})</button>`;
+  return groups.map(sec => `<div class="notif-section-label">${escapeHtml(sec)}</div>` + bySection.get(sec).map(it => renderNotifItem(it)).join("")).join("");
 }
 
 function renderNotifDropdown() {
@@ -6801,7 +6788,6 @@ function renderNotifDropdown() {
 
   const activeItems = activeNotifTab === "notif" ? notifItems : alertItems;
   const activeEmpty = activeNotifTab === "notif" ? "Sin notificaciones pendientes" : "Sin alertas pendientes";
-  const activeKey = activeNotifTab === "notif" ? "notif" : "alerts";
 
   dropdown.innerHTML = `
     <div class="notif-header">
@@ -6813,7 +6799,7 @@ function renderNotifDropdown() {
       <button type="button" class="notif-tab ${activeNotifTab === "notif" ? "active" : ""}" data-notif-tab="notif">Notificaciones<span class="notif-tab-count">${notifItems.length}</span></button>
       <button type="button" class="notif-tab ${activeNotifTab === "alerts" ? "active" : ""}" data-notif-tab="alerts">Alertas<span class="notif-tab-count">${alertItems.length}</span></button>
     </div>
-    <div class="notif-body">${renderNotifItemsList(activeItems, activeEmpty, activeKey)}</div>`;
+    <div class="notif-body">${renderNotifItemsList(activeItems, activeEmpty)}</div>`;
 }
 
 const notifBtn = document.querySelector("#notifBtn");
@@ -6860,14 +6846,6 @@ notifDropdown.addEventListener("click", e => {
     document.querySelector("#notifBadge").classList.add("hidden");
     return;
   }
-  const expandBtn = e.target.closest("[data-notif-expand]");
-  if (expandBtn) {
-    const key = expandBtn.dataset.notifExpand;
-    const collapsed = notifDropdown.querySelector(`[data-notif-collapsed="${key}"]`);
-    if (collapsed) collapsed.classList.remove("hidden");
-    expandBtn.remove();
-    return;
-  }
   const item = e.target.closest("[data-notif-nav]");
   if (!item) return;
   const view = item.dataset.notifNav;
@@ -6877,6 +6855,13 @@ notifDropdown.addEventListener("click", e => {
   showContentLoader();
   render();
   hideContentLoader(50);
+  const entityType = item.dataset.notifEntity;
+  const entityId = item.dataset.notifId;
+  const cfg = entityType && DIALOG_ENTITY_CONFIG[entityType];
+  if (cfg) {
+    const record = cfg.find(entityId);
+    if (record) cfg.open(record);
+  }
 });
 
 function refreshNotifBadge() {
