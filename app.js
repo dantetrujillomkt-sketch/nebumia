@@ -2291,11 +2291,11 @@ const views = {
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
           <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
-          ${salesByCategory.length ? miniBars(salesByCategory, true) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          ${salesByCategory.length ? donutChart(salesByCategory, {asCount:true, totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesSource">
           <div class="panel-head"><div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div>
-          ${salesBySource.length ? miniBars(salesBySource, true) : `<p class="fe-empty">Sin datos de fuente.</p>`}
+          ${salesBySource.length ? donutChart(salesBySource, {asCount:true, totalLabel:"Ventas"}) : `<p class="fe-empty">Sin datos de fuente.</p>`}
         </div>
         <div class="panel" data-dash-section="salesOwner">
           <div class="panel-head"><div><h3>Comerciales</h3><p>Ventas del periodo</p></div></div>
@@ -3731,6 +3731,32 @@ function dashAlerts(s) {
   return items.length
     ? `<div class="alert-list">${items.join("")}</div>`
     : `<div class="empty-state">${icon("check")} Sin alertas pendientes. Todo al día.</div>`;
+}
+
+function donutChart(data, opts = {}) {
+  const { asCount = false, totalLabel = "Total" } = opts;
+  const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--purple)", "var(--amber)", "var(--coral)"];
+  const total = data.reduce((a, d) => a + d.value, 0);
+  const r = 45, C = 2 * Math.PI * r;
+  let offset = 0;
+  const segments = data.map((d, i) => {
+    const pct = total > 0 ? d.value / total : 0;
+    const dash = pct * C;
+    const circle = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${palette[i % palette.length]}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)"/>`;
+    offset += dash;
+    return circle;
+  }).join("");
+  const legend = data.map((d, i) => {
+    const pct = total > 0 ? Math.round(d.value / total * 100) : 0;
+    return `<div class="donut-legend-item"><i style="background:${palette[i % palette.length]}"></i><span>${escapeHtml(d.label)}</span><strong>${pct}%</strong></div>`;
+  }).join("");
+  return `<div class="donut-widget">
+    <div class="donut-chart-wrap">
+      <svg viewBox="0 0 120 120" width="120" height="120">${segments}</svg>
+      <div class="donut-center"><strong>${total}</strong><span>${escapeHtml(totalLabel)}</span></div>
+    </div>
+    <div class="donut-legend">${legend}</div>
+  </div>`;
 }
 
 function miniBars(data, asCount = false) {
