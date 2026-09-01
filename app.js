@@ -6761,18 +6761,51 @@ function renderNotifItem(it) {
   const iconBg = it.type === "red" ? "#ffe0ec" : "#f1edfe";
   const iconColor = it.type === "red" ? "var(--danger)" : "var(--brand)";
   const hasSub = it.subItems && it.subItems.length > 0;
-  const arrow = `<svg class="app-icon notif-arrow ${hasSub ? "notif-arrow--down" : ""}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
-  const header = `<div class="notif-item notif-item--clickable" ${hasSub ? `data-notif-toggle-sub="1"` : `data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""}`} role="button" tabindex="0">
+  return `<div class="notif-item notif-item--clickable" ${hasSub ? `data-notif-open-sub="${escapeAttr(JSON.stringify({ title: it.title, subItems: it.subItems }))}"` : `data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""}`} role="button" tabindex="0">
       <div class="notif-icon-circle" style="background:${iconBg};color:${iconColor}">${icon(it.icon || "clock")}</div>
       <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
-      ${arrow}
-    </div>`;
-  if (!hasSub) return header;
-  const subRows = it.subItems.map(si => `<div class="notif-subitem notif-item--clickable" data-notif-nav="${si.nav}" data-notif-entity="${si.entityType}" data-notif-id="${escapeAttr(si.id)}" role="button" tabindex="0">
-      <div class="notif-subitem-text"><strong>${escapeHtml(si.title)}</strong><span>${escapeHtml(si.sub)}</span></div>
       <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-    </div>`).join("");
-  return `<div class="notif-item-group">${header}<div class="notif-subitems hidden">${subRows}</div></div>`;
+    </div>`;
+}
+
+function showNotifSubPopup(title, subItems) {
+  document.getElementById("notifSubPopup")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "notifSubPopup";
+  overlay.className = "notif-subpopup-overlay";
+  overlay.innerHTML = `
+    <div class="notif-subpopup">
+      <div class="notif-subpopup-head">
+        <strong>${escapeHtml(title)}</strong>
+        <button type="button" class="notif-close-btn" data-notif-subpopup-close aria-label="Cerrar">${icon("x")}</button>
+      </div>
+      <div class="notif-subpopup-body">
+        ${subItems.map(si => `<div class="notif-subitem notif-item--clickable" data-notif-nav="${si.nav}" data-notif-entity="${si.entityType}" data-notif-id="${escapeAttr(si.id)}" role="button" tabindex="0">
+          <div class="notif-subitem-text"><strong>${escapeHtml(si.title)}</strong><span>${escapeHtml(si.sub)}</span></div>
+          <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </div>`).join("")}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay || e.target.closest("[data-notif-subpopup-close]")) { overlay.remove(); return; }
+    const item = e.target.closest("[data-notif-nav]");
+    if (!item) return;
+    overlay.remove();
+    closeNotifPanel();
+    activeView = item.dataset.notifNav;
+    showContentLoader();
+    render();
+    hideContentLoader(50);
+    const entityType = item.dataset.notifEntity;
+    const entityId = item.dataset.notifId;
+    const cfg = entityType && DIALOG_ENTITY_CONFIG[entityType];
+    if (cfg) {
+      const record = cfg.find(entityId);
+      if (record) cfg.open(record);
+    }
+  });
 }
 
 function renderNotifItemsList(items, emptyText) {
@@ -6861,11 +6894,11 @@ notifDropdown.addEventListener("click", e => {
     document.querySelector("#notifBadge").classList.add("hidden");
     return;
   }
-  const toggleBtn = e.target.closest("[data-notif-toggle-sub]");
-  if (toggleBtn) {
-    const sub = toggleBtn.parentElement.querySelector(".notif-subitems");
-    if (sub) sub.classList.toggle("hidden");
-    toggleBtn.querySelector(".notif-arrow")?.classList.toggle("notif-arrow--open");
+  const subTrigger = e.target.closest("[data-notif-open-sub]");
+  if (subTrigger) {
+    let data;
+    try { data = JSON.parse(subTrigger.dataset.notifOpenSub); } catch { data = null; }
+    if (data) showNotifSubPopup(data.title, data.subItems);
     return;
   }
   const item = e.target.closest("[data-notif-nav]");
