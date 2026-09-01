@@ -1246,9 +1246,12 @@ function dashboardSnapshot() {
   // Comprobantes (ventas facturadas + compras) marcados "Sin declarar" — global, no depende del periodo filtrado.
   const undeclaredCount = (state.invoicedSales || []).filter(f => (f.declared || "Sin declarar") !== "Declarado").length
     + (state.purchases || []).filter(p => (p.declared || "Sin declarar") !== "Declarado").length;
-  // Detracciones pendientes (las paguemos nosotros o el cliente) — global, no depende del periodo filtrado.
+  // Detracciones pendientes (las paguemos nosotros o el cliente) — solo facturas ya
+  // facturadas/pagadas/vencidas (igual que la tabla de Pago SUNAT); una cobranza aún
+  // "Pendiente" (sin facturar) todavía no genera detracción por cobrar.
+  // Global, no depende del periodo filtrado.
   const detModes = state.settings.collectionDetModes || {};
-  const pendingDetracciones = allCollections.filter(c => c.quote?.hasIgv).map(c => {
+  const pendingDetracciones = allCollections.filter(c => c.quote?.hasIgv && ["Facturado", "Pagado", "Vencido"].includes(c.status)).map(c => {
     const dm = detModes[c.id] || {};
     return { c, detActual: autoDetraction(c, dm), mode: dm.mode || "cliente", detStatus: dm.detStatus || "Completado" };
   }).filter(x => x.detActual > 0 && x.detStatus !== "Completado");
