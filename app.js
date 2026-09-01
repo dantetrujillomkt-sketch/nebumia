@@ -3685,20 +3685,20 @@ function buildDashAlertItems() {
   const nowLabel = nowTs.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + nowTs.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   const items = [];
   s.overdueCollections.forEach(c => {
-    items.push({ type: "red", section: "Cobro vencido", nav: "collections", title: "Cobro vencido", sub: `${c.client} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}`, createdAt: nowLabel });
+    items.push({ type: "red", icon: "clock", section: "Cobro vencido", nav: "collections", title: "Cobro vencido", sub: `${c.client} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}`, createdAt: nowLabel });
   });
   s.pendingSunat.forEach(t => {
-    items.push({ type: "amber", section: "SUNAT pendiente", nav: "comprobantes", title: "SUNAT pendiente", sub: `${t.type} · ${t.period} · ${fmt(t.amount)}`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "package", section: "SUNAT pendiente", nav: "comprobantes", title: "SUNAT pendiente", sub: `${t.type} · ${t.period} · ${fmt(t.amount)}`, createdAt: nowLabel });
   });
   s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).forEach(t => {
-    items.push({ type: "amber", section: "Pago personal vencido", nav: "team", title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "users", section: "Pago personal vencido", nav: "team", title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
   });
   if (s.undeclaredCount > 0) {
-    items.push({ type: "amber", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "fileText", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel });
   }
   if (s.pendingDetracciones.length > 0) {
     const totalDet = s.pendingDetracciones.reduce((sum, x) => sum + x.detActual, 0);
-    items.push({ type: "amber", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel });
+    items.push({ type: "amber", icon: "creditCard", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel });
   }
   return items;
 }
@@ -6700,12 +6700,12 @@ function buildNotifAlerts() {
   ];
   allCollections
     .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate < t)
-    .forEach(c => items.push({ type: "red", section: "Cobros vencidos", nav: "collections", title: `Cobro vencido: ${c.ref || c.description || "Sin descripción"}`, sub: `Venció el ${c.dueDate}`, createdAt: nowLabel }));
+    .forEach(c => items.push({ type: "red", icon: "clock", section: "Cobros vencidos", nav: "collections", title: `Cobro vencido: ${c.ref || c.description || "Sin descripción"}`, sub: `Venció el ${c.dueDate}`, createdAt: nowLabel }));
 
   // Cobros próximos (próximos 7 días)
   allCollections
     .filter(c => c.status !== "Pagado" && c.dueDate && c.dueDate >= t && c.dueDate <= soonStr)
-    .forEach(c => items.push({ type: "amber", section: "Cobros próximos", nav: "collections", title: `Cobro próximo: ${c.ref || c.description || "Sin descripción"}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
+    .forEach(c => items.push({ type: "amber", icon: "clock", section: "Cobros próximos", nav: "collections", title: `Cobro próximo: ${c.ref || c.description || "Sin descripción"}`, sub: `Vence el ${c.dueDate}`, createdAt: nowLabel }));
 
   // Pagos de equipo pendientes — sólo cuando la fecha de pago ya llegó o es en los próximos 7 días
   const _lastDayOf = monthName => {
@@ -6723,7 +6723,7 @@ function buildNotifAlerts() {
     .forEach(m => {
       const d = m.dueDate || _lastDayOf(m.month);
       const overdue = d < t;
-      items.push({ type: overdue ? "red" : "amber", section: overdue ? "Pagos equipo vencidos" : "Pagos equipo próximos", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0, m.currency)} · ${m.role || ""} · vence ${fmtDate(d)}`, createdAt: nowLabel });
+      items.push({ type: overdue ? "red" : "amber", icon: "users", section: overdue ? "Pagos equipo vencidos" : "Pagos equipo próximos", nav: "team", title: `Pago pendiente: ${m.name}`, sub: `${fmt(m.amount || 0, m.currency)} · ${m.role || ""} · vence ${fmtDate(d)}`, createdAt: nowLabel });
     });
 
   // SUNAT pendiente — sólo cuando el período ya terminó o vence en los próximos 7 días
@@ -6742,17 +6742,23 @@ function buildNotifAlerts() {
     .forEach(tp => {
       const d = _periodEnd(tp);
       const overdue = d < t;
-      items.push({ type: overdue ? "red" : "amber", section: overdue ? "SUNAT vencido" : "SUNAT próximo", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)} · ${overdue ? "período cerrado" : `cierra ${fmtDate(d)}`}`, createdAt: nowLabel });
+      items.push({ type: overdue ? "red" : "amber", icon: "package", section: overdue ? "SUNAT vencido" : "SUNAT próximo", nav: "comprobantes", title: `Declaración SUNAT pendiente`, sub: `${tp.period || ""} · ${fmt(tp.amount || 0)} · ${overdue ? "período cerrado" : `cierra ${fmtDate(d)}`}`, createdAt: nowLabel });
     });
 
   return items;
 }
 
 const NOTIF_SECTION_LIMIT = 5;
+let activeNotifTab = "notif";
+// null = nunca se marcó como leído; si no, guarda el total que había al marcar, para
+// volver a mostrar el badge solo cuando aparecen alertas/notificaciones nuevas.
+let notifDismissedCount = null;
 
-function renderNotifItem(it, dotColor) {
-  return `<div class="notif-item notif-item--${it.type} notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
-      <div class="notif-dot" style="background:${dotColor(it.type)}"></div>
+function renderNotifItem(it) {
+  const iconBg = it.type === "red" ? "#ffe0ec" : "#f1edfe";
+  const iconColor = it.type === "red" ? "var(--danger)" : "var(--brand)";
+  return `<div class="notif-item notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
+      <div class="notif-icon-circle" style="background:${iconBg};color:${iconColor}">${icon(it.icon || "clock")}</div>
       <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
       <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
     </div>`;
@@ -6760,7 +6766,6 @@ function renderNotifItem(it, dotColor) {
 
 function renderNotifItemsList(items, emptyText, groupKey) {
   if (!items.length) return `<div class="notif-empty">${emptyText}</div>`;
-  const dotColor = type => type === "red" ? "#ef4444" : "#6c47f5";
   // Group items by section keeping original order
   const groups = [];
   const bySection = new Map();
@@ -6771,7 +6776,7 @@ function renderNotifItemsList(items, emptyText, groupKey) {
   let visibleHtml = "", hiddenHtml = "", count = 0;
   groups.forEach(sec => {
     const its = bySection.get(sec);
-    const block = `<div class="notif-section-label">${escapeHtml(sec)}</div>` + its.map(it => renderNotifItem(it, dotColor)).join("");
+    const block = `<div class="notif-section-label">${escapeHtml(sec)}</div>` + its.map(it => renderNotifItem(it)).join("");
     if (count < NOTIF_SECTION_LIMIT) visibleHtml += block; else hiddenHtml += block;
     count += its.length;
   });
@@ -6787,30 +6792,74 @@ function renderNotifDropdown() {
   const dropdown = document.querySelector("#notifDropdown");
 
   const totalCount = notifItems.length + alertItems.length;
-  if (totalCount > 0) {
+  if (totalCount > 0 && totalCount !== notifDismissedCount) {
     badge.textContent = totalCount > 99 ? "99+" : totalCount;
     badge.classList.remove("hidden");
   } else {
     badge.classList.add("hidden");
   }
 
-  let html = `<div class="notif-header"><span class="notif-header-title">Notificaciones</span></div>
-    <div class="notif-body">${renderNotifItemsList(notifItems, "Sin notificaciones pendientes", "notif")}</div>
-    <div class="notif-header notif-header--alerts"><span class="notif-header-title">Alertas</span></div>
-    <div class="notif-body">${renderNotifItemsList(alertItems, "Sin alertas pendientes", "alerts")}</div>`;
-  dropdown.innerHTML = html;
+  const activeItems = activeNotifTab === "notif" ? notifItems : alertItems;
+  const activeEmpty = activeNotifTab === "notif" ? "Sin notificaciones pendientes" : "Sin alertas pendientes";
+  const activeKey = activeNotifTab === "notif" ? "notif" : "alerts";
+
+  dropdown.innerHTML = `
+    <div class="notif-header">
+      <span class="notif-header-title">Notificaciones</span>
+      <button type="button" class="notif-close-btn" id="notifCloseBtn" aria-label="Cerrar">${icon("x")}</button>
+    </div>
+    <div class="notif-toolbar"><button type="button" class="notif-mark-read" data-notif-mark-read>Marcar todo como leído</button></div>
+    <div class="notif-tabs">
+      <button type="button" class="notif-tab ${activeNotifTab === "notif" ? "active" : ""}" data-notif-tab="notif">Notificaciones<span class="notif-tab-count">${notifItems.length}</span></button>
+      <button type="button" class="notif-tab ${activeNotifTab === "alerts" ? "active" : ""}" data-notif-tab="alerts">Alertas<span class="notif-tab-count">${alertItems.length}</span></button>
+    </div>
+    <div class="notif-body">${renderNotifItemsList(activeItems, activeEmpty, activeKey)}</div>`;
 }
 
 const notifBtn = document.querySelector("#notifBtn");
 const notifDropdown = document.querySelector("#notifDropdown");
+const notifBackdrop = document.querySelector("#notifBackdrop");
+// El topbar usa backdrop-filter, lo que crea un containing block nuevo para descendientes
+// position:fixed — moverlos al <body> evita que el panel quede atrapado dentro del topbar.
+document.body.appendChild(notifBackdrop);
+document.body.appendChild(notifDropdown);
+
+function openNotifPanel() {
+  renderNotifDropdown();
+  notifBackdrop.classList.remove("hidden");
+  notifDropdown.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    notifBackdrop.classList.add("visible");
+    notifDropdown.classList.add("visible");
+  });
+}
+
+function closeNotifPanel() {
+  notifBackdrop.classList.remove("visible");
+  notifDropdown.classList.remove("visible");
+  setTimeout(() => {
+    notifBackdrop.classList.add("hidden");
+    notifDropdown.classList.add("hidden");
+  }, 250);
+}
 
 notifBtn.addEventListener("click", e => {
   e.stopPropagation();
-  renderNotifDropdown();
-  notifDropdown.classList.toggle("hidden");
+  if (notifDropdown.classList.contains("visible")) closeNotifPanel();
+  else openNotifPanel();
 });
 
+notifBackdrop.addEventListener("click", closeNotifPanel);
+
 notifDropdown.addEventListener("click", e => {
+  if (e.target.closest("#notifCloseBtn")) { closeNotifPanel(); return; }
+  const tabBtn = e.target.closest("[data-notif-tab]");
+  if (tabBtn) { activeNotifTab = tabBtn.dataset.notifTab; renderNotifDropdown(); return; }
+  if (e.target.closest("[data-notif-mark-read]")) {
+    notifDismissedCount = buildNotifAlerts().length + buildDashAlertItems().length;
+    document.querySelector("#notifBadge").classList.add("hidden");
+    return;
+  }
   const expandBtn = e.target.closest("[data-notif-expand]");
   if (expandBtn) {
     const key = expandBtn.dataset.notifExpand;
@@ -6823,23 +6872,17 @@ notifDropdown.addEventListener("click", e => {
   if (!item) return;
   const view = item.dataset.notifNav;
   if (!view) return;
-  notifDropdown.classList.add("hidden");
+  closeNotifPanel();
   activeView = view;
   showContentLoader();
   render();
   hideContentLoader(50);
 });
 
-document.addEventListener("click", e => {
-  if (!notifDropdown.classList.contains("hidden") && !notifDropdown.contains(e.target) && e.target !== notifBtn) {
-    notifDropdown.classList.add("hidden");
-  }
-});
-
 function refreshNotifBadge() {
   const total = buildNotifAlerts().length + buildDashAlertItems().length;
   const badge = document.querySelector("#notifBadge");
-  if (total > 0) {
+  if (total > 0 && total !== notifDismissedCount) {
     badge.textContent = total > 99 ? "99+" : total;
     badge.classList.remove("hidden");
   } else {
