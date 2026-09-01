@@ -930,17 +930,17 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
 }
 .notif-subitem-text strong { display: block; font-size: 12px; font-weight: 700; color: var(--ink); }
 .notif-subitem-text span { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
-.notif-subitem-payer {
-  display: inline-block;
-  font-size: 10px;
+.notif-subitem-text span.notif-subitem-payer {
+  display: inline;
+  font-size: 11px;
   font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 99px;
   margin-left: 6px;
-  vertical-align: middle;
+  background: none;
+  padding: 0;
+  border-radius: 0;
 }
-.notif-subitem-payer--bandu { background: var(--brand-light, #f1edfe); color: var(--brand); }
-.notif-subitem-payer--cliente { background: #ffe0b3; color: #a8560a; }
+.notif-subitem-text span.notif-subitem-payer--bandu { color: var(--brand); }
+.notif-subitem-text span.notif-subitem-payer--cliente { color: #c2660a; }
 .notif-subitem .notif-arrow { margin-top: 0; }
 .notif-subpopup-overlay {
   position: fixed;
