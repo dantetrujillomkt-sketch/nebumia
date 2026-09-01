@@ -1246,12 +1246,12 @@ function dashboardSnapshot() {
   // Comprobantes (ventas facturadas + compras) marcados "Sin declarar" — global, no depende del periodo filtrado.
   const undeclaredCount = (state.invoicedSales || []).filter(f => (f.declared || "Sin declarar") !== "Declarado").length
     + (state.purchases || []).filter(p => (p.declared || "Sin declarar") !== "Declarado").length;
-  // Detracciones que nos toca pagar (mode="bandu") y siguen pendientes — global, no depende del periodo filtrado.
+  // Detracciones pendientes (las paguemos nosotros o el cliente) — global, no depende del periodo filtrado.
   const detModes = state.settings.collectionDetModes || {};
   const pendingDetracciones = allCollections.filter(c => c.quote?.hasIgv).map(c => {
     const dm = detModes[c.id] || {};
     return { c, detActual: autoDetraction(c, dm), mode: dm.mode || "cliente", detStatus: dm.detStatus || "Completado" };
-  }).filter(x => x.detActual > 0 && x.mode === "bandu" && x.detStatus !== "Completado");
+  }).filter(x => x.detActual > 0 && x.detStatus !== "Completado");
   return { leads, quotes, won, lost, collections, expenses, team, revenue, paid, pending, outflows, taxesPaid, adSpend, netProfit, roas, openLeads, openQuotes, pipelineValue, totalLeads, wonLeads, wonThisMonth, goal, goalUSD, goalPct, overdueCollections, pendingSunat, pendingTeam, undeclaredCount, pendingDetracciones, wonPEN, lostPEN, wonThisMonthPEN, goalPctPEN, pipelinePEN, wonUSD, lostUSD, pipelineUSD, wonThisMonthUSD, goalPctUSD, rangePeriodLabel };
 }
 
@@ -1820,7 +1820,12 @@ function padQuoteCode(code) {
 }
 
 function nextQuoteCode() {
-  const nums = state?.quotes?.map(q => Number(String(q.code).match(/\d+/)?.[0] || 0)).filter(Boolean) || [285];
+  // Guarded: puede llamarse desde newQuote() durante loadState()/migrateState(), antes de que
+  // la variable global `state` termine de inicializarse (TDZ) — sin el try/catch, un solo
+  // presupuesto guardado sin código rompería la carga completa de la app.
+  let nums;
+  try { nums = state?.quotes?.map(q => Number(String(q.code).match(/\d+/)?.[0] || 0)).filter(Boolean); } catch { nums = null; }
+  nums = nums && nums.length ? nums : [285];
   const next = Math.max(...nums, 285) + 1;
   return next < 1000 ? String(next).padStart(4, "0") : String(next);
 }
