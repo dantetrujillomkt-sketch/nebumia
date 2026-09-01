@@ -748,7 +748,7 @@ function setCurrentRange(range) { viewRanges[activeView] = range; localStorage.s
 let dashboardRange = getCurrentRange();
 let revenueChartTab = "";
 let dashboardSections = (() => {
-  const always = ["accountsBreakdown", "annualProjection"];
+  const always = ["accountsBreakdown", "annualProjection", "salesType"];
   try {
     const stored = JSON.parse(localStorage.getItem(DASH_SECTIONS_KEY));
     if (Array.isArray(stored)) {
@@ -757,7 +757,7 @@ let dashboardSections = (() => {
       return s;
     }
   } catch {}
-  return new Set(["metrics", "revenue", "pipeline", "accountsBreakdown", "profitability", "salesSource", "salesOwner", "collections", "activity", "annualProjection"]);
+  return new Set(["metrics", "revenue", "pipeline", "accountsBreakdown", "profitability", "salesType", "salesSource", "collections", "activity", "annualProjection"]);
 })();
 let activeDashboardFilter = null;
 let dashboardSavedFilters = JSON.parse(localStorage.getItem(DASHBOARD_FILTERS_KEY) || "[]");
@@ -1151,8 +1151,8 @@ function dashboardFilterBar() {
     ["revenue", "Gráfico de ingresos"],
     ["pipeline", "Embudo comercial"],
     ["profitability", "Por categoría"],
+    ["salesType", "Por tipo"],
     ["salesSource", "Por fuente"],
-    ["salesOwner", "Comerciales"],
     ["collections", "Cobros próximos"],
     ["activity", "Ranking de clientes"],
     ["annualProjection", "Proyección anual"]
@@ -2093,15 +2093,18 @@ const views = {
       const dm = _detModes[c.id] || {};
       return { ...c, detActual: autoDetraction(c, dm), mode: dm.mode || "cliente" };
     });
-    const salesByOwner = group(s.won, "owner", q => q.total);
-    const salesByCategory = group(s.won, "category", () => 1);
+    const salesByCategory = groupWithClients(s.won, "category");
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
     const wonBeforePeriod = state.quotes.filter(q => q.status === "Ganado" && (q.wonDate || q.date) < dashboardRange.start);
     const recurringClients = new Set(wonBeforePeriod.map(q => q.client));
-    const salesBySource = group(s.won.map(q => ({
+    const salesByType = groupWithClients(s.won.map(q => ({
       ...q,
-      source: clientSourceMap.get(q.client) || (recurringClients.has(q.client) ? "Recurrente" : "Cliente nuevo"),
-    })), "source", () => 1);
+      type: recurringClients.has(q.client) ? "Recurrente" : "Cliente nuevo",
+    })), "type");
+    const salesByAcqSource = groupWithClients(s.won.map(q => ({
+      ...q,
+      acqSource: clientSourceMap.get(q.client) || "Sin fuente",
+    })), "acqSource");
     const newClientNames = new Set(state.clients.filter(c => dateInRange(c.date)).map(c => c.name));
     const existingClientsWithQuote = new Set(
       state.quotes.filter(q => dateInRange(q.date) && !newClientNames.has(q.client)).map(q => q.client)
@@ -2278,29 +2281,19 @@ const views = {
         </div>
       </div>
 
-      <!-- Fila 4: Por categoría + Por fuente + Comerciales -->
+      <!-- Fila 4: Por categoría + Por tipo + Por fuente -->
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
           <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
-          ${salesByCategory.length ? donutChart(salesByCategory, {asCount:true, totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          ${salesByCategory.length ? donutChart(salesByCategory, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+        </div>
+        <div class="panel" data-dash-section="salesType">
+          <div class="panel-head"><div><h3>Por tipo</h3><p>Leads ganados</p></div></div>
+          ${salesByType.length ? donutChart(salesByType, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesSource">
           <div class="panel-head"><div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div>
-          ${salesBySource.length ? donutChart(salesBySource, {asCount:true, totalLabel:"Ventas"}) : `<p class="fe-empty">Sin datos de fuente.</p>`}
-        </div>
-        <div class="panel" data-dash-section="salesOwner">
-          <div class="panel-head"><div><h3>Comerciales</h3><p>Ventas del periodo</p></div></div>
-          ${salesByOwner.length ? `<div class="ranking-list">${salesByOwner.map((o, i) => {
-            const comm = calcTeamCommission(o.label);
-            return `<div class="ranking-item">
-              <div class="ranking-pos">${i+1}</div>
-              <div class="ranking-info">
-                <strong>${escapeHtml(o.label)}</strong>
-                <span>${fmt(o.value)}</span>
-              </div>
-              ${comm > 0 ? `<div class="ranking-comm">Comisión<strong>${fmt(comm)}</strong></div>` : ""}
-            </div>`;
-          }).join("")}</div>` : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          ${salesByAcqSource.length ? donutChart(salesByAcqSource, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin datos de fuente.</p>`}
         </div>
       </div>
 
@@ -3729,7 +3722,7 @@ function dashAlerts(s) {
 }
 
 function donutChart(data, opts = {}) {
-  const { asCount = false, totalLabel = "Total" } = opts;
+  const { totalLabel = "Total" } = opts;
   const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--purple)", "var(--amber)", "var(--coral)"];
   const total = data.reduce((a, d) => a + d.value, 0);
   const r = 45, C = 2 * Math.PI * r;
@@ -3737,7 +3730,11 @@ function donutChart(data, opts = {}) {
   const segments = data.map((d, i) => {
     const pct = total > 0 ? d.value / total : 0;
     const dash = pct * C;
-    const circle = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${palette[i % palette.length]}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)"/>`;
+    const detail = escapeAttr(JSON.stringify({
+      label: d.label,
+      items: (d.items || []).map(it => ({ client: it.client, amount: fmt(it.amount, it.currency) })),
+    }));
+    const circle = `<circle class="donut-seg" data-detail="${detail}" cx="60" cy="60" r="${r}" fill="none" stroke="${palette[i % palette.length]}" stroke-width="16" stroke-dasharray="${dash.toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 60 60)"/>`;
     offset += dash;
     return circle;
   }).join("");
@@ -3777,6 +3774,18 @@ function group(rows, key, valueFn) {
   const map = new Map();
   rows.forEach(row => map.set(row[key], (map.get(row[key]) || 0) + valueFn(row)));
   return [...map.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+}
+
+function groupWithClients(rows, key) {
+  const map = new Map();
+  rows.forEach(row => {
+    const k = row[key];
+    if (!map.has(k)) map.set(k, { label: k, value: 0, items: [] });
+    const bucket = map.get(k);
+    bucket.value += 1;
+    bucket.items.push({ client: row.client, amount: row.total, currency: row.currency || "PEN" });
+  });
+  return [...map.values()].sort((a, b) => b.value - a.value);
 }
 
 let _filterPopoverDocListenerAdded = false;
@@ -3866,7 +3875,36 @@ function bindMetricsToggle() {
   });
 }
 
+function bindDonutTooltips() {
+  const segs = document.querySelectorAll(".donut-seg");
+  if (!segs.length) return;
+  let tooltip = document.getElementById("chartTooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "chartTooltip";
+    tooltip.style.cssText = "position:fixed;pointer-events:none;background:#1e293b;color:#f1f5f9;font:12px Inter,sans-serif;padding:8px 12px;border-radius:8px;display:none;z-index:9999;line-height:1.6;max-width:260px;";
+    document.body.appendChild(tooltip);
+  }
+  segs.forEach(seg => {
+    seg.addEventListener("mouseenter", () => {
+      let detail;
+      try { detail = JSON.parse(seg.dataset.detail || "{}"); } catch { detail = {}; }
+      const items = detail.items || [];
+      const rows = items.slice(0, 12).map(it => `<div style="display:flex;justify-content:space-between;gap:14px"><span>${escapeHtml(it.client || "—")}</span><strong style="margin-left:8px">${escapeHtml(it.amount || "")}</strong></div>`).join("");
+      const more = items.length > 12 ? `<div style="opacity:.7;margin-top:2px">+${items.length - 12} más</div>` : "";
+      tooltip.innerHTML = `<strong>${escapeHtml(detail.label || "")}</strong><div style="margin-top:4px">${rows || "Sin datos"}</div>${more}`;
+      tooltip.style.display = "block";
+    });
+    seg.addEventListener("mousemove", e => {
+      tooltip.style.left = (e.clientX + 14) + "px";
+      tooltip.style.top = (e.clientY - 10) + "px";
+    });
+    seg.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+  });
+}
+
 function bindViewEvents() {
+  bindDonutTooltips();
   // Contabilidad: si faltan tipos de cambio para las ventas en US$, los jala de SUNAT y refresca.
   if (activeView === "comprobantes") {
     const _dec = computeDeclaracion();
@@ -4459,7 +4497,7 @@ function setDashboardSections(sections, filterId) {
 
 function bindDashboardQuickFilters() {
   if (activeView !== "dashboard") return;
-  const allSections = ["metrics", "revenue", "pipeline", "profitability", "salesSource", "salesOwner", "collections", "activity", "annualProjection"];
+  const allSections = ["metrics", "revenue", "pipeline", "profitability", "salesType", "salesSource", "collections", "activity", "annualProjection"];
   const presets = {
     all: allSections
   };
