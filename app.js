@@ -2096,21 +2096,12 @@ const views = {
     const salesByOwner = group(s.won, "owner", q => q.total);
     const salesByCategory = group(s.won, "category", () => 1);
     const clientSourceMap = new Map(state.clients.map(c => [c.name, c.source]));
-    const wonWithSource = s.won.map(q => ({ ...q, source: clientSourceMap.get(q.client) || "" })).filter(q => q.source);
-    const salesBySource = group(wonWithSource, "source", () => 1);
     const wonBeforePeriod = state.quotes.filter(q => q.status === "Ganado" && (q.wonDate || q.date) < dashboardRange.start);
     const recurringClients = new Set(wonBeforePeriod.map(q => q.client));
-    const recurringWins = s.won.filter(q => recurringClients.has(q.client));
-    const recurringCount = recurringWins.length;
-    if (recurringCount > 0) {
-      const bySource = new Map();
-      recurringWins.forEach(q => {
-        const src = clientSourceMap.get(q.client) || "Sin fuente";
-        bySource.set(src, (bySource.get(src) || 0) + 1);
-      });
-      const tooltip = [...bySource.entries()].map(([s, n]) => `${s}: ${n} venta${n !== 1 ? "s" : ""}`).join(" · ");
-      salesBySource.push({ label: "Recurrente", value: recurringCount, tooltip });
-    }
+    const salesBySource = group(s.won.map(q => ({
+      ...q,
+      source: clientSourceMap.get(q.client) || (recurringClients.has(q.client) ? "Recurrente" : "Cliente nuevo"),
+    })), "source", () => 1);
     const newClientNames = new Set(state.clients.filter(c => dateInRange(c.date)).map(c => c.name));
     const existingClientsWithQuote = new Set(
       state.quotes.filter(q => dateInRange(q.date) && !newClientNames.has(q.client)).map(q => q.client)
