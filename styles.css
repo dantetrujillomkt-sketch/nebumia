@@ -810,13 +810,29 @@ body.sidebar-collapsed #navSkeletonOverlay { left: 64px; }
   padding: 0;
 }
 .notif-body {
-  max-height: 380px;
+  max-height: 260px;
   overflow-y: auto;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+.notif-header--alerts { border-top: 1px solid var(--line); }
+.notif-collapsed.hidden { display: none; }
+.notif-collapsed { display: flex; flex-direction: column; gap: 6px; }
+.notif-more-btn {
+  width: 100%;
+  margin-top: 2px;
+  padding: 8px;
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notif-more-btn:hover { background: var(--hover); }
 .notif-empty {
   text-align: center;
   color: var(--muted);

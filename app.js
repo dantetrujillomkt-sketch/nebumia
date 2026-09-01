@@ -2250,12 +2250,6 @@ const views = {
         </div>
       </div>
 
-      <!-- Alertas -->
-      <div class="panel" style="margin-bottom:14px">
-        <div class="panel-head"><div><h3>Alertas</h3><p>Cosas que necesitan tu atención</p></div></div>
-        ${dashAlerts(s)}
-      </div>
-
       <!-- Fila 2: Ingresos vs Egresos + Embudo comercial -->
       <div class="dash-main-grid" data-dash-grid>
         <div class="panel chart-panel" data-dash-section="revenue">
@@ -3683,42 +3677,30 @@ function dashFunnelChart(steps) {
   return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block">${polys}${texts}</svg>`;
 }
 
-function dashAlerts(s) {
+// Alertas del negocio (cobros vencidos, SUNAT, detracciones, etc.) — se muestran en el
+// dropdown de notificaciones, sección "Alertas", no dependen del periodo del dashboard.
+function buildDashAlertItems() {
+  const s = dashboardSnapshot();
+  const nowTs = new Date();
+  const nowLabel = nowTs.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + nowTs.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   const items = [];
   s.overdueCollections.forEach(c => {
-    items.push(`<div class="alert-item alert-item--red">
-      <div class="alert-icon">${icon("clock")}</div>
-      <div class="alert-body"><strong>Cobro vencido</strong><span>${escapeHtml(c.client)} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}</span></div>
-    </div>`);
+    items.push({ type: "red", section: "Cobro vencido", nav: "collections", title: "Cobro vencido", sub: `${c.client} · ${fmt(c.amount, c.currency)} · venció ${fmtDate(c.dueDate)}`, createdAt: nowLabel });
   });
   s.pendingSunat.forEach(t => {
-    items.push(`<div class="alert-item alert-item--amber">
-      <div class="alert-icon">${icon("package")}</div>
-      <div class="alert-body"><strong>SUNAT pendiente</strong><span>${escapeHtml(t.type)} · ${escapeHtml(t.period)} · ${fmt(t.amount)}</span></div>
-    </div>`);
+    items.push({ type: "amber", section: "SUNAT pendiente", nav: "comprobantes", title: "SUNAT pendiente", sub: `${t.type} · ${t.period} · ${fmt(t.amount)}`, createdAt: nowLabel });
   });
   s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).forEach(t => {
-    items.push(`<div class="alert-item alert-item--amber">
-      <div class="alert-icon">${icon("users")}</div>
-      <div class="alert-body"><strong>Pago personal vencido</strong><span>${escapeHtml(t.name)} · ${fmt(t.amount, t.currency)}</span></div>
-    </div>`);
+    items.push({ type: "amber", section: "Pago personal vencido", nav: "team", title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
   });
   if (s.undeclaredCount > 0) {
-    items.push(`<div class="alert-item alert-item--amber">
-      <div class="alert-icon">${icon("fileText")}</div>
-      <div class="alert-body"><strong>Comprobantes sin declarar</strong><span>Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar</span></div>
-    </div>`);
+    items.push({ type: "amber", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel });
   }
   if (s.pendingDetracciones.length > 0) {
     const totalDet = s.pendingDetracciones.reduce((sum, x) => sum + x.detActual, 0);
-    items.push(`<div class="alert-item alert-item--amber">
-      <div class="alert-icon">${icon("creditCard")}</div>
-      <div class="alert-body"><strong>Detracciones pendientes</strong><span>Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}</span></div>
-    </div>`);
+    items.push({ type: "amber", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel });
   }
-  return items.length
-    ? `<div class="alert-list">${items.join("")}</div>`
-    : `<div class="empty-state">${icon("check")} Sin alertas pendientes. Todo al día.</div>`;
+  return items;
 }
 
 function donutChart(data, opts = {}) {
@@ -6766,46 +6748,56 @@ function buildNotifAlerts() {
   return items;
 }
 
+const NOTIF_SECTION_LIMIT = 5;
+
+function renderNotifItem(it, dotColor) {
+  return `<div class="notif-item notif-item--${it.type} notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
+      <div class="notif-dot" style="background:${dotColor(it.type)}"></div>
+      <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
+      <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </div>`;
+}
+
+function renderNotifItemsList(items, emptyText, groupKey) {
+  if (!items.length) return `<div class="notif-empty">${emptyText}</div>`;
+  const dotColor = type => type === "red" ? "#ef4444" : "#ff5100";
+  // Group items by section keeping original order
+  const groups = [];
+  const bySection = new Map();
+  items.forEach(it => {
+    if (!bySection.has(it.section)) { bySection.set(it.section, []); groups.push(it.section); }
+    bySection.get(it.section).push(it);
+  });
+  let visibleHtml = "", hiddenHtml = "", count = 0;
+  groups.forEach(sec => {
+    const its = bySection.get(sec);
+    const block = `<div class="notif-section-label">${escapeHtml(sec)}</div>` + its.map(it => renderNotifItem(it, dotColor)).join("");
+    if (count < NOTIF_SECTION_LIMIT) visibleHtml += block; else hiddenHtml += block;
+    count += its.length;
+  });
+  if (!hiddenHtml) return visibleHtml;
+  return `${visibleHtml}<div class="notif-collapsed hidden" data-notif-collapsed="${groupKey}">${hiddenHtml}</div>
+    <button type="button" class="notif-more-btn" data-notif-expand="${groupKey}">Ver más (${items.length - Math.min(items.length, NOTIF_SECTION_LIMIT)})</button>`;
+}
+
 function renderNotifDropdown() {
-  const items = buildNotifAlerts();
+  const notifItems = buildNotifAlerts();
+  const alertItems = buildDashAlertItems();
   const badge = document.querySelector("#notifBadge");
   const dropdown = document.querySelector("#notifDropdown");
 
-  // Badge
-  if (items.length > 0) {
-    badge.textContent = items.length > 99 ? "99+" : items.length;
+  const totalCount = notifItems.length + alertItems.length;
+  if (totalCount > 0) {
+    badge.textContent = totalCount > 99 ? "99+" : totalCount;
     badge.classList.remove("hidden");
   } else {
     badge.classList.add("hidden");
   }
 
-  // Group by section
-  const sections = {};
-  items.forEach(it => {
-    if (!sections[it.section]) sections[it.section] = [];
-    sections[it.section].push(it);
-  });
-
-  const dotColor = type => type === "red" ? "#ef4444" : "#ff5100";
-
-  let html = `<div class="notif-header"><span class="notif-header-title">Notificaciones</span></div><div class="notif-body">`;
-
-  if (items.length === 0) {
-    html += `<div class="notif-empty">Sin alertas pendientes</div>`;
-  } else {
-    Object.entries(sections).forEach(([sec, its]) => {
-      html += `<div class="notif-section-label">${escapeHtml(sec)}</div>`;
-      its.forEach(it => {
-        html += `<div class="notif-item notif-item--${it.type} notif-item--clickable" data-notif-nav="${it.nav}" role="button" tabindex="0">
-          <div class="notif-dot" style="background:${dotColor(it.type)}"></div>
-          <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
-          <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-        </div>`;
-      });
-    });
-  }
-
-  html += `</div>`;
+  let html = `<div class="notif-header"><span class="notif-header-title">Notificaciones</span></div>
+    <div class="notif-body">${renderNotifItemsList(notifItems, "Sin notificaciones pendientes", "notif")}</div>
+    <div class="notif-header notif-header--alerts"><span class="notif-header-title">Alertas</span></div>
+    <div class="notif-body">${renderNotifItemsList(alertItems, "Sin alertas pendientes", "alerts")}</div>`;
   dropdown.innerHTML = html;
 }
 
@@ -6819,6 +6811,14 @@ notifBtn.addEventListener("click", e => {
 });
 
 notifDropdown.addEventListener("click", e => {
+  const expandBtn = e.target.closest("[data-notif-expand]");
+  if (expandBtn) {
+    const key = expandBtn.dataset.notifExpand;
+    const collapsed = notifDropdown.querySelector(`[data-notif-collapsed="${key}"]`);
+    if (collapsed) collapsed.classList.remove("hidden");
+    expandBtn.remove();
+    return;
+  }
   const item = e.target.closest("[data-notif-nav]");
   if (!item) return;
   const view = item.dataset.notifNav;
@@ -6837,10 +6837,10 @@ document.addEventListener("click", e => {
 });
 
 function refreshNotifBadge() {
-  const items = buildNotifAlerts();
+  const total = buildNotifAlerts().length + buildDashAlertItems().length;
   const badge = document.querySelector("#notifBadge");
-  if (items.length > 0) {
-    badge.textContent = items.length > 99 ? "99+" : items.length;
+  if (total > 0) {
+    badge.textContent = total > 99 ? "99+" : total;
     badge.classList.remove("hidden");
   } else {
     badge.classList.add("hidden");
