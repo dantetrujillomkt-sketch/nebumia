@@ -1546,7 +1546,7 @@ td.cell-wrap { white-space: normal; word-break: break-word; }
 .donut-chart-wrap { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
 .donut-chart-wrap svg circle { transition: stroke-dasharray .3s ease; }
 .donut-seg { cursor: pointer; }
-.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
 .donut-center strong { font-size: 20px; font-weight: 700; color: var(--ink); line-height: 1.1; }
 .donut-center span { font-size: 11px; color: var(--muted); }
 .donut-legend { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; }
