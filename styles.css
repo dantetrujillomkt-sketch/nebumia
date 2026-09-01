@@ -2511,7 +2511,6 @@ label.profile-photo-upload-btn {
 .kpi-bottom-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .kpi-bottom-row .kpi-sub { flex: 1; min-width: 0; }
 .kpi-spark { flex-shrink: 0; opacity: .85; }
-.kpi-bottom-row--center { justify-content: center; margin-top: -6px; }
 .kpi-bar { height: 5px; background: var(--hover); border-radius: 99px; overflow: hidden; margin-top: 8px; }
 .kpi-bar-fill { height: 100%; border-radius: 99px; transition: width .4s; }
 .gauge-wrap { display: flex; align-items: center; justify-content: center; margin-top: 2px; }
