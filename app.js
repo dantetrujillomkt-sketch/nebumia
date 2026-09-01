@@ -3693,12 +3693,19 @@ function buildDashAlertItems() {
   s.pendingTeam.filter(t => t.dueDate && t.dueDate < today()).forEach(t => {
     items.push({ type: "amber", icon: "users", section: "Pago personal vencido", nav: "team", entityType: "team", id: t.id, title: "Pago personal vencido", sub: `${t.name} · ${fmt(t.amount, t.currency)}`, createdAt: nowLabel });
   });
+  const undeclaredInvoiced = (state.invoicedSales || []).filter(f => (f.declared || "Sin declarar") !== "Declarado");
+  const undeclaredPurchases = (state.purchases || []).filter(p => (p.declared || "Sin declarar") !== "Declarado");
   if (s.undeclaredCount > 0) {
-    items.push({ type: "amber", icon: "fileText", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel });
+    const subItems = [
+      ...undeclaredInvoiced.map(f => ({ title: f.client || "Venta facturada", sub: `${f.invoiceNum || "Sin N°"} · ${fmt(f.total, f.currency)}`, nav: "comprobantes", entityType: "invoicedSale", id: f.id })),
+      ...undeclaredPurchases.map(p => ({ title: p.vendor || "Compra", sub: `${p.invoiceNum || "Sin N°"} · ${fmt(p.total, p.currency)}`, nav: "comprobantes", entityType: "purchase", id: p.id })),
+    ];
+    items.push({ type: "amber", icon: "fileText", section: "Comprobantes sin declarar", nav: "comprobantes", title: "Comprobantes sin declarar", sub: `Tienes ${s.undeclaredCount} comprobante${s.undeclaredCount === 1 ? "" : "s"} sin declarar`, createdAt: nowLabel, subItems });
   }
   if (s.pendingDetracciones.length > 0) {
     const totalDet = s.pendingDetracciones.reduce((sum, x) => sum + x.detActual, 0);
-    items.push({ type: "amber", icon: "creditCard", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel });
+    const subItems = s.pendingDetracciones.map(x => ({ title: x.c.client, sub: `Detracción ${fmt(x.detActual, "PEN")} · cobro ${fmt(x.c.amount, x.c.currency)}`, nav: "finance", entityType: "collection", id: x.c.id }));
+    items.push({ type: "amber", icon: "creditCard", section: "Detracciones pendientes", nav: "finance", title: "Detracciones pendientes", sub: `Tienes ${s.pendingDetracciones.length} detracción${s.pendingDetracciones.length === 1 ? "" : "es"} por pagar · ${fmt(totalDet, "PEN")}`, createdAt: nowLabel, subItems });
   }
   return items;
 }
@@ -6753,11 +6760,19 @@ let notifDismissedCount = null;
 function renderNotifItem(it) {
   const iconBg = it.type === "red" ? "#ffe0ec" : "#f1edfe";
   const iconColor = it.type === "red" ? "var(--danger)" : "var(--brand)";
-  return `<div class="notif-item notif-item--clickable" data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""} role="button" tabindex="0">
+  const hasSub = it.subItems && it.subItems.length > 0;
+  const arrow = `<svg class="app-icon notif-arrow ${hasSub ? "notif-arrow--down" : ""}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+  const header = `<div class="notif-item notif-item--clickable" ${hasSub ? `data-notif-toggle-sub="1"` : `data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""}`} role="button" tabindex="0">
       <div class="notif-icon-circle" style="background:${iconBg};color:${iconColor}">${icon(it.icon || "clock")}</div>
       <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
-      <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      ${arrow}
     </div>`;
+  if (!hasSub) return header;
+  const subRows = it.subItems.map(si => `<div class="notif-subitem notif-item--clickable" data-notif-nav="${si.nav}" data-notif-entity="${si.entityType}" data-notif-id="${escapeAttr(si.id)}" role="button" tabindex="0">
+      <div class="notif-subitem-text"><strong>${escapeHtml(si.title)}</strong><span>${escapeHtml(si.sub)}</span></div>
+      <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    </div>`).join("");
+  return `<div class="notif-item-group">${header}<div class="notif-subitems hidden">${subRows}</div></div>`;
 }
 
 function renderNotifItemsList(items, emptyText) {
@@ -6844,6 +6859,13 @@ notifDropdown.addEventListener("click", e => {
   if (e.target.closest("[data-notif-mark-read]")) {
     notifDismissedCount = buildNotifAlerts().length + buildDashAlertItems().length;
     document.querySelector("#notifBadge").classList.add("hidden");
+    return;
+  }
+  const toggleBtn = e.target.closest("[data-notif-toggle-sub]");
+  if (toggleBtn) {
+    const sub = toggleBtn.parentElement.querySelector(".notif-subitems");
+    if (sub) sub.classList.toggle("hidden");
+    toggleBtn.querySelector(".notif-arrow")?.classList.toggle("notif-arrow--open");
     return;
   }
   const item = e.target.closest("[data-notif-nav]");
