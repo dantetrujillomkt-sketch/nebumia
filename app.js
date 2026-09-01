@@ -3010,7 +3010,7 @@ const views = {
       const orphaned = [...allUsed].filter(v => v && !bankSet.has(v));
       const orphanSection = orphaned.length ? `
         <section class="panel settings-panel" style="margin-top:16px">
-          <div class="panel-head"><div><h3 style="color:var(--warning,#f59e0b)">Cuentas desactualizadas</h3>
+          <div class="panel-head"><div><h3 style="color:var(--amber,#ff9f2e)">Cuentas desactualizadas</h3>
           <p>${orphaned.length} nombre${orphaned.length>1?"s":""} de cuenta en tus registros no coincide${orphaned.length>1?"n":""} con la lista actual. Reasígnalos para sincronizar todo de golpe.</p></div></div>
           <ul class="bank-accounts-list">
             ${orphaned.map(old => `
@@ -3705,7 +3705,7 @@ function buildDashAlertItems() {
 
 function donutChart(data, opts = {}) {
   const { totalLabel = "Total" } = opts;
-  const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--purple)", "var(--amber)", "var(--coral)"];
+  const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--amber)", "var(--coral)", "var(--purple)"];
   const total = data.reduce((a, d) => a + d.value, 0);
   const r = 45, C = 2 * Math.PI * r;
   let offset = 0;
@@ -6490,9 +6490,9 @@ function drawCharts() {
   periods.forEach((p, i) => {
     const cx = padL + i * groupW + groupW / 2;
     const gap = barW + 2;
-    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#ff5100");
-    drawRoundedBar(cx         - barW/2, padT + chartH - (cobValues[i]/max)*chartH, barW, (cobValues[i]/max)*chartH, 3, "#34d399");
-    drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#fb7185");
+    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#6c47f5");
+    drawRoundedBar(cx         - barW/2, padT + chartH - (cobValues[i]/max)*chartH, barW, (cobValues[i]/max)*chartH, 3, "#12c99b");
+    drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#ff4d8d");
     ctx.fillStyle = "#64748b";
     ctx.font = `${n > 20 ? 9 : 11}px Inter, sans-serif`;
     ctx.textAlign = "center";
@@ -6503,12 +6503,12 @@ function drawCharts() {
   // Goal line (only for month view)
   if (goal > 0 && periods[0]?.type === "month") {
     const goalY = padT + chartH - (goal / max) * chartH;
-    ctx.strokeStyle = "#f59e0b";
+    ctx.strokeStyle = "#ff9f2e";
     ctx.setLineDash([6, 4]);
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(padL, goalY); ctx.lineTo(rect.width - padR, goalY); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#f59e0b";
+    ctx.fillStyle = "#ff9f2e";
     ctx.font = `11px Inter, sans-serif`;
     ctx.fillText("Meta", padL + 4, goalY - 5);
   }
@@ -6518,7 +6518,7 @@ function drawCharts() {
   if (subtitleEl) subtitleEl.textContent = `${dashboardRange.label} · vendido vs cobrado`;
 
   // Legend — top right
-  const legendItems = [["#ff5100","Vendido"],["#34d399","Cobrado"],["#fb7185","Egresos"]];
+  const legendItems = [["#6c47f5","Vendido"],["#12c99b","Cobrado"],["#ff4d8d","Egresos"]];
   ctx.font = `11px Inter, sans-serif`;
   const totalLegendW = legendItems.reduce((s,[,l]) => s + 10 + 4 + ctx.measureText(l).width + 16, 0);
   let lx = rect.width - padR - totalLegendW;
@@ -6538,9 +6538,9 @@ function drawCharts() {
     return {
       label: p.label,
       bars: [
-        { name: "Vendido", color: "#ff5100", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
-        { name: "Cobrado", color: "#34d399", value: cobValues[i], x: cx - barW/2,       y: padT + chartH - (cobValues[i]/max)*chartH, w: barW, h: (cobValues[i]/max)*chartH },
-        { name: "Egresos", color: "#fb7185", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
+        { name: "Vendido", color: "#6c47f5", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
+        { name: "Cobrado", color: "#12c99b", value: cobValues[i], x: cx - barW/2,       y: padT + chartH - (cobValues[i]/max)*chartH, w: barW, h: (cobValues[i]/max)*chartH },
+        { name: "Egresos", color: "#ff4d8d", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
       ]
     };
   });
@@ -6760,7 +6760,7 @@ function renderNotifItem(it, dotColor) {
 
 function renderNotifItemsList(items, emptyText, groupKey) {
   if (!items.length) return `<div class="notif-empty">${emptyText}</div>`;
-  const dotColor = type => type === "red" ? "#ef4444" : "#ff5100";
+  const dotColor = type => type === "red" ? "#ef4444" : "#6c47f5";
   // Group items by section keeping original order
   const groups = [];
   const bySection = new Map();
