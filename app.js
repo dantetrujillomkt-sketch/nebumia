@@ -2572,11 +2572,7 @@ const views = {
     const allCajaRows = buildCajaRows();
     const saldoRows = buildSaldoAnteriorRows(allCajaRows, tab, dashboardRange.start, dashboardRange.end);
     let all = [...allCajaRows, ...fixedRows, ...saldoRows].filter(r =>
-      r.sourceType === "saldoAnterior" || (
-        r.sourceType === "collection"
-          ? (r.date || "") >= dashboardRange.start
-          : dateInRange(r.date)
-      )
+      r.sourceType === "saldoAnterior" || dateInRange(r.date)
     );
 
     // Bank tab filter
