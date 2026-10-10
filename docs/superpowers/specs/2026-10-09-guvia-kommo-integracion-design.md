@@ -206,7 +206,31 @@ Al crear o renombrar un servicio en `service_catalog`, n8n agrega o renombra su 
 
 Cada fase se valida con leads `[PRUEBA]` y un cliente de prueba antes de activar la siguiente.
 
-## 12. Pruebas
+## 12. Reversión total (requisito obligatorio)
+
+Si Dante pide "volver a como estaba", todo debe quedar como antes de la integración **sin perder ningún dato**, incluidos los datos ingresados después de activarla.
+
+**Punto de restauración (antes de la Fase 0)**
+- Tag de Git `pre-integracion-kommo` sobre el commit actual de Guvia.
+- Backup completo de la base de Supabase (dump SQL) y respaldo JSON de Guvia ("Exportar respaldo").
+- Export de leads, contactos y empresas de Kommo, más el JSON de los bots existentes.
+- Registro de cada cambio hecho en Kommo (IDs de la etapa, los campos, el embudo y el webhook creados).
+
+**Procedimiento de reversión, por capa, en este orden**
+1. **Detener:** kill switch en `false` y desactivar los flujos de n8n. La sincronización se detiene al instante.
+2. **Guvia (app):** redeploy del tag `pre-integracion-kommo` en Vercel. Los datos ingresados después se conservan, porque viven en las mismas tablas con las mismas columnas.
+3. **Supabase:** las migraciones solo agregan. Cada una trae su script de reversión (`down`), que elimina únicamente las tablas, columnas y triggers nuevos. Las cotizaciones o clientes creados desde Kommo durante la integración **se conservan** como registros normales de Guvia.
+4. **Kommo:**
+   - Se elimina el webhook y se desactiva el bot de Telegram nuevo.
+   - Los leads que estén en "Cotizar" o en el embudo "Clientes · Cobranzas" se mueven primero a etapas existentes que Dante elija. Solo después se eliminan la etapa y el embudo.
+   - Los campos nuevos se conservan ocultos o se eliminan, según decida Dante. Solo contienen datos de la integración.
+5. **Verificación:** se comparan los conteos y totales (Dashboard, Ventas, Cobranzas, Caja, Contabilidad, y número de leads por embudo en Kommo) contra el punto de restauración, sumando lo ingresado después. No se da por terminada la reversión hasta que cuadren.
+
+**Último recurso:** restaurar el dump de Supabase del punto de restauración. Solo se usaría si los pasos anteriores fallan, y antes se exporta lo ingresado después para reincorporarlo.
+
+**Ensayo:** el procedimiento completo se ensaya en el proyecto de prueba antes de aplicar la Fase 0 en producción.
+
+## 13. Pruebas
 
 - **Por flujo de n8n:** ejecución con datos de prueba (pin data) y luego con un lead `[PRUEBA]` real.
 - **Escenarios obligatorios:**
