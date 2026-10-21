@@ -3399,3 +3399,9 @@ body[data-theme="dark"] .panel[data-dash-section="annualProjection"] { border: 1
 .dash-kpi-grid .kpi-bottom-row { align-items: flex-end; }
 .dash-kpi-grid .kpi-spark { opacity: 1; }
 .dash-main-grid .panel-head h3, .dash-mid-grid .panel-head h3, .dash-bottom-grid .panel-head h3 { font-size: 16px; font-weight: 750; }
+
+/* Tooltip del menú colapsado: contraste fijo (los tokens del sidebar lo dejaban ilegible) */
+#appShell.sidebar-collapsed .nav-btn::after { background: #ffffff; color: #111827; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.28); }
+#appShell.sidebar-collapsed .nav-btn::before { border-right-color: #ffffff; }
+body[data-theme="dark"] #appShell.sidebar-collapsed .nav-btn::after { background: #1f2937; color: #f9fafb; border: 1px solid rgba(255,255,255,.12); }
+body[data-theme="dark"] #appShell.sidebar-collapsed .nav-btn::before { border-right-color: #1f2937; }
