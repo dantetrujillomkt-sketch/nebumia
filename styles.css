@@ -3363,3 +3363,15 @@ body[data-theme="dark"] .ac-dropdown {
 /* Sin trazos/contornos de foco ni hover en ningún elemento */
 *:focus, *:focus-visible, *:active { outline: none !important; }
 button:hover, a:hover, [role="button"]:hover { outline: none; }
+
+/* Barra superior #111827 (buscador, notificaciones, perfil) */
+.topbar { background: #111827; backdrop-filter: none; border-bottom-color: rgba(255,255,255,.08); }
+body:not([data-theme="dark"]) .topbar {
+  --ink: #f3f4f6;
+  --muted: #9ca3af;
+  --line: rgba(255,255,255,.12);
+  --input: rgba(255,255,255,.06);
+  --panel: #1f2937;
+  --hover: rgba(255,255,255,.08);
+}
+.topbar .theme-toggle { color: #9ca3af; }

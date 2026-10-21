@@ -855,6 +855,7 @@ function saveState() {
 
 function applyTheme(theme) {
   document.body.dataset.theme = theme;
+  document.documentElement.dataset.theme = theme;
   const label = theme === "dark" ? "Modo Claro" : "Modo Oscuro";
   const labelEl = document.getElementById("themeToggleLabel");
   if (labelEl) labelEl.textContent = label;
