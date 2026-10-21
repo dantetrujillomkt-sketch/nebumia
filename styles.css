@@ -3405,3 +3405,11 @@ body[data-theme="dark"] .panel[data-dash-section="annualProjection"] { border: 1
 #appShell.sidebar-collapsed .nav-btn::before { border-right-color: #ffffff; }
 body[data-theme="dark"] #appShell.sidebar-collapsed .nav-btn::after { background: #1f2937; color: #f9fafb; border: 1px solid rgba(255,255,255,.12); }
 body[data-theme="dark"] #appShell.sidebar-collapsed .nav-btn::before { border-right-color: #1f2937; }
+
+/* Tarjeta Meta mensual estilo "icono + valor + píldora" */
+.meta-card { display: flex; flex-direction: column; gap: 2px; }
+.meta-card-icon { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: #e8effe; color: var(--brand); margin-bottom: 10px; }
+.meta-card-icon .app-icon { width: 19px; height: 19px; }
+.kpi-value--ink { color: var(--ink); }
+.kpi-trend.warn { background: rgba(255,159,46,.16); color: #c2660a; }
+.kpi-pct--info { background: #e8effe; color: var(--brand); }

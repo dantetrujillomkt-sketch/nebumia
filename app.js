@@ -1268,28 +1268,14 @@ function fmt(amount, currency = "PEN") {
 }
 
 function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMonthName()) {
-  const R = 82, SW = 13, cx = 100, cy = 118;
-  const total = Math.PI * R;
-  const filled = (Math.min(Math.max(pct, 0), 100) / 100 * total).toFixed(1);
-  const arcD = `M ${cx - R},${cy} A ${R},${R} 0 0,1 ${cx + R},${cy}`;
-  const color = pct >= 100 ? "var(--mint)" : pct >= 50 ? "var(--brand)" : "var(--coral)";
-  const pctClass = pct >= 100 ? "kpi-pct--ok" : pct >= 50 ? "kpi-pct--warn" : "kpi-pct--low";
-  const sym = currency === "USD" ? "$" : "S/";
-  const fmtS = n => n >= 1000 ? `${sym} ${(n / 1000).toFixed(1)}k` : `${sym} ${Math.round(n)}`;
-  const goalText = goal > 0 ? `de ${fmtS(goal)} · ${periodLabel}` : periodLabel;
+  const pctClass = pct >= 100 ? "kpi-trend up" : pct >= 50 ? "kpi-trend warn" : "kpi-trend down";
+  const goalText = goal > 0 ? `de ${fmt(goal, currency)} · ${periodLabel}` : `Sin meta · ${periodLabel}`;
   return `
-    <div class="kpi-top">
-      <span class="kpi-label">${label}</span>
-      ${goal > 0 ? `<span class="kpi-pct ${pctClass}">${pct}%</span>` : ""}
-    </div>
-    <div class="gauge-wrap">
-      <svg viewBox="0 0 200 128" xmlns="http://www.w3.org/2000/svg">
-        <path d="${arcD}" fill="none" stroke="var(--hover)" stroke-width="${SW}" stroke-linecap="round"/>
-        <path d="${arcD}" fill="none" stroke="${color}" stroke-width="${SW}" stroke-linecap="round"
-          stroke-dasharray="${filled} ${total.toFixed(1)}"/>
-        <text x="${cx}" y="90" text-anchor="middle" font-family="inherit" font-size="21" font-weight="600" fill="var(--ink)">${fmtS(current)}</text>
-        <text x="${cx}" y="112" text-anchor="middle" font-family="inherit" font-size="10.5" fill="var(--muted)">${goalText}</text>
-      </svg>
+    <div class="meta-card">
+      <div class="meta-card-icon">${icon("target")}</div>
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value kpi-value--ink">${fmt(current, currency)}</div>
+      <div class="kpi-trend-row">${goal > 0 ? `<span class="${pctClass}">${pct}% de la meta</span>` : ""}<span class="kpi-trend-label">${goalText}</span></div>
     </div>`;
 }
 
@@ -2155,6 +2141,9 @@ const views = {
     const perdidaSpark = cur => _last6.map(m => state.quotes
       .filter(q => (q.currency || "PEN") === cur && q.status === "Perdido" && (q.wonDate || q.date) >= m.start && (q.wonDate || q.date) <= m.end)
       .reduce((a, q) => a + calcQuote(q).total, 0));
+    const pipelineSpark = cur => _last6.map(m => state.quotes
+      .filter(q => (q.currency || "PEN") === cur && ["Por cotizar", "Cotizado"].includes(q.status) && q.date >= m.start && q.date <= m.end)
+      .reduce((a, q) => a + calcQuote(q).total, 0));
     const conversionSpark = cur => _last6.map(m => {
       const closed = state.quotes.filter(q => (q.currency || "PEN") === cur && ["Ganado", "Perdido"].includes(q.status) && (q.wonDate || q.date) >= m.start && (q.wonDate || q.date) <= m.end);
       const won = closed.filter(q => q.status === "Ganado").length;
@@ -2207,9 +2196,9 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
-            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => (q.currency||"PEN") === "PEN" && dateInRange(q.date)).length; return t ? Math.round(openPEN.length / t * 100) : 0; })()}% abiertas</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelinePEN)}</div>
-            <div class="kpi-sub">${openPEN.length} ${openPEN.length===1?"cotización abierta":"cotizaciones abiertas"}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(pipelineSpark("PEN"), false)}</div>${openPEN.length} ${openPEN.length===1?"cotización abierta":"cotizaciones abiertas"}</div>${sparkline(pipelineSpark("PEN"), "--brand")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2218,8 +2207,7 @@ const views = {
             const conv = closedPEN > 0 ? Math.round(s.wonPEN.length / closedPEN * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${conv}%</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("PEN"), false)}</div>${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>${sparkline(conversionSpark("PEN"), "--mint")}</div>
-            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${conv}%;background:var(--mint)"></div></div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("PEN"), false)}</div>${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>${sparkline(conversionSpark("PEN"), "--mint")}</div>`;
           })()}
         </div>
       </div>
@@ -2250,9 +2238,9 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openUSD = s.openQuotes.filter(q => q.currency === "USD");
-            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => q.currency === "USD" && dateInRange(q.date)).length; return t ? Math.round(openUSD.length / t * 100) : 0; })()}% abiertas</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelineUSD, "USD")}</div>
-            <div class="kpi-sub">${openUSD.length} ${openUSD.length===1?"cotización abierta":"cotizaciones abiertas"}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(pipelineSpark("USD"), false)}</div>${openUSD.length} ${openUSD.length===1?"cotización abierta":"cotizaciones abiertas"}</div>${sparkline(pipelineSpark("USD"), "--brand")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2261,8 +2249,7 @@ const views = {
             const convUSD = closedUSD > 0 ? Math.round(s.wonUSD.length / closedUSD * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${convUSD}%</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("USD"), false)}</div>${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>${sparkline(conversionSpark("USD"), "--mint")}</div>
-            <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${convUSD}%;background:var(--mint)"></div></div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("USD"), false)}</div>${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>${sparkline(conversionSpark("USD"), "--mint")}</div>`;
           })()}
         </div>
       </div>
