@@ -1267,16 +1267,8 @@ function fmt(amount, currency = "PEN") {
   return new Intl.NumberFormat("es-PE", { style: "currency", currency }).format(amount || 0);
 }
 
-function gaugeKpi(pct, current, goal, currency, label, periodLabel = currentMonthName()) {
-  const pctClass = pct >= 100 ? "kpi-trend up" : pct >= 50 ? "kpi-trend warn" : "kpi-trend down";
-  const goalText = goal > 0 ? `de ${fmt(goal, currency)} · ${periodLabel}` : `Sin meta · ${periodLabel}`;
-  return `
-    <div class="meta-card">
-      <div class="meta-card-icon">${icon("target")}</div>
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value kpi-value--ink">${fmt(current, currency)}</div>
-      <div class="kpi-trend-row">${goal > 0 ? `<span class="${pctClass}">${pct}% de la meta</span>` : ""}<span class="kpi-trend-label">${goalText}</span></div>
-    </div>`;
+function kpiIcon(name, tone = "blue") {
+  return `<span class="kpi-icon kpi-icon--${tone}">${icon(name)}</span>`;
 }
 
 function fmtMixed(rows, valueFn, currencyFn = r => r.currency || "PEN") {
@@ -2150,7 +2142,7 @@ const views = {
       return closed.length > 0 ? Math.round(won / closed.length * 100) : 0;
     });
     const sparkline = (values, colorVar) => {
-      const w = 64, h = 32, n = values.length, gap = 3, bw = (w - gap * (n - 1)) / n;
+      const w = 84, h = 64, n = values.length, gap = 4, bw = (w - gap * (n - 1)) / n;
       const max = Math.max(...values, 0.0001);
       const bars = values.map((v, i) => {
         const bh = Math.max(3, v / max * (h - 2));
@@ -2172,13 +2164,19 @@ const views = {
 
       <!-- KPIs -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
-        <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goal > 0 ? Math.min(100, Math.round(_recogPENTotal / s.goal * 100)) : 0, _recogPENTotal, s.goal, "PEN", "Meta mensual", s.rangePeriodLabel)}
+        <div class="kpi-card">
+          ${(() => {
+            const pct = s.goal > 0 ? Math.round(_recogPENTotal / s.goal * 100) : 0;
+            const sp = cobradaSpark("PEN");
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("target", "blue")}Meta mensual</span>${s.goal > 0 ? `<span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span>` : ""}</div>
+            <div class="kpi-value kpi-value--ink">${fmt(_recogPENTotal)}</div>
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(sp)}</div>${s.goal > 0 ? `de ${fmt(s.goal)} · ${s.rangePeriodLabel}` : `Sin meta · ${s.rangePeriodLabel}`}</div>${sparkline(sp, "--blue")}</div>`;
+          })()}
         </div>
         <div class="kpi-card">
           ${(() => {
             const pct = s.goal > 0 ? Math.round(_recogPENTotal / s.goal * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("wallet", "blue")}Ventas cobradas</span><span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span></div>
             <div class="kpi-value kpi-value--blue">${fmt(_recogPENTotal)}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(cobradaSpark("PEN"), false)}</div>${_recogPEN.length} ${_recogPEN.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("PEN"), "--brand")}</div>`;
           })()}
@@ -2188,7 +2186,7 @@ const views = {
             const lostAmt = s.lostPEN.reduce((a,q)=>a+calcQuote(q).total,0);
             const totalClosed = s.wonPEN.length + s.lostPEN.length;
             const lossPct = totalClosed > 0 ? Math.round(s.lostPEN.length / totalClosed * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPct}% tasa</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("receipt", "red")}Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPct}% tasa</span></div>
             <div class="kpi-value kpi-value--coral">${fmt(lostAmt)}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(perdidaSpark("PEN"), true)}</div>${s.lostPEN.length} ${s.lostPEN.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("PEN"), "--coral")}</div>`;
           })()}
@@ -2196,7 +2194,7 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openPEN = s.openQuotes.filter(q => (q.currency||"PEN") === "PEN");
-            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => (q.currency||"PEN") === "PEN" && dateInRange(q.date)).length; return t ? Math.round(openPEN.length / t * 100) : 0; })()}% abiertas</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("briefcase", "gray")}Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => (q.currency||"PEN") === "PEN" && dateInRange(q.date)).length; return t ? Math.round(openPEN.length / t * 100) : 0; })()}% abiertas</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelinePEN)}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(pipelineSpark("PEN"), false)}</div>${openPEN.length} ${openPEN.length===1?"cotización abierta":"cotizaciones abiertas"}</div>${sparkline(pipelineSpark("PEN"), "--brand")}</div>`;
           })()}
@@ -2205,7 +2203,7 @@ const views = {
           ${(() => {
             const closedPEN = s.wonPEN.length + s.lostPEN.length;
             const conv = closedPEN > 0 ? Math.round(s.wonPEN.length / closedPEN * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("check", "green")}Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${conv}%</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("PEN"), false)}</div>${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>${sparkline(conversionSpark("PEN"), "--mint")}</div>`;
           })()}
@@ -2214,13 +2212,19 @@ const views = {
 
       <!-- KPIs USD -->
       <div class="dash-kpi-grid" data-dash-section="metrics">
-        <div class="kpi-card kpi-meta">
-          ${gaugeKpi(s.goalUSD > 0 ? Math.min(100, Math.round(_recogUSDTotal / s.goalUSD * 100)) : 0, _recogUSDTotal, s.goalUSD, "USD", "Meta mensual $", s.rangePeriodLabel)}
+        <div class="kpi-card">
+          ${(() => {
+            const pct = s.goalUSD > 0 ? Math.round(_recogUSDTotal / s.goalUSD * 100) : 0;
+            const sp = cobradaSpark("USD");
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("target", "blue")}Meta mensual $</span>${s.goalUSD > 0 ? `<span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span>` : ""}</div>
+            <div class="kpi-value kpi-value--ink">${fmt(_recogUSDTotal, "USD")}</div>
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(sp)}</div>${s.goalUSD > 0 ? `de ${fmt(s.goalUSD, "USD")} · ${s.rangePeriodLabel}` : `Sin meta · ${s.rangePeriodLabel}`}</div>${sparkline(sp, "--blue")}</div>`;
+          })()}
         </div>
         <div class="kpi-card">
           ${(() => {
             const pctUSD = s.goalUSD > 0 ? Math.round(_recogUSDTotal / s.goalUSD * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pctUSD>=100?"kpi-pct--ok":pctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${pctUSD}% meta</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("wallet", "blue")}Ventas cobradas</span><span class="kpi-pct ${pctUSD>=100?"kpi-pct--ok":pctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${pctUSD}% meta</span></div>
             <div class="kpi-value kpi-value--blue">${fmt(_recogUSDTotal, "USD")}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(cobradaSpark("USD"), false)}</div>${_recogUSD.length} ${_recogUSD.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("USD"), "--brand")}</div>`;
           })()}
@@ -2230,7 +2234,7 @@ const views = {
             const lostUSDTotal = s.lostUSD.reduce((a,q)=>a+calcQuote(q).total,0);
             const totalClosedUSD = s.wonUSD.length + s.lostUSD.length;
             const lossPctUSD = totalClosedUSD > 0 ? Math.round(s.lostUSD.length / totalClosedUSD * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("receipt", "red")}Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
             <div class="kpi-value kpi-value--coral">${fmt(lostUSDTotal, "USD")}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(perdidaSpark("USD"), true)}</div>${s.lostUSD.length} ${s.lostUSD.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("USD"), "--coral")}</div>`;
           })()}
@@ -2238,7 +2242,7 @@ const views = {
         <div class="kpi-card">
           ${(() => {
             const openUSD = s.openQuotes.filter(q => q.currency === "USD");
-            return `<div class="kpi-top"><span class="kpi-label">Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => q.currency === "USD" && dateInRange(q.date)).length; return t ? Math.round(openUSD.length / t * 100) : 0; })()}% abiertas</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("briefcase", "gray")}Pipeline activo</span><span class="kpi-pct kpi-pct--info">${(() => { const t = state.quotes.filter(q => q.currency === "USD" && dateInRange(q.date)).length; return t ? Math.round(openUSD.length / t * 100) : 0; })()}% abiertas</span></div>
             <div class="kpi-value kpi-value--purple">${fmt(s.pipelineUSD, "USD")}</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(pipelineSpark("USD"), false)}</div>${openUSD.length} ${openUSD.length===1?"cotización abierta":"cotizaciones abiertas"}</div>${sparkline(pipelineSpark("USD"), "--brand")}</div>`;
           })()}
@@ -2247,7 +2251,7 @@ const views = {
           ${(() => {
             const closedUSD = s.wonUSD.length + s.lostUSD.length;
             const convUSD = closedUSD > 0 ? Math.round(s.wonUSD.length / closedUSD * 100) : 0;
-            return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
+            return `<div class="kpi-top"><span class="kpi-label">${kpiIcon("check", "green")}Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${convUSD}%</div>
             <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("USD"), false)}</div>${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>${sparkline(conversionSpark("USD"), "--mint")}</div>`;
           })()}

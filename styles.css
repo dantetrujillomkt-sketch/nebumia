@@ -3413,3 +3413,15 @@ body[data-theme="dark"] #appShell.sidebar-collapsed .nav-btn::before { border-ri
 .kpi-value--ink { color: var(--ink); }
 .kpi-trend.warn { background: rgba(255,159,46,.16); color: #c2660a; }
 .kpi-pct--info { background: #e8effe; color: var(--brand); }
+
+/* Iconos de título de los KPIs (icono + fondo) */
+.dash-kpi-grid .kpi-label { display: flex; align-items: center; gap: 9px; }
+.kpi-icon { width: 30px; height: 30px; border-radius: 9px; display: inline-grid; place-items: center; flex-shrink: 0; }
+.kpi-icon .app-icon { width: 16px; height: 16px; }
+.kpi-icon--blue { background: #e8effe; color: var(--brand); }
+.kpi-icon--red { background: rgba(239,68,68,.12); color: #dc2626; }
+.kpi-icon--green { background: rgba(18,201,155,.15); color: #0b8f6f; }
+.kpi-icon--gray { background: #eef0f3; color: var(--muted); }
+body[data-theme="dark"] .kpi-icon--blue { background: rgba(37,99,235,.22); color: #93b4f5; }
+body[data-theme="dark"] .kpi-icon--gray { background: rgba(255,255,255,.08); }
+.dash-kpi-grid .kpi-bottom-row { min-height: 64px; }
