@@ -3765,13 +3765,13 @@ function categoryTable(data) {
   const rows = data.map((d, i) => {
     const byCur = {};
     (d.items || []).forEach(it => { byCur[it.currency] = (byCur[it.currency] || 0) + (Number(it.amount) || 0); });
-    const amount = Object.entries(byCur).map(([c, v]) => fmt(v, c)).join(" + ") || fmt(0);
+    const amount = `<div>${fmt(byCur.PEN || 0, "PEN")}</div><div class="cat-amount-usd">${fmt(byCur.USD || 0, "USD")}</div>`;
     const pct = total > 0 ? Math.round(d.value / total * 100) : 0;
     return `<tr>
       <td><span class="cat-chip" style="background:${palette[i % palette.length]}">${escapeHtml(String(d.label || "?").charAt(0).toUpperCase())}</span><span class="cat-name">${escapeHtml(d.label)}</span></td>
       <td class="cat-num">${d.value}</td>
       <td class="cat-num">${pct}%</td>
-      <td class="cat-num cat-amount">${escapeHtml(amount)}</td>
+      <td class="cat-num cat-amount">${amount}</td>
     </tr>`;
   }).join("");
   return `<div class="cat-table-wrap"><table class="cat-table">

@@ -3458,3 +3458,4 @@ body[data-theme="dark"] .kpi-icon--gray { background: rgba(255,255,255,.08); }
 .annual-tab { padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
 .annual-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 .annual-tab:hover:not(.active) { background: var(--hover); color: var(--ink); }
+.cat-table .cat-amount-usd { color: var(--muted); font-weight: 600; font-size: 12px; margin-top: 2px; }
