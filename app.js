@@ -747,6 +747,7 @@ function getCurrentRange() { return viewRanges[activeView] || getDashboardPreset
 function setCurrentRange(range) { viewRanges[activeView] = range; localStorage.setItem(VIEW_RANGES_KEY, JSON.stringify(viewRanges)); }
 let dashboardRange = getCurrentRange();
 let revenueChartTab = "";
+let annualProjTab = "";
 let dashboardSections = (() => {
   const always = ["accountsBreakdown", "annualProjection", "salesType"];
   try {
@@ -1300,18 +1301,40 @@ function wonQuotes() {
   return state.quotes.filter(q => q.status === "Ganado").map(q => ({ ...q, ...calcQuote(q) }));
 }
 
+function annualAccountGroups() {
+  const detAcc = String(state.settings.detractionAccount || "Detracciones");
+  const bases = [];
+  (state.settings.bankAccounts || []).forEach(a => {
+    if (a === detAcc || /detracc/i.test(a)) return;
+    const base = a.replace(/\s*(S\/|\$|USD|PEN)\s*$/i, "").trim();
+    if (base && !bases.includes(base)) bases.push(base);
+  });
+  return bases;
+}
+
+function annualTabsHTML() {
+  const bases = annualAccountGroups();
+  if (!bases.length) return "";
+  return `<div class="chart-acct-tabs annual-tabs" id="annualProjTabs">
+    <button class="annual-tab ${annualProjTab === "" ? "active" : ""}" data-annual-acct="">Todas</button>
+    ${bases.map(b => `<button class="annual-tab ${annualProjTab === b ? "active" : ""}" data-annual-acct="${escapeAttr(b)}">${escapeHtml(b.replace(/^C\.\s*/i, ""))}</button>`).join("")}
+  </div>`;
+}
+
 function annualProjectionTables() {
   const year = new Date().getFullYear();
   const currentMk = `${year}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const acctSel = annualProjTab;
+  const acctMatch = b => !acctSel || String(b || "").startsWith(acctSel);
   let penGoalSum = 0, penGanadoSum = 0, penCobradoSum = 0;
   const penRows = months.map((name, i) => {
     const monthNum = i + 1;
     const key = `${year}-${String(monthNum).padStart(2, "0")}`;
     const isCurrent = key === currentMk;
     const target = getMonthTarget(year, monthNum);
-    const goal = target.pen || 0;
-    const ganado = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
-    const cobrado = collectionRows().filter(c => (c.currency||"PEN") === "PEN" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
+    const goal = acctSel ? 0 : (target.pen || 0);
+    const ganado = state.quotes.filter(q => q.status === "Ganado" && (q.currency||"PEN") === "PEN" && acctMatch(q.bankAccount) && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
+    const cobrado = collectionRows().filter(c => (c.currency||"PEN") === "PEN" && c.status === "Pagado" && acctMatch(c.bankAccount) && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
     penGoalSum += goal; penGanadoSum += ganado; penCobradoSum += cobrado;
     const pct = goal > 0 ? Math.round((ganado / goal) * 100) : 0;
     const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
@@ -1326,9 +1349,9 @@ function annualProjectionTables() {
     const key = `${year}-${String(monthNum).padStart(2, "0")}`;
     const isCurrent = key === currentMk;
     const target = getMonthTarget(year, monthNum);
-    const goalUsd = target.usd || 0;
-    const ganado = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
-    const cobrado = collectionRows().filter(c => c.currency === "USD" && c.status === "Pagado" && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
+    const goalUsd = acctSel ? 0 : (target.usd || 0);
+    const ganado = state.quotes.filter(q => q.status === "Ganado" && q.currency === "USD" && acctMatch(q.bankAccount) && q.date.startsWith(key)).reduce((s, q) => s + calcQuote(q).total, 0);
+    const cobrado = collectionRows().filter(c => c.currency === "USD" && c.status === "Pagado" && acctMatch(c.bankAccount) && (c.paidDate||"").startsWith(key)).reduce((s, c) => s + c.amount, 0);
     usdGoalSum += goalUsd; usdGanadoSum += ganado; usdCobradoSum += cobrado;
     const pct = goalUsd > 0 ? Math.round((ganado / goalUsd) * 100) : 0;
     const nameTd = isCurrent ? `<strong>${name}</strong>` : name;
@@ -2332,7 +2355,7 @@ const views = {
 
       <!-- Fila 6: Proyección anual -->
       <div class="panel" data-dash-section="annualProjection" style="margin-bottom:14px">
-        <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div></div>
+        <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div>${annualTabsHTML()}</div>
         ${annualProjectionTables()}
       </div>
     `;
@@ -3921,6 +3944,12 @@ function bindViewEvents() {
     revenueChartTab = btn.dataset.acct;
     document.querySelectorAll(".chart-acct-tab").forEach(b => b.classList.toggle("active", b === btn));
     drawCharts();
+  });
+  document.getElementById("annualProjTabs")?.addEventListener("click", e => {
+    const btn = e.target.closest("[data-annual-acct]");
+    if (!btn) return;
+    annualProjTab = btn.dataset.annualAcct;
+    render();
   });
   bindFilters();
   bindDashboardDateFilter();
