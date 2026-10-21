@@ -3435,3 +3435,20 @@ body[data-theme="dark"] .kpi-icon--gray { background: rgba(255,255,255,.08); }
 .funnel-col-sub { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; color: var(--muted); }
 .funnel-col-sub b { font-weight: 700; color: var(--ink); }
 .funnel-area { display: block; width: 100%; height: 150px; border-radius: 0 0 8px 8px; }
+
+/* Por categoría como tabla (estilo "Popular Products") */
+.panel-head--icon { display: flex; align-items: center; gap: 10px; }
+.cat-table-wrap { overflow-x: auto; max-height: 300px; overflow-y: auto; }
+.cat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cat-table th { text-align: left; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 8px 6px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+.cat-table td { padding: 11px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.cat-table tbody tr:last-child td { border-bottom: 0; }
+.cat-table .cat-num { text-align: right; white-space: nowrap; }
+.cat-table .cat-amount { font-weight: 700; color: var(--ink); }
+.cat-chip { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 700; margin-right: 10px; vertical-align: middle; }
+.cat-name { font-weight: 600; color: var(--ink); vertical-align: middle; }
+@media (min-width: 1281px) { .dash-mid-grid > .panel[data-dash-section="profitability"] { flex: 2 1 0; } }
+.panel-head.panel-head--icon { justify-content: flex-start; }
+.cat-table-wrap .cat-table { min-width: 0; width: 100%; table-layout: auto; }
+.cat-table th, .cat-table td { white-space: nowrap; border-left: 0; border-right: 0; }
+@media (min-width: 1281px) { .dash-mid-grid > .panel[data-dash-section="profitability"] { flex: 2 1 0; } }

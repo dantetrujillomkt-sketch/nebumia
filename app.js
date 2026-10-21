@@ -2286,8 +2286,8 @@ const views = {
       <!-- Fila 4: Por categoría + Por tipo + Por fuente -->
       <div class="dash-mid-grid" data-dash-grid>
         <div class="panel" data-dash-section="profitability">
-          <div class="panel-head"><div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
-          ${salesByCategory.length ? donutChart(salesByCategory, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          <div class="panel-head panel-head--icon">${kpiIcon("package", "blue")}<div><h3>Por categoría</h3><p>Distribución de ventas</p></div></div>
+          ${salesByCategory.length ? categoryTable(salesByCategory) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesType">
           <div class="panel-head"><div><h3>Por tipo</h3><p>Leads ganados</p></div></div>
@@ -3734,6 +3734,26 @@ function donutChart(data, opts = {}) {
     </div>
     <div class="donut-legend">${legend}</div>
   </div>`;
+}
+
+function categoryTable(data) {
+  const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--amber)", "var(--coral)", "var(--purple)"];
+  const total = data.reduce((a, d) => a + d.value, 0);
+  const rows = data.map((d, i) => {
+    const byCur = {};
+    (d.items || []).forEach(it => { byCur[it.currency] = (byCur[it.currency] || 0) + (Number(it.amount) || 0); });
+    const amount = Object.entries(byCur).map(([c, v]) => fmt(v, c)).join(" + ") || fmt(0);
+    const pct = total > 0 ? Math.round(d.value / total * 100) : 0;
+    return `<tr>
+      <td><span class="cat-chip" style="background:${palette[i % palette.length]}">${escapeHtml(String(d.label || "?").charAt(0).toUpperCase())}</span><span class="cat-name">${escapeHtml(d.label)}</span></td>
+      <td class="cat-num">${d.value}</td>
+      <td class="cat-num">${pct}%</td>
+      <td class="cat-num cat-amount">${escapeHtml(amount)}</td>
+    </tr>`;
+  }).join("");
+  return `<div class="cat-table-wrap"><table class="cat-table">
+    <thead><tr><th>Categoría</th><th class="cat-num">Ventas</th><th class="cat-num">%</th><th class="cat-num">Monto</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
 }
 
 function miniBars(data, asCount = false) {
