@@ -3465,3 +3465,11 @@ body[data-theme="dark"] .kpi-icon--gray { background: rgba(255,255,255,.08); }
 .kpi-icon--amber { background: rgba(255,159,46,.16); color: #c2660a; }
 .panel-title .kpi-icon, .panel-head--icon .kpi-icon { width: 34px; height: 34px; border-radius: 10px; }
 .panel-title .kpi-icon .app-icon, .panel-head--icon .kpi-icon .app-icon { width: 17px; height: 17px; }
+
+/* Tablas de Por categoría / tipo / fuente: tres paneles iguales y compactos */
+.dash-mid-grid > .panel[data-dash-section="profitability"] { flex: 1 1 0 !important; }
+.cat-table-wrap { max-height: 380px; }
+.cat-table th, .cat-table td { padding-left: 4px; padding-right: 4px; }
+.cat-table td:first-child { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.cat-name { display: inline-block; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.cat-chip { margin-right: 8px; }

@@ -2314,11 +2314,11 @@ const views = {
         </div>
         <div class="panel" data-dash-section="salesType">
           <div class="panel-head"><div class="panel-title">${kpiIcon("users", "gray")}<div><h3>Por tipo</h3><p>Leads ganados</p></div></div></div>
-          ${salesByType.length ? donutChart(salesByType, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
+          ${salesByType.length ? categoryTable(salesByType, "Tipo") : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesSource">
           <div class="panel-head"><div class="panel-title">${kpiIcon("link", "blue")}<div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div></div>
-          ${salesByAcqSource.length ? donutChart(salesByAcqSource, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin datos de fuente.</p>`}
+          ${salesByAcqSource.length ? categoryTable(salesByAcqSource, "Fuente") : `<p class="fe-empty">Sin datos de fuente.</p>`}
         </div>
       </div>
 
@@ -3759,7 +3759,7 @@ function donutChart(data, opts = {}) {
   </div>`;
 }
 
-function categoryTable(data) {
+function categoryTable(data, header = "Categoría") {
   const palette = ["var(--brand)", "var(--blue)", "var(--mint)", "var(--amber)", "var(--coral)", "var(--purple)"];
   const total = data.reduce((a, d) => a + d.value, 0);
   const rows = data.map((d, i) => {
@@ -3775,7 +3775,7 @@ function categoryTable(data) {
     </tr>`;
   }).join("");
   return `<div class="cat-table-wrap"><table class="cat-table">
-    <thead><tr><th>Categoría</th><th class="cat-num">Ventas</th><th class="cat-num">%</th><th class="cat-num">Monto</th></tr></thead>
+    <thead><tr><th>${escapeHtml(header)}</th><th class="cat-num">Ventas</th><th class="cat-num">%</th><th class="cat-num">Monto</th></tr></thead>
     <tbody>${rows}</tbody></table></div>`;
 }
 
