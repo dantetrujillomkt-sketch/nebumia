@@ -3459,3 +3459,9 @@ body[data-theme="dark"] .kpi-icon--gray { background: rgba(255,255,255,.08); }
 .annual-tab.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 .annual-tab:hover:not(.active) { background: var(--hover); color: var(--ink); }
 .cat-table .cat-amount-usd { color: var(--muted); font-weight: 600; font-size: 12px; margin-top: 2px; }
+
+/* Iconos en títulos de paneles del dashboard */
+.panel-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kpi-icon--amber { background: rgba(255,159,46,.16); color: #c2660a; }
+.panel-title .kpi-icon, .panel-head--icon .kpi-icon { width: 34px; height: 34px; border-radius: 10px; }
+.panel-title .kpi-icon .app-icon, .panel-head--icon .kpi-icon .app-icon { width: 17px; height: 17px; }

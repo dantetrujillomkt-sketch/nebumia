@@ -2285,7 +2285,7 @@ const views = {
       <div class="dash-main-grid" data-dash-grid>
         <div class="panel chart-panel" data-dash-section="revenue">
           <div class="panel-head">
-            <div><h3>Ingresos vs Egresos</h3><p id="revenueChartSubtitle">vendido vs cobrado</p></div>
+            <div class="panel-title">${kpiIcon("trending", "blue")}<div><h3>Ingresos vs Egresos</h3><p id="revenueChartSubtitle">vendido vs cobrado</p></div></div>
             <div class="chart-acct-tabs" id="revenueChartTabs">
               <button class="chart-acct-tab ${revenueChartTab===''?'active':''}" data-acct="">Todas</button>
               ${(state.settings.bankAccounts||[]).map(a=>`<button class="chart-acct-tab ${revenueChartTab===a?'active':''}" data-acct="${escapeAttr(a)}">${escapeHtml(a)}</button>`).join("")}
@@ -2294,7 +2294,7 @@ const views = {
           <canvas id="revenueChart" class="chart"></canvas>
         </div>
         <div class="panel" data-dash-section="pipeline">
-          <div class="panel-head"><div><h3>Embudo comercial</h3><p>Leads → cierre</p></div></div>
+          <div class="panel-head"><div class="panel-title">${kpiIcon("target", "green")}<div><h3>Embudo comercial</h3><p>Leads → cierre</p></div></div></div>
           <div class="funnel-flow">
             ${dashFunnelChart([
               {label:"Leads",    count:leadsNew,         color:"var(--brand)"},
@@ -2313,11 +2313,11 @@ const views = {
           ${salesByCategory.length ? categoryTable(salesByCategory) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesType">
-          <div class="panel-head"><div><h3>Por tipo</h3><p>Leads ganados</p></div></div>
+          <div class="panel-head"><div class="panel-title">${kpiIcon("users", "gray")}<div><h3>Por tipo</h3><p>Leads ganados</p></div></div></div>
           ${salesByType.length ? donutChart(salesByType, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin ventas en el periodo.</p>`}
         </div>
         <div class="panel" data-dash-section="salesSource">
-          <div class="panel-head"><div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div>
+          <div class="panel-head"><div class="panel-title">${kpiIcon("link", "blue")}<div><h3>Por fuente</h3><p>Origen de leads ganados</p></div></div></div>
           ${salesByAcqSource.length ? donutChart(salesByAcqSource, {totalLabel:"Ventas"}) : `<p class="fe-empty">Sin datos de fuente.</p>`}
         </div>
       </div>
@@ -2325,7 +2325,7 @@ const views = {
       <!-- Fila 4: Cobros próximos + Actividad reciente -->
       <div class="dash-bottom-grid" data-dash-grid>
         <div class="panel" data-dash-section="collections">
-          <div class="panel-head"><div><h3>Cobros próximos</h3><p>Pendientes ordenados por fecha</p></div></div>
+          <div class="panel-head"><div class="panel-title">${kpiIcon("clock", "amber")}<div><h3>Cobros próximos</h3><p>Pendientes ordenados por fecha</p></div></div></div>
           <div class="timeline">
             ${upcoming.length ? upcoming.map(r => {
               const isOverdue = r.dueDate && r.dueDate < today();
@@ -2348,14 +2348,14 @@ const views = {
             </div>` : ""}
         </div>
         <div class="panel" data-dash-section="activity">
-          <div class="panel-head"><div><h3>Ranking de clientes</h3><p>Quién más compró en el periodo</p></div></div>
+          <div class="panel-head"><div class="panel-title">${kpiIcon("chart", "blue")}<div><h3>Ranking de clientes</h3><p>Quién más compró en el periodo</p></div></div></div>
           ${dashClientRanking(_recog)}
         </div>
       </div>
 
       <!-- Fila 6: Proyección anual -->
       <div class="panel" data-dash-section="annualProjection" style="margin-bottom:14px">
-        <div class="panel-head"><div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div>${annualTabsHTML()}</div>
+        <div class="panel-head"><div class="panel-title">${kpiIcon("calendar", "blue")}<div><h3>Proyección anual</h3><p>Meta mensual vs. ingresos reales ${new Date().getFullYear()}</p></div></div>${annualTabsHTML()}</div>
         ${annualProjectionTables()}
       </div>
     `;
