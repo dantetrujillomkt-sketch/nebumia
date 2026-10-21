@@ -3657,31 +3657,24 @@ function dashClientRanking(salesRows) {
 }
 
 function dashFunnelChart(steps) {
-  const W = 300, segH = 32, gap = 2;
-  const totalH = steps.length * (segH + gap);
-  const pcts = [1, 0.80, 0.62, 0.46, 0.32];
-  const poly = i => {
-    const y = i * (segH + gap);
-    const wT = pcts[i] * W, wB = (pcts[i + 1] ?? pcts[i] * 0.76) * W;
-    const xT = (W - wT) / 2, xB = (W - wB) / 2;
-    return { pts: `${xT.toFixed(1)},${y} ${(xT+wT).toFixed(1)},${y} ${(xB+wB).toFixed(1)},${y+segH} ${xB.toFixed(1)},${y+segH}`, cy: (y + segH / 2).toFixed(1), wMin: Math.min(wT, wB), wMax: Math.max(wT, wB) };
-  };
-  // Render polygons first, then all text on top (unclipped so count numbers never get cut off)
-  const polys = steps.map((s, i) => `<polygon points="${poly(i).pts}" fill="${s.color}"/>`).join('');
-  const texts = steps.map((s, i) => {
-    const { cy, wMin, wMax } = poly(i);
-    const mid = W / 2;
-    // Use midpoint of the narrowest width for text bounds
-    const lx = (mid - wMin / 2 + 10).toFixed(1);
-    const rx = (mid + wMin / 2 - 10).toFixed(1);
-    return `<text x="${lx}" y="${cy}" dominant-baseline="middle" fill="white" font-size="11.5" font-weight="600" font-family="system-ui,sans-serif">${s.label}</text>` +
-      `<text x="${rx}" y="${cy}" text-anchor="end" dominant-baseline="middle" fill="rgba(255,255,255,.92)" font-size="9.5" font-weight="500" font-family="system-ui,sans-serif">${s.count}</text>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${W} ${totalH}" width="100%" style="display:block">${polys}${texts}</svg>`;
+  const first = steps[0] ? steps[0].count : 0;
+  const max = Math.max(...steps.map(s => s.count), 1);
+  const H = 120, colW = 100, W = colW * steps.length;
+  const yOf = c => H - Math.max(c / max * (H - 8), 6);
+  const polys = steps.map((s, i) => {
+    const x0 = i * colW, x1 = x0 + colW;
+    const y0 = yOf(s.count), y1 = i < steps.length - 1 ? yOf(steps[i + 1].count) : y0;
+    return `<polygon points="${x0},${H} ${x0},${y0.toFixed(1)} ${x1},${y1.toFixed(1)} ${x1},${H}" fill="${s.color}"/>`;
+  }).join("");
+  const seps = steps.slice(1).map((_, i) => `<line x1="${(i + 1) * colW}" y1="0" x2="${(i + 1) * colW}" y2="${H}" stroke="var(--panel)" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join("");
+  const cols = steps.map((s, i) => {
+    const pct = first > 0 ? Math.round(s.count / first * 100) : 0;
+    return `<div class="funnel-col"><div class="funnel-col-label">${escapeHtml(s.label)}</div><div class="funnel-col-value">${s.count}</div><div class="funnel-col-sub"><span>${i === 0 ? "Base" : "% de leads"}</span><b>${i === 0 ? "100%" : pct + "%"}</b></div></div>`;
+  }).join("");
+  return `<div class="funnel-cols" style="grid-template-columns:repeat(${steps.length},1fr)">${cols}</div>
+    <svg class="funnel-area" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${polys}${seps}</svg>`;
 }
 
-// Alertas del negocio (cobros vencidos, SUNAT, detracciones, etc.) — se muestran en el
-// dropdown de notificaciones, sección "Alertas", no dependen del periodo del dashboard.
 function buildDashAlertItems() {
   const s = dashboardSnapshot();
   const nowTs = new Date();
