@@ -6500,9 +6500,9 @@ function drawCharts() {
   periods.forEach((p, i) => {
     const cx = padL + i * groupW + groupW / 2;
     const gap = barW + 2;
-    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#6c47f5");
+    drawRoundedBar(cx - gap - barW/2, padT + chartH - (wonValues[i]/max)*chartH, barW, (wonValues[i]/max)*chartH, 3, "#2563eb");
     drawRoundedBar(cx         - barW/2, padT + chartH - (cobValues[i]/max)*chartH, barW, (cobValues[i]/max)*chartH, 3, "#12c99b");
-    drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#ff4d8d");
+    drawRoundedBar(cx + gap   - barW/2, padT + chartH - (egrValues[i]/max)*chartH, barW, (egrValues[i]/max)*chartH, 3, "#ef4444");
     ctx.fillStyle = "#64748b";
     ctx.font = `${n > 20 ? 9 : 11}px Inter, sans-serif`;
     ctx.textAlign = "center";
@@ -6528,7 +6528,7 @@ function drawCharts() {
   if (subtitleEl) subtitleEl.textContent = `${dashboardRange.label} · vendido vs cobrado`;
 
   // Legend — top right
-  const legendItems = [["#6c47f5","Vendido"],["#12c99b","Cobrado"],["#ff4d8d","Egresos"]];
+  const legendItems = [["#2563eb","Vendido"],["#12c99b","Cobrado"],["#ef4444","Egresos"]];
   ctx.font = `11px Inter, sans-serif`;
   const totalLegendW = legendItems.reduce((s,[,l]) => s + 10 + 4 + ctx.measureText(l).width + 16, 0);
   let lx = rect.width - padR - totalLegendW;
@@ -6548,9 +6548,9 @@ function drawCharts() {
     return {
       label: p.label,
       bars: [
-        { name: "Vendido", color: "#6c47f5", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
+        { name: "Vendido", color: "#2563eb", value: wonValues[i], x: cx - gap - barW/2, y: padT + chartH - (wonValues[i]/max)*chartH, w: barW, h: (wonValues[i]/max)*chartH },
         { name: "Cobrado", color: "#12c99b", value: cobValues[i], x: cx - barW/2,       y: padT + chartH - (cobValues[i]/max)*chartH, w: barW, h: (cobValues[i]/max)*chartH },
-        { name: "Egresos", color: "#ff4d8d", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
+        { name: "Egresos", color: "#ef4444", value: egrValues[i], x: cx + gap - barW/2, y: padT + chartH - (egrValues[i]/max)*chartH, w: barW, h: (egrValues[i]/max)*chartH },
       ]
     };
   });
@@ -6761,7 +6761,7 @@ let activeNotifTab = "notif";
 let notifDismissedCount = null;
 
 function renderNotifItem(it) {
-  const iconBg = it.type === "red" ? "#ffe0ec" : "#f1edfe";
+  const iconBg = it.type === "red" ? "#ffe0ec" : "#eff4ff";
   const iconColor = it.type === "red" ? "var(--danger)" : "var(--brand)";
   const hasSub = it.subItems && it.subItems.length > 0;
   return `<div class="notif-item notif-item--clickable" ${hasSub ? `data-notif-open-sub="${escapeAttr(JSON.stringify({ title: it.title, subItems: it.subItems }))}"` : `data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""}`} role="button" tabindex="0">
