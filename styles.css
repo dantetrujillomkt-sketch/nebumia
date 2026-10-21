@@ -3371,3 +3371,31 @@ body[data-theme="dark"] .topbar { background: #111827; border-bottom-color: rgba
 
 .topbar-actions { gap: 6px; }
 .profile-trigger { gap: 8px; }
+
+/* ── Dashboard rediseñado: tarjetas suaves, KPIs con barras y tendencia ── */
+.dash-kpi-grid .kpi-card,
+.dash-main-grid .panel,
+.dash-mid-grid .panel,
+.dash-bottom-grid .panel,
+.panel[data-dash-section="annualProjection"] {
+  border: 0;
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(17,24,39,.04), 0 8px 24px rgba(17,24,39,.05);
+}
+body[data-theme="dark"] .dash-kpi-grid .kpi-card,
+body[data-theme="dark"] .dash-main-grid .panel,
+body[data-theme="dark"] .dash-mid-grid .panel,
+body[data-theme="dark"] .dash-bottom-grid .panel,
+body[data-theme="dark"] .panel[data-dash-section="annualProjection"] { border: 1px solid var(--line); box-shadow: none; }
+.dash-kpi-grid .kpi-card { padding: 18px 20px; }
+.dash-kpi-grid .kpi-label { font-size: 12px; font-weight: 700; letter-spacing: .02em; color: var(--ink); text-transform: none; }
+.dash-kpi-grid .kpi-value { font-size: 28px; font-weight: 750; letter-spacing: -.02em; margin-top: 8px; }
+.kpi-trend-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 11px; flex-wrap: wrap; }
+.kpi-trend { font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+.kpi-trend.up { background: rgba(18,201,155,.14); color: #0b8f6f; }
+.kpi-trend.down { background: rgba(239,68,68,.12); color: #dc2626; }
+.kpi-trend-label { color: var(--muted); }
+.dash-kpi-grid .kpi-bottom-row { align-items: flex-end; }
+.dash-kpi-grid .kpi-spark { opacity: 1; }
+.dash-main-grid .panel-head h3, .dash-mid-grid .panel-head h3, .dash-bottom-grid .panel-head h3 { font-size: 16px; font-weight: 750; }

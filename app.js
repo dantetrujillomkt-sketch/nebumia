@@ -1363,11 +1363,11 @@ function annualProjectionTables() {
     <div class="annual-proj-tables">
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Soles (S/)</div>
-        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows, "targets-pen", penFooter)}
+        ${table(["Mes", "Meta S/", "Ganado", "Cobrado", "% Meta"], penRows, "targets-pen", penFooter, true)}
       </div>
       <div class="annual-proj-col">
         <div class="annual-proj-subtitle">Dólares ($)</div>
-        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows, "targets-usd", usdFooter)}
+        ${table(["Mes", "Meta $", "Ganado", "Cobrado", "% Meta"], usdRows, "targets-usd", usdFooter, true)}
       </div>
     </div>`;
 }
@@ -2161,12 +2161,20 @@ const views = {
       return closed.length > 0 ? Math.round(won / closed.length * 100) : 0;
     });
     const sparkline = (values, colorVar) => {
-      const w = 60, h = 24, pad = 3;
-      const max = Math.max(...values, 0.0001), min = Math.min(...values, 0);
-      const range = (max - min) || 1;
-      const step = (w - pad * 2) / (values.length - 1 || 1);
-      const pts = values.map((v, i) => `${(pad + i * step).toFixed(1)},${(h - pad - ((v - min) / range) * (h - pad * 2)).toFixed(1)}`).join(" ");
-      return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(${colorVar})" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      const w = 64, h = 32, n = values.length, gap = 3, bw = (w - gap * (n - 1)) / n;
+      const max = Math.max(...values, 0.0001);
+      const bars = values.map((v, i) => {
+        const bh = Math.max(3, v / max * (h - 2));
+        return `<rect x="${(i * (bw + gap)).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="var(${colorVar})" opacity="${i === n - 1 ? 1 : .35}"/>`;
+      }).join("");
+      return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${bars}</svg>`;
+    };
+    const trendPill = (vals, invert = false) => {
+      const cur = vals[vals.length - 1], prev = vals[vals.length - 2];
+      if (!cur && !prev) return `<span class="kpi-trend-label">Sin movimiento vs mes anterior</span>`;
+      if (!prev) return `<span class="kpi-trend ${invert ? "down" : "up"}">▲ nuevo</span><span class="kpi-trend-label">vs mes anterior</span>`;
+      const pct = Math.round((cur - prev) / prev * 100), up = pct >= 0, good = invert ? !up : up;
+      return `<span class="kpi-trend ${good ? "up" : "down"}">${up ? "▲" : "▼"} ${Math.abs(pct)}%</span><span class="kpi-trend-label">vs mes anterior</span>`;
     };
 
     return `
@@ -2183,7 +2191,7 @@ const views = {
             const pct = s.goal > 0 ? Math.round(_recogPENTotal / s.goal * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pct>=100?"kpi-pct--ok":pct>=50?"kpi-pct--warn":"kpi-pct--low"}">${pct}% meta</span></div>
             <div class="kpi-value kpi-value--blue">${fmt(_recogPENTotal)}</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${_recogPEN.length} ${_recogPEN.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("PEN"), "--blue")}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(cobradaSpark("PEN"), false)}</div>${_recogPEN.length} ${_recogPEN.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("PEN"), "--brand")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2193,7 +2201,7 @@ const views = {
             const lossPct = totalClosed > 0 ? Math.round(s.lostPEN.length / totalClosed * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPct}% tasa</span></div>
             <div class="kpi-value kpi-value--coral">${fmt(lostAmt)}</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${s.lostPEN.length} ${s.lostPEN.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("PEN"), "--coral")}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(perdidaSpark("PEN"), true)}</div>${s.lostPEN.length} ${s.lostPEN.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("PEN"), "--coral")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2210,7 +2218,7 @@ const views = {
             const conv = closedPEN > 0 ? Math.round(s.wonPEN.length / closedPEN * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${conv}%</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>${sparkline(conversionSpark("PEN"), "--mint")}</div>
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("PEN"), false)}</div>${s.wonPEN.length} ganadas de ${closedPEN} cerradas</div>${sparkline(conversionSpark("PEN"), "--mint")}</div>
             <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${conv}%;background:var(--mint)"></div></div>`;
           })()}
         </div>
@@ -2226,7 +2234,7 @@ const views = {
             const pctUSD = s.goalUSD > 0 ? Math.round(_recogUSDTotal / s.goalUSD * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Ventas cobradas</span><span class="kpi-pct ${pctUSD>=100?"kpi-pct--ok":pctUSD>=50?"kpi-pct--warn":"kpi-pct--low"}">${pctUSD}% meta</span></div>
             <div class="kpi-value kpi-value--blue">${fmt(_recogUSDTotal, "USD")}</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${_recogUSD.length} ${_recogUSD.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("USD"), "--blue")}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(cobradaSpark("USD"), false)}</div>${_recogUSD.length} ${_recogUSD.length===1?"cobro":"cobros"} · periodo</div>${sparkline(cobradaSpark("USD"), "--brand")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2236,7 +2244,7 @@ const views = {
             const lossPctUSD = totalClosedUSD > 0 ? Math.round(s.lostUSD.length / totalClosedUSD * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Ventas perdidas</span><span class="kpi-pct kpi-pct--low">${lossPctUSD}% tasa</span></div>
             <div class="kpi-value kpi-value--coral">${fmt(lostUSDTotal, "USD")}</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${s.lostUSD.length} ${s.lostUSD.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("USD"), "--coral")}</div>`;
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(perdidaSpark("USD"), true)}</div>${s.lostUSD.length} ${s.lostUSD.length===1?"venta perdida":"ventas perdidas"} · periodo</div>${sparkline(perdidaSpark("USD"), "--coral")}</div>`;
           })()}
         </div>
         <div class="kpi-card">
@@ -2253,7 +2261,7 @@ const views = {
             const convUSD = closedUSD > 0 ? Math.round(s.wonUSD.length / closedUSD * 100) : 0;
             return `<div class="kpi-top"><span class="kpi-label">Conversión</span></div>
             <div class="kpi-value kpi-value--mint">${convUSD}%</div>
-            <div class="kpi-bottom-row"><div class="kpi-sub">${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>${sparkline(conversionSpark("USD"), "--mint")}</div>
+            <div class="kpi-bottom-row"><div class="kpi-sub"><div class="kpi-trend-row">${trendPill(conversionSpark("USD"), false)}</div>${s.wonUSD.length} ganadas de ${closedUSD} cerradas</div>${sparkline(conversionSpark("USD"), "--mint")}</div>
             <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${convUSD}%;background:var(--mint)"></div></div>`;
           })()}
         </div>
@@ -3379,11 +3387,11 @@ function setColWidths(key, widths) {
   } catch {}
 }
 
-function table(headers, rows, key = null, footerRow = null) {
+function table(headers, rows, key = null, footerRow = null, noPaginate = false) {
   if (!rows.length) return `<div class="empty-state">Sin registros todavia.</div>`;
   let displayRows = rows;
   let paginatorHtml = "";
-  if (key) {
+  if (key && !noPaginate) {
     const pg = getTablePage(key);
     const totalPages = Math.max(1, Math.ceil(rows.length / pg.pageSize));
     pg.page = Math.min(pg.page, totalPages);
