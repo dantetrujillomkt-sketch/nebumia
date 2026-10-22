@@ -6848,7 +6848,7 @@ function renderNotifItem(it) {
   const hasSub = it.subItems && it.subItems.length > 0;
   return `<div class="notif-item notif-item--clickable" ${hasSub ? `data-notif-open-sub="${escapeAttr(JSON.stringify({ title: it.title, subItems: it.subItems }))}"` : `data-notif-nav="${it.nav}" ${it.entityType ? `data-notif-entity="${it.entityType}"` : ""} ${it.id ? `data-notif-id="${escapeAttr(it.id)}"` : ""}`} role="button" tabindex="0">
       <div class="notif-icon-circle" style="background:${iconBg};color:${iconColor}">${icon(it.icon || "clock")}</div>
-      <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span>${it.createdAt ? `<span class="notif-timestamp">${escapeHtml(it.createdAt)}</span>` : ""}</div>
+      <div class="notif-content"><strong>${escapeHtml(it.title)}</strong><span>${escapeHtml(it.sub)}</span><span class="notif-timestamp">${escapeHtml(it.section || "")}</span></div>
       <svg class="app-icon notif-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
     </div>`;
 }
@@ -6895,14 +6895,7 @@ function showNotifSubPopup(title, subItems) {
 
 function renderNotifItemsList(items, emptyText) {
   if (!items.length) return `<div class="notif-empty">${emptyText}</div>`;
-  // Group items by section keeping original order
-  const groups = [];
-  const bySection = new Map();
-  items.forEach(it => {
-    if (!bySection.has(it.section)) { bySection.set(it.section, []); groups.push(it.section); }
-    bySection.get(it.section).push(it);
-  });
-  return groups.map(sec => `<div class="notif-section-label">${escapeHtml(sec)}</div>` + bySection.get(sec).map(it => renderNotifItem(it)).join("")).join("");
+  return items.map(it => renderNotifItem(it)).join("");
 }
 
 function renderNotifDropdown() {
@@ -6925,9 +6918,8 @@ function renderNotifDropdown() {
   dropdown.innerHTML = `
     <div class="notif-header">
       <span class="notif-header-title">Notificaciones</span>
-      <button type="button" class="notif-close-btn" id="notifCloseBtn" aria-label="Cerrar">${icon("x")}</button>
+      <button type="button" class="notif-mark-read" data-notif-mark-read>Marcar todo como leído</button>
     </div>
-    <div class="notif-toolbar"><button type="button" class="notif-mark-read" data-notif-mark-read>Marcar todo como leído</button></div>
     <div class="notif-tabs">
       <button type="button" class="notif-tab ${activeNotifTab === "notif" ? "active" : ""}" data-notif-tab="notif">Notificaciones<span class="notif-tab-count">${notifItems.length}</span></button>
       <button type="button" class="notif-tab ${activeNotifTab === "alerts" ? "active" : ""}" data-notif-tab="alerts">Alertas<span class="notif-tab-count">${alertItems.length}</span></button>
