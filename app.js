@@ -2388,10 +2388,10 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Cotizaciones activas", active.length, "Por cotizar y cotizado", active.length >= _prevActive ? "up" : "down", "", "purple", `${_fmtN(active.length - _prevActive)} vs ${_pr.label}`)}
-        ${metric("Monto cotizado S/", `S/ ${totalPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en soles", totalPEN >= _prevPEN ? "up" : "down", "", "amber", `${_fmtN(totalPEN - _prevPEN, "S/")} vs ${_pr.label}`)}
-        ${metric("Monto cotizado $", `$ ${totalUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en dólares", totalUSD >= _prevUSD ? "up" : "down", "", "blue", `${_fmtN(totalUSD - _prevUSD, "$")} vs ${_pr.label}`)}
-        ${metric("Ventas generadas", won.length, wonNote, won.length >= _prevWon ? "up" : "down", "", "mint", `${_fmtN(won.length - _prevWon)} vs ${_pr.label}`)}
+        ${metric("Cotizaciones activas", active.length, "Por cotizar y cotizado", active.length >= _prevActive ? "up" : "down", "", "purple", `${_fmtN(active.length - _prevActive)} vs ${_pr.label}`, monthSeries(state.quotes.filter(q => q.status === "Por cotizar" || q.status === "Cotizado"), q => q.date))}
+        ${metric("Monto cotizado S/", `S/ ${totalPEN.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en soles", totalPEN >= _prevPEN ? "up" : "down", "", "amber", `${_fmtN(totalPEN - _prevPEN, "S/")} vs ${_pr.label}`, monthSeries(state.quotes.filter(q => (q.currency || "PEN") === "PEN"), q => q.date, q => calcQuote(q).total))}
+        ${metric("Monto cotizado $", `$ ${totalUSD.toLocaleString("es-PE", {minimumFractionDigits:2, maximumFractionDigits:2})}`, "Total con impuestos en dólares", totalUSD >= _prevUSD ? "up" : "down", "", "blue", `${_fmtN(totalUSD - _prevUSD, "$")} vs ${_pr.label}`, monthSeries(state.quotes.filter(q => q.currency === "USD"), q => q.date, q => calcQuote(q).total))}
+        ${metric("Ventas generadas", won.length, wonNote, won.length >= _prevWon ? "up" : "down", "", "mint", `${_fmtN(won.length - _prevWon)} vs ${_pr.label}`, monthSeries(state.quotes.filter(q => q.status === "Ganado"), q => q.date))}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o servicio",
@@ -2415,7 +2415,7 @@ const views = {
     const activeCountries = new Set(allClients.map(c => c.country).filter(Boolean)).size;
     return `
       <section class="metric-grid">
-        ${metric("Total clientes", allClients.length, `${tipos.length} tipo${tipos.length !== 1 ? "s" : ""} registrado${tipos.length !== 1 ? "s" : ""}`, "", "", "purple")}
+        ${metric("Total clientes", allClients.length, `${tipos.length} tipo${tipos.length !== 1 ? "s" : ""} registrado${tipos.length !== 1 ? "s" : ""}`, "", "", "purple", "", monthSeries(state.clients, c => c.date))}
         ${metric("Con cotizaciones", clientsWithQuotes, "Clientes en pipeline activo", "", "", "amber")}
         ${metric("Con ventas ganadas", clientsWithSales, "Clientes con al menos 1 cierre", "", "", "mint")}
         ${metric("Países activos", activeCountries, `De ${allClients.length} clientes registrados`, "", "", "blue")}
@@ -2453,10 +2453,10 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Ventas cobradas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, sales.length >= _prevSales.length ? "up" : "down", "", "purple", `${_fmtN(sales.length - _prevSales.length)} vs ${_pr.label}`)}
-        ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, penConIGV >= _prevPenIGV ? "up" : "down", "", "amber", `${_fmtS(penConIGV - _prevPenIGV, "S/")} vs ${_pr.label}`)}
-        ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, usdConIGV >= _prevUsdIGV ? "up" : "down", "", "blue", `${_fmtS(usdConIGV - _prevUsdIGV, "$")} vs ${_pr.label}`)}
-        ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, comPEN >= _prevComPEN ? "up" : "down", "", "coral", `${_fmtS(comPEN - _prevComPEN, "S/")} vs ${_pr.label}`)}
+        ${metric("Ventas cobradas", sales.length, `${pen.length} en S/ · ${usd.length} en $`, sales.length >= _prevSales.length ? "up" : "down", "", "purple", `${_fmtN(sales.length - _prevSales.length)} vs ${_pr.label}`, monthSeries(allSales, x => x.date))}
+        ${metric("Total con IGV S/", fmt(penConIGV,"PEN"), penNote, penConIGV >= _prevPenIGV ? "up" : "down", "", "amber", `${_fmtS(penConIGV - _prevPenIGV, "S/")} vs ${_pr.label}`, monthSeries(allSales.filter(x => (x.currency || "PEN") === "PEN"), x => x.date, x => x.total))}
+        ${metric("Total con IGV $", fmt(usdConIGV,"USD"), usdNote, usdConIGV >= _prevUsdIGV ? "up" : "down", "", "blue", `${_fmtS(usdConIGV - _prevUsdIGV, "$")} vs ${_pr.label}`, monthSeries(allSales.filter(x => x.currency === "USD"), x => x.date, x => x.total))}
+        ${metric("Comisiones S/", fmt(comPEN,"PEN"), comNote, comPEN >= _prevComPEN ? "up" : "down", "", "coral", `${_fmtS(comPEN - _prevComPEN, "S/")} vs ${_pr.label}`, monthSeries(allSales.filter(x => (x.currency || "PEN") === "PEN"), x => x.date, x => x.commission))}
       </section>
       ${moduleToolbar({
         search: "Buscar venta, cliente o servicio",
@@ -2491,10 +2491,10 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Pendiente S/", fmt(_pendPEN), `${cntCur(pending,"PEN")} abiertos · ${overdue.filter(r=>(r.currency||"PEN")==="PEN").length} vencidos`, _pendPEN <= _prevPendPEN ? "up" : "down", "", "purple", `${_fmtS(_pendPEN - _prevPendPEN, "S/")} pendiente vs ${_pr.label}`)}
-        ${metric("Pendiente $", fmt(_pendUSD,"USD"), `${cntCur(pending,"USD")} abiertos`, _pendUSD <= _prevPendUSD ? "up" : "down", "", "blue", `${_fmtS(_pendUSD - _prevPendUSD, "$")} pendiente vs ${_pr.label}`)}
-        ${metric("Cobrado S/", fmt(_cobPEN), `${cntCur(paid,"PEN")} recibidos`, _cobPEN >= _prevCobPEN ? "up" : "down", "", "mint", `${_fmtS(_cobPEN - _prevCobPEN, "S/")} vs ${_pr.label}`)}
-        ${metric("Cobrado $", fmt(_cobUSD,"USD"), `${cntCur(paid,"USD")} recibidos`, _cobUSD >= _prevCobUSD ? "up" : "down", "", "amber", `${_fmtS(_cobUSD - _prevCobUSD, "$")} vs ${_pr.label}`)}
+        ${metric("Pendiente S/", fmt(_pendPEN), `${cntCur(pending,"PEN")} abiertos · ${overdue.filter(r=>(r.currency||"PEN")==="PEN").length} vencidos`, _pendPEN <= _prevPendPEN ? "up" : "down", "", "purple", `${_fmtS(_pendPEN - _prevPendPEN, "S/")} pendiente vs ${_pr.label}`, monthSeries(collectionRows().filter(r => r.status !== "Pagado" && (r.currency || "PEN") === "PEN"), r => r.dueDate || r.wonDate, r => r.amount))}
+        ${metric("Pendiente $", fmt(_pendUSD,"USD"), `${cntCur(pending,"USD")} abiertos`, _pendUSD <= _prevPendUSD ? "up" : "down", "", "blue", `${_fmtS(_pendUSD - _prevPendUSD, "$")} pendiente vs ${_pr.label}`, monthSeries(collectionRows().filter(r => r.status !== "Pagado" && r.currency === "USD"), r => r.dueDate || r.wonDate, r => r.amount))}
+        ${metric("Cobrado S/", fmt(_cobPEN), `${cntCur(paid,"PEN")} recibidos`, _cobPEN >= _prevCobPEN ? "up" : "down", "", "mint", `${_fmtS(_cobPEN - _prevCobPEN, "S/")} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => r.status === "Pagado" && (r.currency || "PEN") === "PEN"), r => r.dueDate || r.wonDate, r => r.amount))}
+        ${metric("Cobrado $", fmt(_cobUSD,"USD"), `${cntCur(paid,"USD")} recibidos`, _cobUSD >= _prevCobUSD ? "up" : "down", "", "amber", `${_fmtS(_cobUSD - _prevCobUSD, "$")} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => r.status === "Pagado" && r.currency === "USD"), r => r.dueDate || r.wonDate, r => r.amount))}
       </section>
       ${moduleToolbar({
         search: "Buscar cliente, PPTO o cobro",
@@ -2707,8 +2707,8 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, _diffIn >= 0 ? "up" : "down", "", "mint", _ttIn)}
-        ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, _diffOut <= 0 ? "up" : "down", "", "coral", _ttOut)}
+        ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, _diffIn >= 0 ? "up" : "down", "", "mint", _ttIn, monthSeries([...allCajaRows, ...fixedRows].filter(r => r.type === "ingreso" && r.currency === tabCurrency && (tab === "general" || r.bankAccount === tab)), r => r.date, r => r.amount))}
+        ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, _diffOut <= 0 ? "up" : "down", "", "coral", _ttOut, monthSeries([...allCajaRows, ...fixedRows].filter(r => r.type === "egreso" && r.currency === tabCurrency && isCountedRow(r) && (tab === "general" || r.bankAccount === tab)), r => r.date, r => r.amount))}
         ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, _diffBal >= 0 ? "up" : "down", "", undefined, _ttBal)}
         ${metric("Por cobrar", fmt(pending, tabCurrency), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
       </section>
@@ -2793,10 +2793,10 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Pagos registrados", team.length, "Movimientos del periodo", team.length >= _prevTeam.length ? "up" : "down", "", "purple", `${_fmtN(team.length - _prevTeam.length)} vs ${_pr.label}`)}
-        ${metric("Total planilla", fmt(totalPlanilla), "Internos y especialistas", totalPlanilla <= _prevTot ? "up" : "down", "", "amber", `${_fmtS(totalPlanilla - _prevTot)} vs ${_pr.label}`)}
-        ${metric("Pagado", fmt(totalPagado), `${paidTeam.length} pagos completados`, totalPagado >= _prevPag ? "up" : "down", "", "mint", `${_fmtS(totalPagado - _prevPag)} vs ${_pr.label}`)}
-        ${metric("Pendiente", fmt(totalPend), "Por desembolsar", totalPend <= _prevPend ? "up" : "down", "", "coral", `${_fmtS(totalPend - _prevPend)} pendiente vs ${_pr.label}`)}
+        ${metric("Pagos registrados", team.length, "Movimientos del periodo", team.length >= _prevTeam.length ? "up" : "down", "", "purple", `${_fmtN(team.length - _prevTeam.length)} vs ${_pr.label}`, monthSeries(state.team, t => t.dueDate || monthDate(t.month)))}
+        ${metric("Total planilla", fmt(totalPlanilla), "Internos y especialistas", totalPlanilla <= _prevTot ? "up" : "down", "", "amber", `${_fmtS(totalPlanilla - _prevTot)} vs ${_pr.label}`, monthSeries(state.team, t => t.dueDate || monthDate(t.month), t => t.amount))}
+        ${metric("Pagado", fmt(totalPagado), `${paidTeam.length} pagos completados`, totalPagado >= _prevPag ? "up" : "down", "", "mint", `${_fmtS(totalPagado - _prevPag)} vs ${_pr.label}`, monthSeries(state.team.filter(t => t.status === "Pagado"), t => t.dueDate || monthDate(t.month), t => t.amount))}
+        ${metric("Pendiente", fmt(totalPend), "Por desembolsar", totalPend <= _prevPend ? "up" : "down", "", "coral", `${_fmtS(totalPend - _prevPend)} pendiente vs ${_pr.label}`, monthSeries(state.team.filter(t => t.status !== "Pagado"), t => t.dueDate || monthDate(t.month), t => t.amount))}
       </section>
       ${moduleToolbar({
         search: "Buscar persona, rol o estado",
@@ -2831,9 +2831,9 @@ const views = {
 
     return `
       <section class="metric-grid">
-        ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, totalSales >= _prevSales ? "up" : "down", "", "mint", `${_fmtS(totalSales - _prevSales)} vs ${_pr.label}`)}
-        ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber")}
-        ${metric("IGV generado", fmt(igvGen), "En ventas facturadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`)}
+        ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, totalSales >= _prevSales ? "up" : "down", "", "mint", `${_fmtS(totalSales - _prevSales)} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status)), r => r.dueDate || r.wonDate, r => r.amount))}
+        ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber", "", monthSeries(state.purchases || [], p => p.date, p => p.total))}
+        ${metric("IGV generado", fmt(igvGen), "En ventas facturadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && r.quote?.hasIgv), r => r.dueDate || r.wonDate, r => r.amount - r.amount / (1 + _igvRate)))}
         ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral")}
       </section>
 
@@ -3362,17 +3362,57 @@ const views = {
   }
 };
 
-function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "") {
-  const toneIcon = { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
+function last6Months() {
+  const a = new Date(dashboardRange.start + "T00:00:00");
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(a.getFullYear(), a.getMonth() - (5 - i), 1);
+    return { start: isoDate(d), end: isoDate(new Date(d.getFullYear(), d.getMonth() + 1, 0)) };
+  });
+}
+function monthSeries(rows, dateFn, valFn = () => 1) {
+  return last6Months().map(m => rows.reduce((a, r) => {
+    const d = dateFn(r) || "";
+    return d >= m.start && d <= m.end ? a + (Number(valFn(r)) || 0) : a;
+  }, 0));
+}
+function sparkBars(values, colorVar) {
+  const w = 84, h = 64, n = values.length, gap = 4, bw = (w - gap * (n - 1)) / n;
+  const max = Math.max(...values, 0.0001);
+  const bars = values.map((v, i) => {
+    const bh = Math.max(3, v / max * (h - 2));
+    return `<rect x="${(i * (bw + gap)).toFixed(1)}" y="${(h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="var(${colorVar})" opacity="${i === n - 1 ? 1 : .35}"/>`;
+  }).join("");
+  return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${bars}</svg>`;
+}
+function metricIconName(label, tone) {
+  const l = String(label).toLowerCase();
+  if (/cliente|pa[ií]ses/.test(l)) return /pa[ií]ses/.test(l) ? "target" : "users";
+  if (/cotiz/.test(l)) return "fileText";
+  if (/pagado/.test(l)) return "check";
+  if (/pendiente|vencid/.test(l)) return "clock";
+  if (/cobr|por cobrar/.test(l)) return "wallet";
+  if (/comisi/.test(l)) return "creditCard";
+  if (/venta|factur/.test(l)) return "receipt";
+  if (/ingres/.test(l)) return "trending";
+  if (/egres/.test(l)) return "banknote";
+  if (/balance/.test(l)) return "chart";
+  if (/pago|planilla/.test(l)) return "briefcase";
+  if (/compra/.test(l)) return "package";
+  if (/igv|impuesto|renta|pagar|sunat/.test(l)) return "book";
+  return { purple: "users", amber: "package", mint: "trending", coral: "clock", blue: "chart" }[tone] || "chart";
+}
+function metric(label, value, note, trend = "", trendValue = "", tone = "blue", tooltip = "", spark = null) {
+  const chip = { purple: "blue", blue: "blue", amber: "amber", mint: "green", coral: "red" }[tone] || "blue";
+  const barVar = { purple: "--brand", blue: "--brand", amber: "--amber", mint: "--mint", coral: "--coral" }[tone] || "--brand";
   const deltaText = trend && tooltip ? `${tooltip} ${trend === "up" ? "↗" : "↘"}` : "";
   const detail = [note, deltaText].filter(Boolean).join(" · ");
   const more = detail
     ? `<button type="button" class="metric-more" data-tooltip="${escapeAttr(detail)}">Ver más detalles</button>`
     : "";
   return `<article class="metric metric-${tone}">
-    <div class="metric-top"><span class="metric-label">${label}</span><span class="metric-icon">${icon(toneIcon)}</span></div>
-    <strong>${value}</strong>
-    ${more}
+    <div class="metric-top"><span class="metric-label">${kpiIcon(metricIconName(label, tone), chip)}${label}</span></div>
+    <strong class="metric-value metric-value--${tone}">${value}</strong>
+    <div class="metric-bottom">${more}${spark && spark.some(v => v > 0) ? sparkBars(spark, barVar) : ""}</div>
   </article>`;
 }
 
