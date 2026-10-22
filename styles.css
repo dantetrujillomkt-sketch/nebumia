@@ -3522,3 +3522,4 @@ body[data-theme="dark"] .metric-grid .metric { border: 1px solid var(--line); bo
 .notif-body { padding: 8px 12px 14px; gap: 2px; }
 .notif-item { padding: 12px 10px; border-radius: 12px; }
 .notif-item .notif-timestamp { color: var(--muted); font-size: 11px; opacity: 1; margin-top: 3px; }
+.notif-backdrop, .notif-backdrop.visible { background: rgba(6,6,7,.45); }

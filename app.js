@@ -1454,6 +1454,7 @@ function declaracionPanel(dec) {
   const loading = dec.missingTc.length ? `<span style="font-size:12px;color:var(--muted)">⏳ Cargando tipo de cambio SUNAT…</span>` : "";
   const usdNote = dec.usdSales ? ` · incluye ${dec.usdSales} en US$ convertidas al TC SUNAT` : "";
   const R = "text-align:right";
+  const _decSeries = last6Months().map(m => computeDeclaracion(m));
   return `
     <section class="comp-section">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1461,9 +1462,9 @@ function declaracionPanel(dec) {
         ${loading}
       </div>
       <div class="metric-grid" style="margin-top:12px">
-        ${metric("IGV a pagar", fmt(dec.igvAPagar), `IGV ventas ${fmt(dec.igvVentas)} − compras ${fmt(dec.igvCompras)}`, "", "", "amber")}
-        ${metric("Renta MYPE (1%)", fmt(dec.renta), `1% de ingresos ${fmt(dec.ingresosNetos)}`, "", "", "purple")}
-        ${metric("Total a pagar", fmt(dec.total), "IGV a pagar + Renta", "", "", "coral")}
+        ${metric("IGV a pagar", fmt(dec.igvAPagar), `IGV ventas ${fmt(dec.igvVentas)} − compras ${fmt(dec.igvCompras)}`, "", "", "amber", "", _decSeries.map(d => d.igvAPagar))}
+        ${metric("Renta MYPE (1%)", fmt(dec.renta), `1% de ingresos ${fmt(dec.ingresosNetos)}`, "", "", "purple", "", _decSeries.map(d => d.renta))}
+        ${metric("Total a pagar", fmt(dec.total), "IGV a pagar + Renta", "", "", "coral", "", _decSeries.map(d => d.total))}
       </div>
       <div class="table-wrap" style="margin-top:12px">
         <table>
@@ -2416,9 +2417,9 @@ const views = {
     return `
       <section class="metric-grid">
         ${metric("Total clientes", allClients.length, `${tipos.length} tipo${tipos.length !== 1 ? "s" : ""} registrado${tipos.length !== 1 ? "s" : ""}`, "", "", "purple", "", monthSeries(state.clients, c => c.date))}
-        ${metric("Con cotizaciones", clientsWithQuotes, "Clientes en pipeline activo", "", "", "amber")}
-        ${metric("Con ventas ganadas", clientsWithSales, "Clientes con al menos 1 cierre", "", "", "mint")}
-        ${metric("Países activos", activeCountries, `De ${allClients.length} clientes registrados`, "", "", "blue")}
+        ${metric("Con cotizaciones", clientsWithQuotes, "Clientes en pipeline activo", "", "", "amber", "", distinctMonthSeries(state.quotes, q => q.date, q => q.client))}
+        ${metric("Con ventas ganadas", clientsWithSales, "Clientes con al menos 1 cierre", "", "", "mint", "", distinctMonthSeries(state.quotes.filter(q => q.status === "Ganado"), q => q.date, q => q.client))}
+        ${metric("Países activos", activeCountries, `De ${allClients.length} clientes registrados`, "", "", "blue", "", distinctMonthSeries(state.clients.filter(c => c.country), c => c.date, c => c.country))}
       </section>
       ${moduleToolbar({ search: "Buscar cliente, contacto o correo", filters: clientFilters, action: "client", metricsToggle: true })}
       <div id="clientsTable">${clientsTable(allClients)}</div>`;
@@ -2709,8 +2710,8 @@ const views = {
       <section class="metric-grid">
         ${metric("Ingresos", fmt(totalIn, tabCurrency), `${ingresos.filter(r=>r.currency===tabCurrency).length} movimientos en ${tabCurrency}`, _diffIn >= 0 ? "up" : "down", "", "mint", _ttIn, monthSeries([...allCajaRows, ...fixedRows].filter(r => r.type === "ingreso" && r.currency === tabCurrency && (tab === "general" || r.bankAccount === tab)), r => r.date, r => r.amount))}
         ${metric("Egresos", fmt(totalOut, tabCurrency), `${completedEgresos.filter(r=>r.currency===tabCurrency).length} completados${pendingEgresos.filter(r=>r.currency===tabCurrency).length > 0 ? ` · ${pendingEgresos.filter(r=>r.currency===tabCurrency).length} pendientes` : ""}`, _diffOut <= 0 ? "up" : "down", "", "coral", _ttOut, monthSeries([...allCajaRows, ...fixedRows].filter(r => r.type === "egreso" && r.currency === tabCurrency && isCountedRow(r) && (tab === "general" || r.bankAccount === tab)), r => r.date, r => r.amount))}
-        ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, _diffBal >= 0 ? "up" : "down", "", undefined, _ttBal)}
-        ${metric("Por cobrar", fmt(pending, tabCurrency), `${pendingCobros.length} cobros pendientes`, "", "", "amber")}
+        ${metric("Balance neto", fmt(totalIn - totalOut, tabCurrency), `Ingresos – Egresos (${tabCurrency === "USD" ? "$" : "S/"})`, _diffBal >= 0 ? "up" : "down", "", undefined, _ttBal, (() => { const rows = [...allCajaRows, ...fixedRows].filter(r => r.currency === tabCurrency && (tab === "general" || r.bankAccount === tab)); const ing = monthSeries(rows.filter(r => r.type === "ingreso"), r => r.date, r => r.amount); const egr = monthSeries(rows.filter(r => r.type === "egreso" && isCountedRow(r)), r => r.date, r => r.amount); return ing.map((v, i) => Math.max(0, v - egr[i])); })())}
+        ${metric("Por cobrar", fmt(pending, tabCurrency), `${pendingCobros.length} cobros pendientes`, "", "", "amber", "", monthSeries(pendingCobros, c => c.dueDate || c.wonDate, c => c.amount))}
       </section>
 
       <div class="module-page-header" data-page-header>
@@ -2834,7 +2835,7 @@ const views = {
         ${metric("Ventas facturadas", fmt(totalSales), `${invoicedSales.length} comprobantes emitidos`, totalSales >= _prevSales ? "up" : "down", "", "mint", `${_fmtS(totalSales - _prevSales)} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status)), r => r.dueDate || r.wonDate, r => r.amount))}
         ${metric("Compras registradas", fmt(totalPurchases), `${purchases.length} comprobantes recibidos`, "", "", "amber", "", monthSeries(state.purchases || [], p => p.date, p => p.total))}
         ${metric("IGV generado", fmt(igvGen), "En ventas facturadas del periodo", igvGen >= _prevIgvGen ? "up" : "down", "", "purple", `${_fmtS(igvGen - _prevIgvGen)} vs ${_pr.label}`, monthSeries(collectionRows().filter(r => ["Facturado", "Pagado", "Vencido"].includes(r.status) && r.quote?.hasIgv), r => r.dueDate || r.wonDate, r => r.amount - r.amount / (1 + _igvRate)))}
-        ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral")}
+        ${metric("Impuestos pagados SUNAT", fmt(igvPaid), `${taxPayments.filter(t => t.status === "Pagado").length} pagos · Det. saldo ${fmt(detBilled - detPaid)}`, "", "", "coral", "", monthSeries((state.taxPayments || []).filter(t => t.status === "Pagado"), t => t.date, t => t.amount))}
       </section>
 
       <div class="module-page-header" data-page-header>
@@ -3375,6 +3376,9 @@ function monthSeries(rows, dateFn, valFn = () => 1) {
     return d >= m.start && d <= m.end ? a + (Number(valFn(r)) || 0) : a;
   }, 0));
 }
+function distinctMonthSeries(rows, dateFn, keyFn) {
+  return last6Months().map(m => new Set(rows.filter(r => { const d = dateFn(r) || ""; return d >= m.start && d <= m.end; }).map(keyFn).filter(Boolean)).size);
+}
 function sparkBars(values, colorVar) {
   const w = 84, h = 64, n = values.length, gap = 4, bw = (w - gap * (n - 1)) / n;
   const max = Math.max(...values, 0.0001);
@@ -3412,7 +3416,7 @@ function metric(label, value, note, trend = "", trendValue = "", tone = "blue", 
   return `<article class="metric metric-${tone}">
     <div class="metric-top"><span class="metric-label">${kpiIcon(metricIconName(label, tone), chip)}${label}</span></div>
     <strong class="metric-value metric-value--${tone}">${value}</strong>
-    <div class="metric-bottom">${more}${spark && spark.some(v => v > 0) ? sparkBars(spark, barVar) : ""}</div>
+    <div class="metric-bottom">${more}${spark ? sparkBars(spark, barVar) : ""}</div>
   </article>`;
 }
 
