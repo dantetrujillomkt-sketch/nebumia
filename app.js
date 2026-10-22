@@ -5061,27 +5061,44 @@ function importState() {
   input.click();
 }
 
-function showImportConfirmModal(schema, imported, warnings) {
-  const existing = (state[schema.stateKey] || []).length;
+function importOverlay(inner) {
   const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
-  overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;">
-      <h3 style="margin:0 0 8px;font-size:16px;">Confirmar importación</h3>
-      <p style="margin:0 0 16px;color:var(--muted);font-size:14px;">Módulo: <strong style="color:var(--ink)">${schema.label}</strong></p>
-      <div style="background:var(--surface);border-radius:10px;padding:14px 16px;margin-bottom:${warnings.length?'12px':'20px'};display:grid;gap:6px;">
-        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Filas a importar</span><strong>${imported.length}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Registros existentes</span><strong>${existing}</strong></div>
-        <div style="display:flex;justify-content:space-between;font-size:14px;"><span style="color:var(--muted)">Total tras importar</span><strong>${existing + imported.length}</strong></div>
-      </div>
-      ${warnings.length ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#9a3412;max-height:80px;overflow-y:auto;">${warnings.slice(0,5).map(w=>`⚠ ${w}`).join("<br>")}${warnings.length>5?`<br>…y ${warnings.length-5} advertencias más`:""}</div>` : ""}
-      <div style="display:flex;gap:10px;">
-        <button id="importCancelBtn" style="flex:1;padding:10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;">Cancelar</button>
-        <button id="importConfirmBtn" style="flex:1;padding:10px;border:none;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer;font-size:14px;font-weight:600;">Importar ${imported.length} registros</button>
-      </div>
-    </div>`;
+  overlay.className = "imp-overlay";
+  overlay.innerHTML = `<div class="imp-card">${inner}</div>`;
   document.body.appendChild(overlay);
-  overlay.querySelector("#importCancelBtn").onclick = () => overlay.remove();
+  requestAnimationFrame(() => overlay.classList.add("visible"));
+  return overlay;
+}
+
+function showImportConfirmModal(schema, imported, warnings) {
+  const existingRows = state[schema.stateKey] || [];
+  const existing = existingRows.length;
+  const existingIds = new Set(existingRows.map(r => r.id));
+  const updates = imported.filter(r => existingIds.has(r.id)).length;
+  const nuevos = imported.length - updates;
+  const overlay = importOverlay(`
+    <div class="imp-head">
+      ${kpiIcon("upload", "blue")}
+      <div><h3>Confirmar importación</h3><p>Módulo: <strong>${escapeHtml(schema.label)}</strong></p></div>
+    </div>
+    <div class="imp-stats">
+      <div class="imp-stat"><span>Filas del archivo</span><strong>${imported.length}</strong></div>
+      <div class="imp-stat"><span>Actualizan existentes</span><strong>${updates}</strong></div>
+      <div class="imp-stat imp-stat--new"><span>Registros nuevos</span><strong>${nuevos}</strong></div>
+    </div>
+    <div class="imp-total">
+      <span>Total tras importar</span>
+      <div><strong>${existing + nuevos}</strong><small>hoy: ${existing}</small></div>
+    </div>
+    ${updates > 0 ? `<p class="imp-note">Las filas con el mismo ID reemplazan los datos del registro existente; no se duplican.</p>` : ""}
+    ${warnings.length ? `<div class="imp-warn">${warnings.slice(0, 5).map(w => `⚠ ${escapeHtml(w)}`).join("<br>")}${warnings.length > 5 ? `<br>…y ${warnings.length - 5} advertencias más` : ""}</div>` : ""}
+    <div class="imp-actions">
+      <button type="button" class="secondary-action" id="importCancelBtn">Cancelar</button>
+      <button type="button" class="primary-action" id="importConfirmBtn">Importar ${imported.length} registros</button>
+    </div>`);
+  const close = () => overlay.remove();
+  overlay.querySelector("#importCancelBtn").onclick = close;
+  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
   overlay.querySelector("#importConfirmBtn").onclick = () => {
     overlay.remove();
     runImport(schema, imported);
@@ -5089,31 +5106,26 @@ function showImportConfirmModal(schema, imported, warnings) {
 }
 
 function showImportErrorModal(msg, errors) {
-  const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
-  overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;max-width:440px;width:90%;">
-      <h3 style="margin:0 0 12px;font-size:16px;color:var(--danger);">Error en la importación</h3>
-      <p style="margin:0 0 ${errors.length?'12px':'20px'};font-size:14px;color:var(--muted);white-space:pre-line;">${msg}</p>
-      ${errors.length ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;margin-bottom:20px;font-size:12px;color:#991b1b;max-height:120px;overflow-y:auto;">${errors.map(e=>`✗ ${e}`).join("<br>")}</div>` : ""}
-      <button onclick="this.closest('div[style]').remove()" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;">Cerrar</button>
-    </div>`;
-  document.body.appendChild(overlay);
+  const overlay = importOverlay(`
+    <div class="imp-head">
+      ${kpiIcon("x", "red")}
+      <div><h3>Error en la importación</h3><p style="white-space:pre-line">${escapeHtml(msg)}</p></div>
+    </div>
+    ${errors.length ? `<div class="imp-warn imp-warn--error">${errors.map(e => `✗ ${escapeHtml(e)}`).join("<br>")}</div>` : ""}
+    <div class="imp-actions"><button type="button" class="secondary-action" id="importErrCloseBtn">Cerrar</button></div>`);
+  const close = () => overlay.remove();
+  overlay.querySelector("#importErrCloseBtn").onclick = close;
+  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
 }
 
 async function runImport(schema, imported) {
-  const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;";
-  overlay.innerHTML = `
-    <div style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:32px 28px;max-width:360px;width:90%;text-align:center;">
-      <div style="margin-bottom:16px;font-size:22px;">⏳</div>
-      <h3 style="margin:0 0 8px;font-size:15px;" id="importProgressTitle">Importando registros…</h3>
-      <p style="margin:0 0 16px;font-size:13px;color:var(--muted);" id="importProgressSub">0 de ${imported.length}</p>
-      <div style="background:var(--surface);border-radius:999px;height:6px;overflow:hidden;">
-        <div id="importProgressBar" style="background:var(--brand);height:100%;width:0%;transition:width .2s;border-radius:999px;"></div>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
+  const overlay = importOverlay(`
+    <div class="imp-progress">
+      <div class="content-spinner"></div>
+      <h3 id="importProgressTitle">Importando registros…</h3>
+      <p id="importProgressSub">0 de ${imported.length}</p>
+      <div class="imp-bar"><div id="importProgressBar"></div></div>
+    </div>`);
   const bar = overlay.querySelector("#importProgressBar");
   const sub = overlay.querySelector("#importProgressSub");
 

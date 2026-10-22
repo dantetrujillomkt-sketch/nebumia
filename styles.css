@@ -3615,3 +3615,37 @@ html[data-theme="dark"] .skx-card, html[data-theme="dark"] .skx-panel { border: 
 .rk2-track { height: 5px; border-radius: 99px; background: var(--soft); overflow: hidden; }
 .rk2-bar { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--brand), var(--mint)); }
 body[data-theme="dark"] .rk2-track { background: rgba(255,255,255,.08); }
+
+/* ── Modales de importación ── */
+.imp-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; background: rgba(22,33,47,.24); opacity: 0; transition: opacity .18s ease; padding: 16px; }
+.imp-overlay.visible { opacity: 1; }
+.imp-card { width: 460px; max-width: 100%; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 20px 60px rgba(17,24,39,.22); transform: translateY(8px) scale(.98); transition: transform .18s ease; }
+.imp-overlay.visible .imp-card { transform: none; }
+.imp-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+.imp-head .kpi-icon { width: 42px; height: 42px; border-radius: 12px; }
+.imp-head .kpi-icon .app-icon { width: 20px; height: 20px; }
+.imp-head h3 { margin: 0; font-size: 17px; font-weight: 800; }
+.imp-head p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+.imp-head p strong { color: var(--ink); }
+.imp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.imp-stat { padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); display: grid; gap: 4px; }
+.imp-stat span { font-size: 11px; color: var(--muted); font-weight: 600; }
+.imp-stat strong { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.imp-stat--new { background: #e8effe; border-color: transparent; }
+.imp-stat--new strong { color: var(--brand); }
+body[data-theme="dark"] .imp-stat--new { background: rgba(37,99,235,.2); }
+.imp-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; }
+.imp-total > span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.imp-total strong { font-size: 20px; font-weight: 800; }
+.imp-total small { margin-left: 8px; font-size: 11px; color: var(--muted); }
+.imp-note { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.imp-warn { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: rgba(255,159,46,.12); color: #9a5a0a; font-size: 12px; max-height: 90px; overflow-y: auto; line-height: 1.5; }
+.imp-warn--error { background: rgba(239,68,68,.1); color: #b91c1c; max-height: 140px; }
+.imp-actions { display: flex; gap: 10px; margin-top: 20px; }
+.imp-actions button { flex: 1; padding: 12px; font-size: 14px; }
+.imp-progress { text-align: center; padding: 8px 4px; }
+.imp-progress .content-spinner { margin: 0 auto 16px; }
+.imp-progress h3 { margin: 0 0 6px; font-size: 16px; font-weight: 800; }
+.imp-progress p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.imp-bar { height: 8px; border-radius: 99px; background: var(--soft); overflow: hidden; border: 1px solid var(--line); }
+.imp-bar > div { height: 100%; width: 0%; border-radius: 99px; background: linear-gradient(90deg, var(--brand), var(--mint)); transition: width .2s; }
