@@ -310,6 +310,7 @@ const icons = {
   wallet: '<path d="M19 7V5a2 2 0 0 0-2-2H5a3 3 0 0 0 0 6h14a2 2 0 0 1 2 2v4h-3a2 2 0 0 0 0 4h3v1a2 2 0 0 1-2 2H5a3 3 0 0 1-3-3V6"></path><path d="M18 14h.01"></path>',
   banknote: '<rect x="3" y="6" width="18" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M7 12h.01"></path><path d="M17 12h.01"></path>',
   briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"></rect><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"></path><path d="M2 12h20"></path>',
+  building: '<rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M12 6h.01"></path><path d="M16 6h.01"></path><path d="M8 10h.01"></path><path d="M12 10h.01"></path><path d="M16 10h.01"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path>',
   chart: '<path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path>',
   plug: '<path d="M12 22v-5"></path><path d="M9 8V2"></path><path d="M15 8V2"></path><path d="M6 8h12v4a6 6 0 0 1-12 0z"></path>',
   settings: '<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 .6 1.65 1.65 0 0 0-.4 1.05V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-.6-1 1.65 1.65 0 0 0-1.05-.4H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-.6A1.65 1.65 0 0 0 10.4 3V3a2 2 0 1 1 4 0v.09c0 .4.15.77.4 1.05.27.29.62.48 1 .56a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.08.38.27.73.56 1 .28.25.65.4 1.05.4H21a2 2 0 1 1 0 4h-.09c-.4 0-.77.15-1.05.4-.29.27-.48.62-.56 1z"></path>',
@@ -3692,20 +3693,25 @@ function dashClientRanking(salesRows) {
     .map(([client, v]) => ({ client, ...v }))
     .sort((a, b) => b.total - a.total);
   const penRows = toRows(penMap), usdRows = toRows(usdMap);
+  const tones = ["blue", "green", "amber", "gray", "red"];
   const renderCol = (rows, cur) => {
     if (!rows.length) return `<p class="ranking-empty">Sin ventas en ${cur === "PEN" ? "soles" : "dólares"}</p>`;
     const maxVal = rows[0].total;
+    const sum = rows.reduce((a, r) => a + r.total, 0) || 1;
     return rows.map((r, i) => {
-      const barPct = Math.round(r.total / maxVal * 100);
+      const barPct = Math.max(4, Math.round(r.total / maxVal * 100));
+      const share = Math.round(r.total / sum * 100);
       const label = r.count === 1 ? "1 venta" : `${r.count} ventas`;
-      return `<div class="rk-row">
-        <span class="rk-pos">${i + 1}</span>
-        <div class="rk-info">
-          <div class="rk-top">
-            <span class="rk-name">${escapeHtml(r.client)}</span>
-            <span class="rk-amt">${fmt(r.total, cur)}</span>
+      return `<div class="rk2-row">
+        <span class="rk2-pos">${i + 1}</span>
+        ${kpiIcon("building", tones[i % tones.length])}
+        <div class="rk2-info">
+          <div class="rk2-top">
+            <span class="rk2-name" title="${escapeAttr(r.client)}">${escapeHtml(r.client)}</span>
+            <span class="rk2-amt">${fmt(r.total, cur)}</span>
           </div>
-          <div class="rk-track"><div class="rk-bar" style="width:${barPct}%"></div><span class="rk-sub">${label}</span></div>
+          <div class="rk2-meta"><span>${label}</span><span>${share}% del total</span></div>
+          <div class="rk2-track"><div class="rk2-bar" style="width:${barPct}%"></div></div>
         </div>
       </div>`;
     }).join("");

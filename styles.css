@@ -3599,3 +3599,20 @@ html[data-theme="dark"] .skx-card, html[data-theme="dark"] .skx-panel { border: 
 .skx-th, .skx-tr { justify-content: space-between; gap: 24px; }
 /* Mismo oscurecido que los diálogos (.dialog::backdrop) */
 .notif-backdrop, .notif-backdrop.visible { background: rgba(22,33,47,.24); }
+
+/* Ranking de clientes rediseñado: filas con ícono de empresa */
+.client-ranking { gap: 0; }
+.rk-col { gap: 8px; }
+.rk2-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); transition: background .15s; }
+.rk2-row:hover { background: var(--hover); }
+.rk2-pos { width: 18px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
+.rk2-row .kpi-icon { width: 36px; height: 36px; border-radius: 10px; }
+.rk2-row .kpi-icon .app-icon { width: 18px; height: 18px; }
+.rk2-info { flex: 1; min-width: 0; }
+.rk2-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.rk2-name { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rk2-amt { font-size: 13px; font-weight: 750; color: var(--brand); white-space: nowrap; flex-shrink: 0; }
+.rk2-meta { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin: 2px 0 6px; }
+.rk2-track { height: 5px; border-radius: 99px; background: var(--soft); overflow: hidden; }
+.rk2-bar { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--brand), var(--mint)); }
+body[data-theme="dark"] .rk2-track { background: rgba(255,255,255,.08); }
