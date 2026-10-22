@@ -4872,7 +4872,18 @@ function bindFilters() {
   }
 }
 
+let _loadingFxBound = false;
+function bindLoadingFx() {
+  if (_loadingFxBound) return;
+  _loadingFxBound = true;
+  const isFilterEl = el => el && (el.id === "moduleSearch" || el.matches?.("[data-table-filter], .filter-select, #quoteStatus, #quoteYear, #quoteCurrencyFilter, #leadStatus"));
+  document.addEventListener("input", e => { if (isFilterEl(e.target)) flashLoading(); });
+  document.addEventListener("change", e => { if (isFilterEl(e.target)) flashLoading(); });
+  document.addEventListener("click", e => { if (e.target.closest?.(".pag-btn, .pag-size-btn")) flashLoading(300); });
+}
+
 function bindModuleToolbar() {
+  bindLoadingFx();
   const search = document.querySelector("#moduleSearch");
   const tableFilters = [...document.querySelectorAll("[data-table-filter]")];
   const filterTableRows = () => {
@@ -6104,12 +6115,43 @@ function bindSaleCalcPreview() {
   update();
 }
 
+// Parpadeo de carga sobre las tablas visibles (búsqueda, filtros, guardado) para que el cambio
+// de resultados no se vea "plano".
+function flashLoading(ms = 380) {
+  document.querySelectorAll("#viewRoot .table-wrap").forEach(el => {
+    el.classList.add("is-loading");
+    clearTimeout(el._loadingTimer);
+    el._loadingTimer = setTimeout(() => el.classList.remove("is-loading"), ms);
+  });
+}
+
 function handleEntitySubmit(event) {
   if (event.submitter?.value === "cancel") return;
   event.preventDefault();
+  const form = event.currentTarget;
+  if (form.dataset.saving) return;
   try {
-    if (!validateFormBeforeSubmit(event.currentTarget)) return;
-    const data = Object.fromEntries(new FormData(event.currentTarget));
+    if (!validateFormBeforeSubmit(form)) return;
+  } catch (err) {
+    console.error("Error al validar:", err);
+    showToast("Error al guardar: " + err.message);
+    return;
+  }
+  form.dataset.saving = "1";
+  const btn = form.querySelector('button[type="submit"]');
+  if (btn) { btn.classList.add("is-loading"); btn.disabled = true; }
+  setTimeout(() => {
+    try { runEntitySave(form); }
+    finally {
+      delete form.dataset.saving;
+      if (btn) { btn.classList.remove("is-loading"); btn.disabled = false; }
+    }
+  }, 380);
+}
+
+function runEntitySave(form) {
+  try {
+    const data = Object.fromEntries(new FormData(form));
     if (editingType === "lead") saveLead(data);
     if (editingType === "quote") saveQuote(data);
     if (editingType === "client") saveClient(data);
@@ -6129,6 +6171,7 @@ function handleEntitySubmit(event) {
     saveState();
     quoteDialog.close();
     render();
+    flashLoading();
     showToast();
   } catch (err) {
     console.error("Error al guardar:", err);
