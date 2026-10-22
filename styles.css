@@ -3597,3 +3597,5 @@ html[data-theme="dark"] .skx-card, html[data-theme="dark"] .skx-panel { border: 
 .skx-tr { height: 56px; }
 .skx-pag { height: 53px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
 .skx-th, .skx-tr { justify-content: space-between; gap: 24px; }
+/* Mismo oscurecido que los diálogos (.dialog::backdrop) */
+.notif-backdrop, .notif-backdrop.visible { background: rgba(22,33,47,.24); }
