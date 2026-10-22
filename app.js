@@ -3993,7 +3993,7 @@ function bindViewEvents() {
     const btn = e.target.closest("[data-annual-acct]");
     if (!btn) return;
     annualProjTab = btn.dataset.annualAcct;
-    render();
+    renderWithLoading();
   });
   bindFilters();
   bindDashboardDateFilter();
@@ -4124,10 +4124,10 @@ function bindViewEvents() {
     });
   });
   document.querySelectorAll("[data-caja-tab]").forEach(btn => {
-    btn.addEventListener("click", () => { activeCajaTab = btn.dataset.cajaTab; history.pushState(null, "", currentRouteHash()); render(); });
+    btn.addEventListener("click", () => { activeCajaTab = btn.dataset.cajaTab; history.pushState(null, "", currentRouteHash()); renderWithLoading(); });
   });
   document.querySelectorAll("[data-settings-tab]").forEach(btn => {
-    btn.addEventListener("click", () => { activeSettingsTab = btn.dataset.settingsTab; history.pushState(null, "", currentRouteHash()); render(); });
+    btn.addEventListener("click", () => { activeSettingsTab = btn.dataset.settingsTab; history.pushState(null, "", currentRouteHash()); renderWithLoading(); });
   });
 
   // Sales targets handlers
@@ -4583,7 +4583,7 @@ function bindDashboardQuickFilters() {
   document.querySelectorAll("[data-dashboard-preset]").forEach(btn => {
     btn.addEventListener("click", () => {
       setDashboardSections(presets[btn.dataset.dashboardPreset] || allSections, btn.dataset.dashboardPreset);
-      render();
+      renderWithLoading();
     });
   });
 
@@ -4592,7 +4592,7 @@ function bindDashboardQuickFilters() {
       const filter = dashboardSavedFilters.find(f => f.id === btn.dataset.savedDashboardFilter);
       if (!filter) return;
       setDashboardSections(filter.sections, filter.id);
-      render();
+      renderWithLoading();
     });
   });
 
@@ -4641,13 +4641,13 @@ function bindDashboardDateFilter() {
   document.querySelector("#closeDateFilter").addEventListener("click", close);
   document.querySelector("#resetDateFilter").addEventListener("click", () => {
     setCurrentRange(getDashboardPreset("thisMonth"));
-    render();
+    renderWithLoading();
   });
 
   document.querySelectorAll("[data-date-preset]").forEach(button => {
     button.addEventListener("click", () => {
       setCurrentRange(getDashboardPreset(button.dataset.datePreset));
-      render();
+      renderWithLoading();
     });
   });
 
@@ -4664,7 +4664,7 @@ function bindDashboardDateFilter() {
       return;
     }
     setCurrentRange({ key: "custom", start, end, label: "Rango personalizado" });
-    render();
+    renderWithLoading();
   });
 }
 
@@ -7158,6 +7158,16 @@ function showToast(message = "Guardado correctamente") {
     toast.classList.add("hide");
     setTimeout(() => toast.remove(), 280);
   }, 3000);
+}
+
+// Muestra el loader del contenido un instante y luego vuelve a dibujar la página — para
+// cambios de periodo/filtros/pestañas que re-renderizan todo y, si no, se verían "planos".
+function renderWithLoading(ms = 160) {
+  showContentLoader();
+  setTimeout(() => {
+    render();
+    hideContentLoader(260);
+  }, ms);
 }
 
 function showContentLoader() {
