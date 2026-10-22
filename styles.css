@@ -3603,8 +3603,7 @@ html[data-theme="dark"] .skx-card, html[data-theme="dark"] .skx-panel { border: 
 /* Ranking de clientes rediseñado: filas con ícono de empresa */
 .client-ranking { gap: 0; }
 .rk-col { gap: 8px; }
-.rk2-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); transition: background .15s; }
-.rk2-row:hover { background: var(--hover); }
+.rk2-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
 .rk2-pos { width: 18px; text-align: center; font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0; }
 .rk2-row .kpi-icon { width: 36px; height: 36px; border-radius: 10px; }
 .rk2-row .kpi-icon .app-icon { width: 18px; height: 18px; }
