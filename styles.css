@@ -3546,3 +3546,54 @@ body[data-theme="dark"] .metric-grid .metric { border: 1px solid var(--line); bo
 }
 @keyframes loadbar { 0% { background-position: -40% 0; } 100% { background-position: 140% 0; } }
 @media (prefers-reduced-motion: reduce) { .table-wrap.is-loading::before, .table-wrap.is-loading::after { animation: none; } }
+
+/* ── Skeleton de carga (skeleton.js): misma estructura que la app real ── */
+#preloader { overflow: hidden; align-items: stretch; }
+.skx-shell { width: 100%; min-height: 100vh; }
+.skx-b { display: block; flex-shrink: 0; border-radius: 6px; background: linear-gradient(90deg, var(--sk-base) 25%, var(--sk-shine) 50%, var(--sk-base) 75%); background-size: 1200px 100%; animation: sk-shimmer 1.4s infinite linear; }
+.skx-sidebar { background: #111827; border-right: 1px solid rgba(255,255,255,.06); --line: rgba(255,255,255,.1); --sk-base: rgba(255,255,255,.08); --sk-shine: rgba(255,255,255,.16); }
+html[data-theme="dark"] .skx-sidebar { background: #0b1120; }
+.skx-brand { gap: 10px; }
+.skx-nav { pointer-events: none; }
+.skx-collapsed { grid-template-columns: 64px 1fr; }
+.skx-collapsed .skx-sidebar { padding: 0 10px 14px; }
+.skx-collapsed .skx-brand { justify-content: center; margin: 0 -10px 14px; padding: 0 10px; }
+.skx-collapsed .skx-nav { justify-content: center; padding: 10px 0; }
+.skx-topbar { background: #f9fafb; backdrop-filter: none; }
+html[data-theme="dark"] .skx-topbar { background: #111827; border-bottom-color: rgba(255,255,255,.08); }
+.skx-search { width: min(340px, 32vw); height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--input); }
+.skx-actions { display: flex; align-items: center; gap: 6px; }
+.skx-profile-copy { display: grid; gap: 5px; margin-right: 2px; }
+.skx-view { padding: 20px 24px 28px; }
+.skx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.skx-filterzone { display: flex; justify-content: space-between; align-items: flex-start; min-height: 123px; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+.skx-chips { display: flex; align-items: center; gap: 10px; }
+.skx-card, .skx-panel { display: flex; flex-direction: column; }
+.skx-icon-row { display: flex; align-items: center; gap: 9px; }
+.skx-bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 10px; min-height: 64px; }
+.skx-toolbar { margin-bottom: 14px; }
+.skx-table { margin-bottom: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.skx-th, .skx-tr { display: flex; align-items: center; gap: 48px; padding: 0 14px; }
+.skx-th { height: 36px; border-bottom: 1px solid var(--line); }
+.skx-tr { height: 52px; border-bottom: 1px solid var(--line); }
+.skx-tr:last-child { border-bottom: 0; }
+.skx-pag { display: flex; align-items: center; padding: 14px 12px; margin-bottom: 14px; }
+.skx-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.skx-settings { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
+.skx-sidenav { display: grid; gap: 8px; align-content: start; }
+html[data-theme="dark"] .skx-card, html[data-theme="dark"] .skx-panel { border: 1px solid var(--line); box-shadow: none; }
+@media (max-width: 768px) {
+  .skx-shell { grid-template-columns: 1fr; }
+  .skx-sidebar { display: none; }
+  .skx-view { padding: 16px 18px 28px; }
+  .skx-settings { grid-template-columns: 1fr; }
+}
+/* ajustes finos para que el skeleton mida igual que la app real */
+.skx-nav { min-height: 42px; box-sizing: border-box; }
+.skx-filterzone { min-height: 61px; }
+.skx-card.kpi-card { height: 203px; }
+.skx-card.metric { min-height: 182px; }
+.skx-th { height: 35px; }
+.skx-tr { height: 56px; }
+.skx-pag { height: 53px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; }
+.skx-th, .skx-tr { justify-content: space-between; gap: 24px; }

@@ -7098,83 +7098,6 @@ profileForm.addEventListener("submit", async event => {
   setTimeout(() => profileDialog.close(), 500);
 });
 
-const SK_SIDEBAR = `
-  <div class="sk-sidebar">
-    <div class="sk-logo">
-      <div class="sk-block" style="width:32px;height:32px;border-radius:8px"></div>
-      <div class="sk-block" style="width:80px;height:16px"></div>
-    </div>
-    <div class="sk-nav">
-      <div class="sk-block" style="width:100%;height:14px"></div>
-      <div class="sk-block" style="width:75%;height:14px"></div>
-      <div class="sk-block" style="width:90%;height:14px"></div>
-      <div class="sk-block" style="width:65%;height:14px"></div>
-      <div class="sk-block" style="width:85%;height:14px"></div>
-      <div class="sk-block" style="width:70%;height:14px"></div>
-      <div class="sk-block" style="width:80%;height:14px"></div>
-      <div class="sk-block" style="width:60%;height:14px"></div>
-    </div>
-  </div>`;
-
-function skMetrics(n) {
-  return `<div class="sk-metrics sk-metrics-${n}">${Array(n).fill('<div class="sk-card"></div>').join("")}</div>`;
-}
-function skToolbar() {
-  return `<div class="sk-toolbar">
-    <div class="sk-block" style="width:220px;height:36px;border-radius:8px"></div>
-    <div class="sk-block" style="width:130px;height:36px;border-radius:8px"></div>
-    <div class="sk-block" style="width:110px;height:36px;border-radius:8px"></div>
-  </div>`;
-}
-function skTable(rows = 5) {
-  return `<div class="sk-table">
-    <div class="sk-row header"></div>
-    ${Array(rows).fill('<div class="sk-row"></div>').join("")}
-  </div>`;
-}
-function skTabs() {
-  return `<div class="sk-tabs">
-    <div class="sk-block" style="width:80px;height:30px;border-radius:20px"></div>
-    <div class="sk-block" style="width:200px;height:30px;border-radius:20px"></div>
-    <div class="sk-block" style="width:200px;height:30px;border-radius:20px"></div>
-  </div>`;
-}
-function skTwoCol() {
-  return `<div class="sk-two-col">
-    <div class="sk-panel"></div>
-    <div class="sk-panel"></div>
-  </div>`;
-}
-
-function skContentFor(view) {
-  const topbar = `<div class="sk-topbar">
-    <div class="sk-block" style="width:180px;height:22px"></div>
-    <div class="sk-block" style="width:100px;height:34px;border-radius:8px"></div>
-  </div>`;
-  switch (view) {
-    case "dashboard":
-      return topbar + skMetrics(4) + skToolbar() + skTable(5);
-    case "quotes":
-      return topbar + skMetrics(2) + skToolbar() + skTable(5);
-    case "sales":
-      return topbar + skMetrics(3) + skToolbar() + skTable(5);
-    case "collections":
-      return topbar + skMetrics(3) + skToolbar() + skTable(5);
-    case "clients":
-      return topbar + skToolbar() + skTable(6);
-    case "finance":
-      return topbar + skMetrics(4) + skTabs() + skToolbar() + skTable(4) + skTable(3);
-    case "team":
-      return topbar + skMetrics(2) + skToolbar() + skTable(5);
-    case "comprobantes":
-      return topbar + skToolbar() + skTable(4) + skTable(4);
-    case "settings":
-      return topbar + skMetrics(4) + skTwoCol();
-    default:
-      return topbar + skMetrics(4) + skToolbar() + skTable(5);
-  }
-}
-
 let _pendingDeleteCallback = null;
 
 function applySidebarState() {
@@ -7270,7 +7193,7 @@ function showSkeleton(view) {
     document.body.prepend(sk);
   }
   sk.classList.remove("fade-out");
-  sk.innerHTML = SK_SIDEBAR + `<div class="sk-content">${skContentFor(view)}</div>`;
+  sk.innerHTML = window.skHtml ? window.skHtml(view) : "";
 }
 
 // ════════════════════════════════════════════════════════════
